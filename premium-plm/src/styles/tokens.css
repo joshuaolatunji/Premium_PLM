@@ -1,0 +1,70 @@
+:root {
+
+  /*BRAND COLORS */
+
+  --premium-red: #dd2025;
+  --premium-red-dark: #a8141c;
+  --premium-red-deep: #8e1215;
+  --premium-tint: #fbe9e8;
+
+
+  /*NEUTRAL COLORS*/
+
+  --color-ink: #16181c;
+  --color-ink-secondary: #4a5058;
+  --color-ink-muted: #767c86;
+  --color-ink-disabled: #a6acb5;
+
+  --color-border-strong: #ccd0d6;
+  --color-border: #e6eaee;
+
+  --color-surface-alt: #f8f8f8;
+  --color-surface: #ffffff;
+
+
+  /*SEMANTIC COLORS*/
+
+  --color-success: #107a5f;
+  --color-warning: #b86e00;
+  --color-danger: #c62828;
+  --color-info: #2f5fa7;
+
+
+  /*SEMANTIC SURFACES*/
+
+  --color-success-tint: #e7f7f0;
+  --color-warning-tint: #fff1e2;
+  --color-danger-tint: #fbe9e8;
+  --color-info-tint: #eaf0f9;
+
+
+  /* SPACING 4PX BASE SYSTEM*/
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+
+  /*BORDER RADIUS*/
+
+  --radius-0: 0;
+  --radius-1: 4px;
+  --radius-2: 6px;
+  --radius-3: 8px;
+  --radius-pill: 999px;
+
+
+  /*ELEVATION*/
+
+  --shadow-border: 0 0 0 1px var(--color-border);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 4%);
+  --shadow-dropdown: 0 4px 12px rgb(0 0 0 / 8%);
+  --shadow-modal: 0 8px 24px rgb(0 0 0 / 12%);
+}
