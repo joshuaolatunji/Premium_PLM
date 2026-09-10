@@ -13,7 +13,7 @@ function Sidebar() {
         <aside className="sidebar">
             <div className="sidebar_brand">
                 <div className="sidebar_brand-logo">
-                    <img src="/premium-logo.png" alt="Premium Trust Bank Logo" />
+                    <img src="/premium-logo-white.png" alt="Premium Trust Bank Logo" />
                 </div>
 
 

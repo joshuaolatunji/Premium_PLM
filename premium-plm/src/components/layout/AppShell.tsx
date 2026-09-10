@@ -1,11 +1,9 @@
+import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 
-interface AppShellProps {
-    children: React.ReactNode;
-}
 
-function AppShell({ children }: AppShellProps) {
+function AppShell() {
     return (
         <div className="app-shell">
             <Sidebar />
@@ -14,7 +12,7 @@ function AppShell({ children }: AppShellProps) {
                 <Topbar />
 
                 <main className="app-shell_content">
-                    {children}
+                    <Outlet />
                 </main>
             </div>
         </div>

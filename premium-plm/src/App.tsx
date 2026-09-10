@@ -1,16 +1,11 @@
-import AppShell from "./components/layout/AppShell";
+import {RouterProvider} from "react-router-dom";
+import router from "./app/router";
+
 
 
 function App() {
   return (
-    <AppShell>
-        <h1>Dashboard</h1>
-        
-        <p style={{ marginTop: "8px", color: "var(--color-ink-muted)" }}>
-          PremiumPLM application workspace.
-        </p>
-      
-    </AppShell>
+    <RouterProvider router={router} />
   );
 }
 
