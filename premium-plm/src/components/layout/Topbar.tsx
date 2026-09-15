@@ -1,4 +1,6 @@
 import {Bell, Search} from "lucide-react";
+import UserAvatar from "../ui/UserAvatar";
+
 
 function Topbar() {
     return(
@@ -29,13 +31,13 @@ function Topbar() {
 
                 <div className="topbar_user">
                     <div className="topbar_avatar">
-                        CO
+                        <UserAvatar name="Abdulmuiz Adewale" size="md"/>
                     </div>
                 </div>
 
                 <div>
                     <p className="topbar_user-name">
-                        <strong>Chidinma Okeke</strong>
+                        <strong>Abdulmuiz Adewale</strong>
                     </p>
 
                     <p className="topbar_user-role">

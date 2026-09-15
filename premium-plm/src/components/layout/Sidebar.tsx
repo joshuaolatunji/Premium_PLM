@@ -8,6 +8,9 @@ import {
   ListOrdered,
 } from "lucide-react";
 
+import UserAvatar from "../ui/UserAvatar"
+
+
 function Sidebar() {
     return (
         <aside className="sidebar">
@@ -69,12 +72,12 @@ function Sidebar() {
 
             <div className="sidebar_footer">
                 <div className="sidebar_avatar">
-                    CO
+                    <UserAvatar name="Abdulmuiz Adewale"/>
                 </div>
 
                 <div>
                     <p className="sidebar_user-name">
-                        <strong>Chidinma Okeke</strong>
+                        <strong>Abdulmuiz Adewale</strong>
                     </p>
 
                     <p className="sidebar_user-role">
