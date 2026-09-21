@@ -627,6 +627,17 @@ a {
   line-height: 1.6;
 }
 
+/*FORM ERROR*/
+.form-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  background: #fef2f2;
+  color: #b42318;
+}
+
 
 /*LOGIN — RESPONSIVE*/
 
