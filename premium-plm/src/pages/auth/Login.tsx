@@ -23,11 +23,19 @@ function Login() {
         setErrorMessage("");
         setIsLoading(true);
 
+        const loginStart = performance.now();
+
         try{
             const response = await loginUser({
                 emailAddress,
                 password,
             });
+
+            console.log(
+                `Login API response: ${Math.round(
+                    performance.now() - loginStart,
+                )}ms`,
+            )
 
             if (!response.isSuccessful) {
                 setErrorMessage(
@@ -41,6 +49,18 @@ function Login() {
                 email: response.data.email,
                 roles: response.data.roles,
             });
+
+            console.log(
+                `Session saved: ${Math.round(
+                    performance.now() - loginStart,
+                )}ms`,
+            );
+
+            console.log(
+                `Navigating to dashoard: ${Math.round(
+                    performance.now() - loginStart,
+                )}ms`,
+            );
 
             navigate("/");
         } catch (error) {
@@ -65,7 +85,7 @@ function Login() {
                     <p>Use your Premium Trust Bank network credentials.</p>
                 </div>
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} noValidate>
                     <div className="form-field">
                         <label htmlFor="email">Email address</label>
 
