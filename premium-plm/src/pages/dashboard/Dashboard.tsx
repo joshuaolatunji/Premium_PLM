@@ -1,10 +1,10 @@
-import DashboardHeader from "../../features/dashboard/components/DashboardHeader";
-import DashboardStatCard from "../../features/dashboard/components/DashboardStatCard";
-import PortfolioOverview from "../../features/dashboard/components/PortfolioOverview";
-import BRDApprovalQueue from "../../features/dashboard/components/BRDApprovalQueue";
-import PriorityDistribution from "../../features/dashboard/components/PriorityDistribution";
-import AtRiskInitiatives from "../../features/dashboard/components/AtRiskInitiatives";
-import RecentGovernanceActivity from "../../features/dashboard/components/RecentGOvernanceActivity";
+import DashboardHeader from "../../dashboardcomponents/DashboardHeader";
+import DashboardStatCard from "../../dashboardcomponents/DashboardStatCard";
+import PortfolioOverview from "../../dashboardcomponents/PortfolioOverview";
+import BRDApprovalQueue from "../../dashboardcomponents/BRDApprovalQueue";
+import PriorityDistribution from "../../dashboardcomponents/PriorityDistribution";
+import AtRiskInitiatives from "../../dashboardcomponents/AtRiskInitiatives";
+import RecentGovernanceActivity from "../../dashboardcomponents/RecentGovernanceActivity";
 
 import {
   dashboardStats,
@@ -13,7 +13,7 @@ import {
   priorityDistribution,
   atRiskInitiatives,
   recentGovernanceActivity,
-} from "../../features/dashboard/data/dashboardMockData";
+} from "../../data/dashboardMockData";
 
 function Dashboard() {
   return (

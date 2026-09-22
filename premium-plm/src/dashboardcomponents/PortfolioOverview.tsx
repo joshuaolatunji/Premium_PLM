@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import type { PortfolioInitiative } from "../types";
+import type { PortfolioInitiative } from "../../src/types/dashboardTypes";
 
 interface PortfolioOverviewProps {
   initiatives: PortfolioInitiative[];
@@ -60,39 +60,53 @@ function PortfolioOverview({
                 <td>{initiative.owner}</td>
 
                 <td>
-                  <div className="progress-cell">
-                    <div
-                      className="progress-track"
-                      role="progressbar"
-                      aria-label={`${initiative.name} progress`}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={initiative.progress}
-                    >
-                      <span
-                        className="progress-fill"
-                        style={{
-                          width: `${initiative.progress}%`,
-                        }}
-                      />
-                    </div>
+                  {initiative.progress !== null ? (
+                    <div className="progress-cell">
+                      <div
+                        className="progress-track"
+                        role="progressbar"
+                        aria-label={`${initiative.name} progress`}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={initiative.progress}
+                      >
+                        <span
+                          className="progress-fill"
+                          style={{
+                            width: `${initiative.progress}%`,
+                          }}
+                        />
+                      </div>
 
-                    <span>{initiative.progress}%</span>
-                  </div>
+                      <span>{initiative.progress}%</span>
+                    </div>
+                  ) : (
+                    <span className="portfolio-empty-value">
+                      —
+                    </span>
+                  )}
                 </td>
 
                 <td>
-                  <span
-                    className={
-                      initiative.daysLeft < 0
-                        ? "days-left days-left--overdue"
-                        : "days-left"
-                    }
-                  >
-                    {initiative.daysLeft < 0
-                      ? `${Math.abs(initiative.daysLeft)}d overdue`
-                      : `${initiative.daysLeft}d`}
-                  </span>
+                  {initiative.daysLeft === null ? (
+                    <span className="portfolio-empty-value">
+                      —
+                    </span>
+                  ) : (
+                    <span
+                      className={
+                        initiative.daysLeft < 0
+                          ? "days-left days-left--overdue"
+                          : "days-left"
+                      }
+                    >
+                      {initiative.daysLeft < 0
+                        ? `${Math.abs(
+                            initiative.daysLeft,
+                          )}d overdue`
+                        : `${initiative.daysLeft}d`}
+                    </span>
+                  )}
                 </td>
 
                 <td>

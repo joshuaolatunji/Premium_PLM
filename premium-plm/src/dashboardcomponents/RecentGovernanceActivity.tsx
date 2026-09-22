@@ -6,7 +6,7 @@ import {
   X,
 } from "lucide-react";
 
-import type { GovernanceActivity } from "../types";
+import type { GovernanceActivity } from "../../src/types/dashboardTypes";
 
 interface RecentGovernanceActivityProps {
   activities: GovernanceActivity[];

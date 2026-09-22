@@ -1,8 +1,9 @@
-import { useState, type SubmitEvent } from "react";
+import { useState, useEffect, type SubmitEvent } from "react";
 import {Eye, EyeOff} from "lucide-react";
 import { useNavigate } from "react-router-dom"
-import { loginUser } from "../../features/auth/api"
-import { saveAuthSession } from "../../services/authStorage"
+import { loginUser } from "../../service/LoginService"
+import { saveAuthSession } from "../../apicalls/authStorage";
+import {checkApiHealth} from "../../service/healthApi"
 
 import LoginLayout from "../../components/auth/LoginLayout";
 
@@ -16,6 +17,12 @@ function Login() {
 
     const [isLoading, setIsLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
+
+    useEffect(() => {
+        void checkApiHealth().catch((error) => {
+            console.error("API health check failed:", error);
+        });
+    }, []);
 
     async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault();

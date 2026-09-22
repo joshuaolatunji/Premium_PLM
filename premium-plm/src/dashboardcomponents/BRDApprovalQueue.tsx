@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import type { BRDQueueItem } from "../types";
+import type { BRDQueueItem } from "../../src/types/dashboardTypes";
 
 interface BRDApprovalQueueProps {
   items: BRDQueueItem[];

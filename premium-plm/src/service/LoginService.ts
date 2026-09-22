@@ -1,24 +1,20 @@
-import { apiClient } from "../../services/apiClient";
+import { apiClient } from "../apicalls/apiClient";
+
 import type {
+    ChangeTemporaryPasswordRequest,
     LoginRequest,
     LoginResponse,
-} from "./types";
+} from "../types/loginTypes";
 
 export function loginUser(
     credentials: LoginRequest,
-): Promise<LoginResponse> {
-    return apiClient<LoginResponse>("/api/PLMAuth/login", {
+)/*: Promise<LoginResponse>*/ {
+    return apiClient<LoginResponse>("api/PLMAuth/login", {
     method: "POST",
     body: JSON.stringify(credentials),
 });
 }
 
-export interface ChangeTemporaryPasswordRequest {
-  email: string;
-  currentPassword: string;
-  newPassword: string;
-  confirmPassword: string;
-}
 
 export async function changeTemporaryPassword(
   data: ChangeTemporaryPasswordRequest,

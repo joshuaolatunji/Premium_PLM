@@ -2,7 +2,8 @@ export type InitiativeStatus =
   | "On Track"
   | "At Risk"
   | "Overdue"
-  | "Blocked";
+  | "Blocked"
+  | "Not Started";
 
 export interface DashboardStat {
   label: string;
@@ -18,8 +19,8 @@ export interface PortfolioInitiative {
   priority: string;
   currentStage: string;
   owner: string;
-  progress: number;
-  daysLeft: number;
+  progress: number | null;
+  daysLeft: number | null;
   status: InitiativeStatus;
   action: string;
 }

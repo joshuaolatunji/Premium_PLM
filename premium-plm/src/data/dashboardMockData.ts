@@ -5,7 +5,7 @@ import type {
   GovernanceActivity,
   PortfolioInitiative,
   PriorityDistributionItem,
-} from "../types";
+} from "../types/dashboardTypes";
 
 export const dashboardStats: DashboardStat[] = [
   {

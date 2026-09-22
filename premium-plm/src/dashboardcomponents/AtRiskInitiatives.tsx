@@ -1,5 +1,5 @@
 import { AlertTriangle, Ban, Clock3 } from "lucide-react";
-import type { AtRiskInitiative } from "../types";
+import type { AtRiskInitiative } from "../../src/types/dashboardTypes";
 
 interface AtRiskInitiativesProps {
   initiatives: AtRiskInitiative[];

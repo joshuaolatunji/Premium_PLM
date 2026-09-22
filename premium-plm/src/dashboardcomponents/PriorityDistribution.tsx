@@ -1,4 +1,4 @@
-import type { PriorityDistributionItem } from "../types";
+import type { PriorityDistributionItem } from "../../src/types/dashboardTypes";
 
 interface PriorityDistributionProps {
   items: PriorityDistributionItem[];

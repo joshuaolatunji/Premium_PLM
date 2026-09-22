@@ -658,21 +658,26 @@ a {
 }
 
 /* Tablets Portrait and Phones: stack the brand panel above the form */
-@media (max-width: 760px) {
+@media (max-width: 1100px) {
   .login-layout {
-    grid-template-columns: 1fr;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100dvh;
+    min-height: 100vh;
+    background: var(--color-ink);
   }
 
   .login-layout_brand {
-    min-height: 0;
+    display: none;
   }
 
-  .login-layout_brand-content {
+  /* .login-layout_brand-content {
     min-height: 0;
     padding: 28px 24px;
-  }
+  } 
 
-  .login-layout_intro {
+   .login-layout_intro {
     max-width: none;
 
     margin-top: 28px;
@@ -685,16 +690,35 @@ a {
 
   .login-layout_intro p {
     max-width: 420px;
-  }
+  } */
 
   .login-layout_form {
-    padding: 32px 24px 48px;
+    min-height: 100dvh;
+    min-height: 100vh;
+    width: 100%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: clamp(20px, 4vw, 48px);
+  }
+
+
+  .login-form {
+    width: clamp(320px, 60vw, 560px);
+    max-width: calc(100% - 32px);
+    padding: clamp(24px, 3vw, 36px);
+    border-radius: 12px;
+    background: var(--color-surface);
+
+    box-shadow: 0 20px 50px rgb(0 0 0 / 18%);
   }
 }
 
 /* Phones */
-@media (max-width: 420px) {
-  .login-layout_brand-content {
+@media (max-width: 480px) {
+  /* .login-layout_brand-content {
     padding: 24px 20px;
   }
 
@@ -713,10 +737,10 @@ a {
 
   .login-layout_legal {
     font-size: 10px;
-  }
+  } */
 
   .login-layout_form {
-    padding: 24px 20px 40px;
+    padding: 16px;
   }
 
   .login-form_header h2 {
@@ -725,6 +749,17 @@ a {
 
   .password-input input {
     padding-right: 58px;
+  }
+
+  .login-form_header p {
+    font-size: 12px;
+  }
+
+
+  .login-form {
+    max-width: calc(100% - 8px);
+    padding: 24px 20px;
+    border-radius: 10px;
   }
 }
 
@@ -1651,4 +1686,13 @@ a {
   .dashboard-grid__activity {
     grid-area: activity;
   }
+}
+
+.portfolio-empty-value {
+  color: #9699a0;
+}
+
+.status-badge--not-started {
+  background-color: #f2f4f7;
+  color: #667085;
 }
