@@ -21,10 +21,10 @@ export interface ProductInitiative {
   productId: string | null;
 }
 
-export interface ProductInitiativesResponse {
-  statusCode: number;
-  isSuccessful: boolean;
-  message: string;
-  data: ProductInitiative[];
-}
+// export interface ProductInitiativesResponse {
+//   statusCode: number;
+//   isSuccessful: boolean;
+//   message: string;
+//   data: ProductInitiative[];
+// }
 

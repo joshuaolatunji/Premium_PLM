@@ -1,16 +1,18 @@
 import { apiClient } from "../apicalls/apiClient";
 import { getToken } from "../apicalls/authStorage";
 
-import type { ProductInitiativesResponse } from "../types/initiativeTypes";
+import type { ApiResponse } from "../types/apiTypes"
+import type { ProductInitiative } from "../types/initiativeTypes";
 
-export async function getProductInitiatives() {
+export async function getProductInitiatives(): Promise<ProductInitiative[]> {
   const token = getToken();
 
-  return apiClient<ProductInitiativesResponse>(
-    "/api/product-initiatives",
-    {
+  const response = await apiClient<ApiResponse<ProductInitiative[]>>
+  ( "/api/product-initiatives", {
       method: "GET",
       token: token ?? undefined,
     },
   );
+
+  return response.data;
 }
