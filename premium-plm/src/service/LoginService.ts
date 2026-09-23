@@ -8,7 +8,7 @@ import type {
 
 export function loginUser(
     credentials: LoginRequest,
-)/*: Promise<LoginResponse>*/ {
+): Promise<LoginResponse> {
     return apiClient<LoginResponse>("api/PLMAuth/login", {
     method: "POST",
     body: JSON.stringify(credentials),
