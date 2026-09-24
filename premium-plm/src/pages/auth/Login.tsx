@@ -69,7 +69,7 @@ function Login() {
                 )}ms`,
             );
 
-            navigate("/");
+            navigate("/dashboard");
         } catch (error) {
             if(error instanceof Error) {
                 setErrorMessage(error.message);

@@ -4,9 +4,9 @@ function DashboardHeader() {
   return (
     <header className="dashboard-header">
       <div className="dashboard-header__content">
-        <p className="dashboard-breadcrumb">
+        {/* <p className="dashboard-breadcrumb">
           PremiumPLM / Dashboard
-        </p>
+        </p> */}
 
         <h1 className="dashboard-title">
           Good morning, Chidinma

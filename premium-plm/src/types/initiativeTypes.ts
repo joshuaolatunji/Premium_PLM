@@ -28,3 +28,13 @@ export interface ProductInitiative {
 //   data: ProductInitiative[];
 // }
 
+
+export interface CreateInitiativeRequest {
+  projectName: string,
+  description: string,
+  priority: number,
+  timelineDays: number,
+  categoryId: string,
+  projectManagerId: string,
+}
+
