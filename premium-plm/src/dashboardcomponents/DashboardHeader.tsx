@@ -1,6 +1,10 @@
 import { Plus } from "lucide-react";
 
-function DashboardHeader() {
+interface DashboardHeaderProps {
+  onOpenCreateInitiative: () => void;
+}
+
+function DashboardHeader({ onOpenCreateInitiative }: DashboardHeaderProps) {
   return (
     <header className="dashboard-header">
       <div className="dashboard-header__content">
@@ -32,6 +36,7 @@ function DashboardHeader() {
         <button
           type="button"
           className="button button--primary"
+          onClick={onOpenCreateInitiative}
         >
           <Plus size={17} strokeWidth={2} />
 
