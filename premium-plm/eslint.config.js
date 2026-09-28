@@ -19,4 +19,20 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // shadcn/ui primitives export their `cva` variant maps alongside the
+    // component, which the fast-refresh rule cannot see through. These are
+    // library files, so HMR granularity is not worth splitting them up.
+    files: ['src/components/ui/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
+    // The router module holds route elements, not a component.
+    files: ['src/app/router.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])
