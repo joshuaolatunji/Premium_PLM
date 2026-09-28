@@ -8,13 +8,9 @@ import type {
 } from "../types";
 
 /**
- * Placeholder dataset.
- *
- * The live `/api/product-initiatives` endpoint returns a different shape
- * (numeric `priority`/`status`, no stage, owner or progress), so it cannot
- * populate these panels as-is. Swapping to real data means implementing
- * `DashboardRepository` against that endpoint and changing one line in
- * `dashboard.repository.ts` — see that file for the mapping notes.
+ * Placeholder data. The live endpoint returns a different shape, so these
+ * cannot be swapped in as-is — see `dashboard.repository.ts` for the mapping
+ * notes.
  */
 
 export const mockStats: DashboardStat[] = [

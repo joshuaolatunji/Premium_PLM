@@ -1,32 +1,21 @@
 /**
- * Every API path in the app lives here. No other file should contain a URL
- * string literal.
- *
- * Paths are transcribed exactly as the API documents them, including the
- * capital `P` in `change-Password` and the literal `&` in `get-user&roles`.
- * ASP.NET routing is case-insensitive so the casing would work either way, but
- * keeping the documented form makes these greppable against the backend.
+ * Every API path in the app. No other file should hold a URL literal. Casing
+ * (`change-Password`) and the `&` in `get-user&roles` are transcribed from the
+ * docs so these stay greppable against the backend.
  */
 export const endpoints = {
   health: "/api/health",
 
   auth: {
     login: "/api/PLMAuth/login",
-    /**
-     * Invited-user flow. `create-user` hands out a relative setup link
-     * (`/set-password?token=...`) which the backend emails; the token is a
-     * SHA-256 digest and carries no identity, so the page also collects
-     * `emailAddress`.
-     */
+    /** Invited-user flow; `create-user` emails a relative `?token=` link. */
     setPassword: "/api/PLMAuth/set-password",
-    /** Authenticated: identity comes from the bearer token, no email needed. */
+    /** Authenticated: identity comes from the bearer token. */
     changePassword: "/api/PLMAuth/change-Password",
     changeTemporaryPassword: "/api/PLMAuth/change-temporary-password",
     /**
-     * SECURITY: accepts `{ email, newPassword, confirmPassword }` with no
-     * verification code or token, so anyone who knows a colleague's email
-     * address could set that account's password. Present for contract
-     * completeness only — deliberately not wired to any UI.
+     * SECURITY: no verification code or token, so knowing an email address is
+     * enough to set that account's password. Not wired to any UI.
      */
     autoResetPassword: "/api/PLMAuth/autoreset-password",
   },
@@ -36,21 +25,14 @@ export const endpoints = {
     getAllUsers: "/api/PLMAdmin/get_all_users",
     getAllRoles: "/api/PLMAdmin/get_all_roles",
     assignRole: "/api/PLMAdmin/assign_role",
-    /** DELETE with a request body — the client supports both. */
+    /** DELETE with a request body. */
     removeUserRole: "/api/PLMAdmin/remove_user_role",
-    /**
-     * The `&` is part of the route segment, not a query separator, so it is
-     * left unencoded.
-     */
+    /** The `&` is part of the route segment, so it stays unencoded. */
     getUserRoles: (userId: string) =>
       `/api/PLMAdmin/${encodeURIComponent(userId)}/get-user&roles`,
   },
 
-  /**
-   * Not part of the verified API surface — carried over from the original
-   * codebase and still referenced only from the dashboard repository notes.
-   * Confirm against the backend before wiring anything to it.
-   */
+  /** Unverified — not in the confirmed API surface. Check before wiring up. */
   initiatives: {
     list: "/api/product-initiatives",
   },

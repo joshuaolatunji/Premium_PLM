@@ -43,16 +43,12 @@ export const router = createBrowserRouter([
           </PublicOnlyRoute>
         ),
       },
+      /*
+       * Reached from the setup link in an invitation email, so it must survive
+       * a cold load of `/set-password?token=...` — which needs the host's SPA
+       * rewrite. See the README deployment checklist.
+       */
       {
-        /*
-         * Reached from the setup link in a new-user invitation email, so it
-         * must survive a cold load of `/set-password?token=...` — which in turn
-         * means the host needs an SPA rewrite to index.html. See the README
-         * deployment checklist.
-         *
-         * `PublicOnlyRoute` applies here too: a signed-in user has no business
-         * setting a first password.
-         */
         path: "/set-password",
         element: (
           <PublicOnlyRoute>

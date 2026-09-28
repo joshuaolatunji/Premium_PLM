@@ -11,16 +11,14 @@ export interface FormFieldProps {
   type?: "text" | "email" | "password" | "search";
   error?: string;
   /**
-   * Replaces the default `<Label>`. Use when the label row needs extra
-   * furniture, such as a "Forgot password?" link. When supplied the caller must
-   * render its own `<label htmlFor={id}>` inside it, and `label` becomes
-   * redundant but is still required so a field can never render unlabelled.
+   * Replaces the default `<Label>`, for label rows needing extra furniture. The
+   * caller must render its own `<label htmlFor={id}>`; `label` stays required
+   * so a field can never render unlabelled.
    */
   labelContent?: ReactNode;
   /**
-   * Id of an external element describing this input — used for form-level
-   * errors rendered as an `Alert` below the form. Ignored when `error` is set,
-   * since the inline message already describes the field.
+   * Id of an external element describing this input, for form-level errors
+   * rendered as an `Alert` below the form. Ignored when `error` is set.
    */
   describedBy?: string;
   autoComplete?: string;
@@ -34,12 +32,8 @@ export interface FormFieldProps {
 }
 
 /**
- * Label + input + inline error with the `aria-invalid` / `aria-describedby`
- * wiring already done.
- *
- * Every field on the login, set-password and change-password screens repeated
- * this markup, including the error-id convention, so the a11y attributes were
- * easy to get subtly wrong in one place and not another.
+ * Label + input + inline error with `aria-invalid` / `aria-describedby` already
+ * wired, shared so those attributes cannot differ between screens.
  */
 export function FormField({
   id,

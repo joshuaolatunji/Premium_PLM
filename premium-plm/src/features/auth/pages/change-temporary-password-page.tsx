@@ -128,6 +128,7 @@ export default function ChangeTemporaryPasswordPage() {
             value={email}
             onChange={setEmail}
             error={fieldErrors.email}
+            inputClassName="h-10"
             required
           />
 
@@ -138,6 +139,7 @@ export default function ChangeTemporaryPasswordPage() {
             value={currentPassword}
             onChange={setCurrentPassword}
             error={fieldErrors.currentPassword}
+            inputClassName="h-10"
             required
           />
 
@@ -148,6 +150,7 @@ export default function ChangeTemporaryPasswordPage() {
             value={newPassword}
             onChange={setNewPassword}
             error={fieldErrors.newPassword}
+            inputClassName="h-10"
             required
           />
 
@@ -158,6 +161,7 @@ export default function ChangeTemporaryPasswordPage() {
             value={confirmPassword}
             onChange={setConfirmPassword}
             error={fieldErrors.confirmPassword}
+            inputClassName="h-10"
             required
           />
 

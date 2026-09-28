@@ -40,14 +40,9 @@ class MockDashboardRepository implements DashboardRepository {
 }
 
 /*
- * To go live, implement DashboardRepository against `endpoints.initiatives.list`
- * and swap the export below.
- *
- * Note the shape mismatch: `ProductInitiative` exposes numeric `priority` and
- * `status`, plus `currentDeadline`/`timelineDays`, but has no lifecycle stage,
- * display name for the owner, or progress percentage. Supporting
- * `PortfolioInitiative` faithfully needs at least one further endpoint, so this
- * is a schema decision, not a wiring change.
+ * To go live, implement DashboardRepository against
+ * `endpoints.initiatives.list` and swap the export below. Note the shape
+ * mismatch: no stage, owner or progress, so this is a schema decision.
  */
 export const dashboardRepository: DashboardRepository =
   new MockDashboardRepository();

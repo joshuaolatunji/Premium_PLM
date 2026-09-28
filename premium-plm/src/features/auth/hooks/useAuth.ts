@@ -21,11 +21,9 @@ function getServerSnapshot(): null {
 }
 
 /**
- * Single entry point for reading the current session.
- *
- * Backed by the store's subscription rather than React context: the session
- * lives in `sessionStorage`, is read imperatively by the API client, and needs
- * to be observable from route guards — none of which benefit from a provider.
+ * Session read via the store rather than context: the API client reads the token
+ * imperatively and route guards need to observe it, so a provider would add
+ * nothing.
  */
 export function useAuth(): AuthState {
   const user = useSyncExternalStore(

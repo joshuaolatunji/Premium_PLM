@@ -1,20 +1,13 @@
 /**
- * Form validation rules shared by the auth screens, so the login, set-password
- * and change-password pages cannot drift apart.
- *
- * These checks exist to give immediate feedback, not to gate: the backend stays
- * the source of truth and its messages win. Minimum password length is 8;
- * complexity is deliberately not enforced here because the policy is not
- * documented, and a stricter server rule will surface as a form error.
+ * Shared by the auth screens so they cannot drift. Feedback only — the backend
+ * stays the source of truth and its messages win. Min length is 8; complexity
+ * is not enforced because the policy is undocumented.
  */
 export const MIN_PASSWORD_LENGTH = 8;
 
 /**
- * Deliberately permissive — checks only for the shape the API needs, so a valid
- * but unusual address is not blocked client-side.
- *
- * Exported so the login button's enable/disable state and {@link validateEmail}
- * cannot disagree about what counts as a filled, valid field.
+ * Permissive on purpose — only the shape the API needs. Exported so the login
+ * button's disabled state and `validateEmail` cannot disagree.
  */
 export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -66,12 +59,7 @@ export function validatePasswordConfirmation(
   return "";
 }
 
-/**
- * Validates a new-password / confirm-password pair.
- *
- * @returns errors keyed by field name, or `null` when both are valid so callers
- *   can branch on truthiness.
- */
+/** @returns errors keyed by field, or `null` when both are valid. */
 export function validatePasswordPair(
   password: string,
   confirmation: string,

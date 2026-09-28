@@ -22,12 +22,9 @@ export function isApiEnvelope<TData>(
 }
 
 /**
- * Unwraps `{ isSuccessful, data, message }` and throws on business-level
- * failure.
- *
- * Call sites used to each re-implement `if (!response.isSuccessful) throw ...`.
- * Doing it once here means a service function either resolves to `TData` or
- * throws an `ApiError`, and pages only need a `try/catch`.
+ * Unwraps `{ isSuccessful, data }` and throws on business-level failure, so a
+ * service function either resolves to `TData` or throws an `ApiError` and pages
+ * only need a `try/catch`.
  */
 export function unwrap<TData>(response: unknown): TData {
   if (!isApiEnvelope<TData>(response)) {

@@ -61,12 +61,8 @@ function buildUrl(
 }
 
 /**
- * Reads a response body without assuming it is JSON.
- *
- * The previous client called `response.json()` unconditionally, which threw on
- * `204 No Content` and on the HTML error pages that proxies and load balancers
- * return. Those failures surfaced as a confusing `SyntaxError` instead of the
- * actual HTTP problem.
+ * Never assumes JSON. Calling `response.json()` blindly threw on `204` and on
+ * the HTML error pages proxies return, masking the real HTTP problem.
  */
 async function readBody(response: Response): Promise<unknown> {
   if (response.status === 204 || response.status === 205) {

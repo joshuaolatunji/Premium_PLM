@@ -40,13 +40,7 @@ export async function signIn(credentials: LoginRequest): Promise<LoginData> {
   return data;
 }
 
-/**
- * `POST /api/PLMAuth/set-password` — the invited-user flow reached from the
- * link in the welcome email. Public: the user has no password yet.
- *
- * The token comes from the `?token=` query parameter and is the only proof the
- * caller is the invited user.
- */
+/** Public: reached from the invitation link, before the user has a password. */
 export async function setPassword(payload: SetPasswordRequest): Promise<void> {
   await apiClient.post<PasswordMutationResponse>(
     endpoints.auth.setPassword,
@@ -55,11 +49,7 @@ export async function setPassword(payload: SetPasswordRequest): Promise<void> {
   );
 }
 
-/**
- * `POST /api/PLMAuth/change-temporary-password` — forces a new password for a
- * user whose current one is temporary. Public, and identified by email plus the
- * temporary password itself.
- */
+/** Public: identified by email plus the temporary password itself. */
 export async function changeTemporaryPassword(
   payload: ChangeTemporaryPasswordRequest,
 ): Promise<void> {
@@ -71,11 +61,8 @@ export async function changeTemporaryPassword(
 }
 
 /**
- * `POST /api/PLMAuth/change-Password` — ordinary authenticated change.
- *
- * The API answers "Password changed successfully. Please log in again", and the
- * existing token stays valid until it expires, so the session is dropped here
- * rather than leaving a stale one behind.
+ * The API answers "please log in again" and the old token stays valid until it
+ * expires, so the session is dropped rather than left stale.
  */
 export async function changePassword(
   payload: ChangePasswordRequest,
@@ -89,13 +76,9 @@ export async function changePassword(
 }
 
 /**
- * `POST /api/PLMAuth/autoreset-password` — NOT WIRED TO ANY UI.
- *
- * Deliberately has no caller. The endpoint accepts an email and a new password
- * with no verification code, token, or current password, so exposing it would
- * let anyone reset any account whose address they know. Kept here so the
- * contract is documented and typed; remove it or add backend verification
- * before calling it.
+ * `autoreset-password` — NOT WIRED TO ANY UI. It accepts an email and a new
+ * password with no verification code, token, or current password, so calling it
+ * would let anyone reset any account whose address they know.
  */
 export async function autoResetPassword(
   payload: AutoResetPasswordRequest,

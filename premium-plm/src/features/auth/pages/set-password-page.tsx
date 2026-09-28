@@ -25,18 +25,8 @@ const NO_ERRORS: FieldErrors = {
 };
 
 /**
- * The invited-user flow: `PLMAdmin/create-user` returns a setup link that the
- * backend emails, and following it lands here to choose a first password.
- *
- * Two details drive the shape of this page:
- *
- * - The `token` query parameter is the only proof the caller is the invited
- *   user. It is an opaque SHA-256 digest, so the email address cannot be
- *   recovered from it and must be typed — pre-filled if the backend ever appends
- *   `?email=`.
- * - The token is read once into state and then stripped from the address bar, so
- *   it does not linger in browser history or leak via the `Referer` header if
- *   the user navigates away.
+ * Opened from the setup link in `create-user`. The token is an opaque digest, so
+ * the email must be typed too. It is read once, then stripped from the URL.
  */
 export default function SetPasswordPage() {
   const navigate = useNavigate();
@@ -178,6 +168,7 @@ export default function SetPasswordPage() {
             value={email}
             onChange={setEmail}
             error={fieldErrors.email}
+            inputClassName="h-10"
             required
           />
 
@@ -188,6 +179,7 @@ export default function SetPasswordPage() {
             value={newPassword}
             onChange={setNewPassword}
             error={fieldErrors.newPassword}
+            inputClassName="h-10"
             required
           />
 
@@ -198,6 +190,7 @@ export default function SetPasswordPage() {
             value={confirmPassword}
             onChange={setConfirmPassword}
             error={fieldErrors.confirmPassword}
+            inputClassName="h-10"
             required
           />
 

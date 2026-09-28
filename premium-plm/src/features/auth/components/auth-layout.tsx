@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
-
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[43%_57%]">
+    <div className="min-h-dvh overflow-x-hidden lg:grid lg:grid-cols-[43%_57%]">
+      {/* Brand panel: desktop only, so the mobile logo lives with the form. */}
       <section className="hidden bg-sidebar text-sidebar-foreground lg:flex">
         <div className="flex min-h-dvh w-full flex-col p-12">
           <div className="flex h-fit w-fit items-center rounded-lg bg-white px-4 py-3">
@@ -38,8 +38,13 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         </div>
       </section>
 
-      <section className="flex min-h-dvh items-center justify-center bg-sidebar p-4 sm:p-10 lg:bg-background lg:p-10">
-        <div className="w-full max-w-[500px] rounded-xl bg-card p-6 shadow-modal sm:p-9">
+      {/*
+        Single centred column below lg. `py` plus `min-h-dvh` lets the card grow
+        when the mobile keyboard shrinks the viewport, so the focused field
+        never gets clipped.
+      */}
+      <section className="flex min-h-dvh items-center justify-center bg-sidebar p-4 sm:p-8 lg:bg-background lg:p-10">
+        <div className="w-full max-w-[500px] rounded-xl bg-card p-5 shadow-modal sm:p-9">
           {children}
         </div>
       </section>

@@ -7,12 +7,7 @@ import { FormField, type FormFieldProps } from "@/features/auth/components/form-
 
 export type PasswordFieldProps = Omit<FormFieldProps, "type" | "trailing">;
 
-/**
- * A password input with a show/hide toggle.
- *
- * Composes {@link FormField} so the aria wiring stays in one place. Used by
- * every password screen, which is why the toggle logic is not repeated per page.
- */
+/** Composes `FormField` so the toggle logic exists once, not per page. */
 export function PasswordField(props: PasswordFieldProps) {
   const [isVisible, setIsVisible] = useState(false);
   const toggleId = useId();

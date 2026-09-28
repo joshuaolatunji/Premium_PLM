@@ -38,12 +38,7 @@ export default function LoginPage() {
     navigate(from ?? "/", { replace: true });
   });
 
-  /*
-   * The form sets `noValidate`, so the browser will not block an empty submit.
-   * The button is gated here instead: the email must be well-formed and the
-   * password must be non-empty, matching the server's own requirements so a
-   * pointless round-trip never leaves the page.
-   */
+  /* The form is `noValidate`, so the button is gated here instead. */
   const isEmailValid = EMAIL_PATTERN.test(emailAddress.trim());
   const isPasswordPresent = password.length > 0;
   const canSubmit = isEmailValid && isPasswordPresent && !isSubmitting;
@@ -66,7 +61,7 @@ export default function LoginPage() {
 
   return (
     <AuthLayout>
-      <header className="mb-8">
+      <header className="mb-6 lg:mb-8">
         <h1 className="text-2xl font-semibold tracking-[-0.02em]">
           Sign in to Premium PLM
         </h1>
@@ -75,6 +70,18 @@ export default function LoginPage() {
           Use your Premium Trust Bank network credentials.
         </p>
       </header>
+
+      {/* The brand panel is hidden below lg, so the logo sits here instead. */}
+      <div className="mb-6 flex items-center gap-2.5 lg:hidden">
+        <img
+          src="/premium-logo.png"
+          alt="Premium Trust Bank"
+          className="h-7 w-auto"
+        />
+        <span className="text-sm font-semibold tracking-[-0.01em]">
+          Premium PLM
+        </span>
+      </div>
 
       {successMessage ? (
         <Alert
@@ -85,31 +92,27 @@ export default function LoginPage() {
         </Alert>
       ) : null}
 
-          {/*
-            Only a genuine transport failure warrants the "cannot reach"
-            message. A 4xx/5xx probe still means the API is responding, so
-            those are reported as degraded and left out of the banner.
-          */}
-          {apiStatus === "unreachable" ? (
-            <Alert variant="destructive" className="mb-5">
-              <AlertDescription>
-                We cannot reach the Premium PLM service. It may still be
-                starting up — please wait a moment and try again.
-              </AlertDescription>
-            </Alert>
-          ) : null}
+      {/* A 4xx/5xx probe means the API responded, so it is not "offline". */}
+      {apiStatus === "unreachable" ? (
+        <Alert variant="destructive" className="mb-5">
+          <AlertDescription>
+            We cannot reach the Premium PLM service. It may still be starting
+            up — please wait a moment and try again.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
-          {apiStatus === "degraded" ? (
-            <Alert className="mb-5">
-              <AlertDescription>
-                The Premium PLM service responded unexpectedly. You can still
-                try to sign in, but report it if sign-in fails.
-              </AlertDescription>
-            </Alert>
-          ) : null}
+      {apiStatus === "degraded" ? (
+        <Alert className="mb-5">
+          <AlertDescription>
+            The Premium PLM service responded unexpectedly. You can still try to
+            sign in, but report it if sign-in fails.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <form onSubmit={handleSubmit} noValidate>
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-4 sm:gap-5">
           <FormField
             id={emailId}
             label="Email address"
@@ -119,6 +122,7 @@ export default function LoginPage() {
             value={emailAddress}
             onChange={setEmailAddress}
             describedBy={errorMessage ? errorId : undefined}
+            inputClassName="h-10"
             required
           />
 
@@ -127,11 +131,11 @@ export default function LoginPage() {
             label="Password"
             describedBy={errorMessage ? errorId : undefined}
             autoComplete="current-password"
-            placeholder="••••••••••"
             value={password}
             onChange={setPassword}
+            inputClassName="h-10"
             labelContent={
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <label
                   htmlFor={passwordId}
                   className="text-xs font-medium leading-none"
@@ -139,19 +143,13 @@ export default function LoginPage() {
                   Password
                 </label>
 
-                {/*
-                  Intentionally inert. `PLMAuth/autoreset-password` accepts an
-                  email plus a new password with no verification code or token,
-                  so wiring this up as-is would let anyone reset any account
-                  whose address they know. Revisit once the backend verifies
-                  the requester owns the mailbox.
-                */}
+                {/* Inert: autoreset-password has no verification step. */}
                 <Button
                   type="button"
                   variant="link"
                   size="xs"
                   disabled
-                  className="h-auto p-0 text-xs text-muted-foreground"
+                  className="h-auto shrink-0 p-0 text-xs text-muted-foreground"
                 >
                   Forgot password?
                 </Button>
@@ -169,7 +167,7 @@ export default function LoginPage() {
           <Button
             type="submit"
             disabled={!canSubmit}
-            className="mt-3 h-10 w-full"
+            className="mt-2 h-11 w-full sm:mt-3 sm:h-10"
           >
             {isSubmitting ? "Signing in…" : "Sign in"}
           </Button>

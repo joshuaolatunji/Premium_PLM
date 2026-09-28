@@ -3,17 +3,8 @@ import { apiClient } from "@/lib/api/client";
 import { endpoints } from "@/lib/api/endpoints";
 
 /**
- * `GET /api/health` is the one endpoint that does **not** use the standard
- * `{ isSuccessful, data }` envelope — it returns `statusCode` directly and
- * carries the payload inline:
- *
- * ```json
- * { "statusCode": 200, "status": "healthy", "message": "...",
- *   "service": "PremiumPLM API", "timestamp": "2026-09-28T11:58:57.1461128Z" }
- * ```
- *
- * So it is deliberately not passed through `unwrap`, which would reject it for
- * lacking `isSuccessful`.
+ * The one endpoint that skips the `{ isSuccessful, data }` envelope — it returns
+ * `statusCode` inline, so it must not go through `unwrap`.
  */
 export interface HealthStatus {
   statusCode: number;
@@ -29,13 +20,9 @@ export type HealthProbe =
   | { reachability: "unreachable" };
 
 /**
- * Connectivity probe used to warm up the API on first load.
- *
- * Distinguishes "the server answered" from "the server could not be reached",
- * because any HTTP response — including a 404 or a 500 — proves the API is up.
- * Collapsing those into a single `null` is what made an incorrect probe path
- * render as "we cannot reach the service" when the service was reachable and
- * healthy the whole time.
+ * Separates "the server answered" from "the server could not be reached": any
+ * HTTP response, including 404 or 500, proves the API is up. Collapsing both
+ * into `null` is what made a wrong probe path render as an outage.
  */
 export async function checkApiHealth(): Promise<HealthProbe> {
   try {

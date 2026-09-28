@@ -17,12 +17,8 @@ import type {
 } from "../types";
 
 /**
- * The only module that knows the `PLMAdmin` surface. Every call here is
- * authenticated — these endpoints are not reachable before sign-in, so the
- * client uses the authenticated GET and the default-authenticated mutations.
- *
- * There is no admin UI yet, so nothing imports these. They are typed against the
- * documented contract and ready for the Users screen.
+ * The only module that knows the `PLMAdmin` surface. All authenticated. No admin
+ * UI yet, so nothing imports these — they are typed and ready for that screen.
  */
 
 /** `GET /api/PLMAdmin/get_all_users` */
@@ -49,12 +45,7 @@ export async function getAllRoles(
   return unwrap<RoleOption[]>(response);
 }
 
-/**
- * `GET /api/PLMAdmin/{userId}/get-user&roles`
- *
- * Resolves to bare role names (`["ProjectManager", ...]`), unlike
- * `getAllUsers` which embeds roles on the user record.
- */
+/** Resolves to bare role names, unlike `getAllUsers` which embeds them. */
 export async function getUserRoles(
   userId: string,
   options?: { signal?: AbortSignal },
@@ -67,12 +58,7 @@ export async function getUserRoles(
   return unwrap<string[]>(response);
 }
 
-/**
- * `POST /api/PLMAdmin/create-user`
- *
- * Returns the relative setup link to email to the new user. No role is
- * assigned here — that is a separate `assignRole` call.
- */
+/** Returns the setup link to email the user. Roles are assigned separately. */
 export async function createUser(
   payload: CreateUserRequest,
 ): Promise<CreateUserData> {

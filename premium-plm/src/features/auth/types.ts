@@ -16,9 +16,8 @@ export interface LoginData {
 export type LoginResponse = ApiEnvelope<LoginData>;
 
 /**
- * Invited-user flow. `emailAddress` is required even though the setup link
- * carries only a token — the token is an opaque SHA-256 digest and the backend
- * has no way to recover the address from it.
+ * `emailAddress` is required even though the setup link carries only a token —
+ * the token is an opaque digest the backend cannot reverse into an address.
  */
 export interface SetPasswordRequest {
   emailAddress: string;
@@ -27,11 +26,7 @@ export interface SetPasswordRequest {
   confirmPassword: string;
 }
 
-/**
- * Authenticated self-service change. No email: identity comes from the bearer
- * token. The API responds "Please log in again", so callers must drop the
- * session.
- */
+/** No email: identity comes from the bearer token. */
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
@@ -46,12 +41,9 @@ export interface ChangeTemporaryPasswordRequest {
 }
 
 /**
- * SECURITY: this endpoint takes no verification code, token, or current
- * password — only an email and the new credentials. Anyone who knows a
- * colleague's address could set their password. Exposed here for contract
- * completeness and deliberately not called from any UI; the "Forgot
- * password?" button on the login page stays inert until the backend adds
- * email verification.
+ * SECURITY: no verification code, token, or current password — knowing an email
+ * address is enough to set that account's password. Typed for completeness and
+ * never called; "Forgot password?" stays inert until the backend verifies.
  */
 export interface AutoResetPasswordRequest {
   email: string;

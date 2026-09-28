@@ -1,10 +1,7 @@
 /**
- * Roles the API currently issues, as of `PLMAdmin/get_all_roles`.
- *
- * This is a compile-time aid, not a source of truth. The backend can add a role
- * at any time, so wire DTOs stay typed as `string` and are narrowed with
- * `isKnownRole` only where a role actually drives behaviour. Typing the DTO as
- * `RoleName` would make the type lie the moment a role is added server-side.
+ * Compile-time aid only. The backend can add a role at any time, so wire DTOs
+ * stay `string` and are narrowed with `isKnownRole` — typing them as `RoleName`
+ * would make the type lie the moment that happens.
  */
 export const KNOWN_ROLES = [
   "SuperAdmin",
