@@ -37,9 +37,9 @@ function RecentGovernanceActivity({
     <section className="dashboard-panel governance-activity">
       <div className="dashboard-panel__header">
         <div>
-          <h2>Recent governance activity</h2>
+          <h2>Recently created</h2>
           <p>
-            Latest decisions and lifecycle events.
+            The most recently created initiatives across the portfolio.
           </p>
         </div>
 

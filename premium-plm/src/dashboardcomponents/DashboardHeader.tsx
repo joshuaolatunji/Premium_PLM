@@ -1,10 +1,24 @@
 import { Plus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { getStoredUser } from "../apicalls/authStorage";
+import { capitalize } from "../utils/text";
 
 interface DashboardHeaderProps {
   onOpenCreateInitiative: () => void;
+  overSlaBrdCount: number;
 }
 
-function DashboardHeader({ onOpenCreateInitiative }: DashboardHeaderProps) {
+function DashboardHeader({ onOpenCreateInitiative, overSlaBrdCount }: DashboardHeaderProps) {
+  const navigate = useNavigate();
+  const user = getStoredUser();
+
+  const today = new Date().toLocaleDateString("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
   return (
     <header className="dashboard-header">
       <div className="dashboard-header__content">
@@ -13,15 +27,20 @@ function DashboardHeader({ onOpenCreateInitiative }: DashboardHeaderProps) {
         </p> */}
 
         <h1 className="dashboard-title">
-          Good morning, Chidinma
+          Good morning, {user?.userName ? capitalize(user.userName) : "there"}
         </h1>
 
         <p className="dashboard-subtitle">
-          Monday, 8 September 2026
-          <span aria-hidden="true"> · </span>
-          <strong>
-            3 BRDs have been waiting more than 3 days.
-          </strong>
+          {today}
+          {overSlaBrdCount > 0 && (
+            <>
+              <span aria-hidden="true"> · </span>
+              <strong>
+                {overSlaBrdCount} BRD{overSlaBrdCount === 1 ? "" : "s"}{" "}
+                {overSlaBrdCount === 1 ? "has" : "have"} been waiting more than 3 days.
+              </strong>
+            </>
+          )}
         </p>
       </div>
 
@@ -29,6 +48,7 @@ function DashboardHeader({ onOpenCreateInitiative }: DashboardHeaderProps) {
         <button
           type="button"
           className="button button--secondary"
+          onClick={() => navigate("/dashboard/priorities")}
         >
           Manage priorities
         </button>

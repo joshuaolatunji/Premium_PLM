@@ -15,7 +15,11 @@ export interface ProductInitiative {
   status: number;
 
   createdByUserId: string;
-  projectManagerId: string;
+  // Real and populated at creation now — the Group Head picks both a BDO
+  // and a PM in the same form (see CreateInitiativeModal.tsx). BDO
+  // assignment still has no real field, so it stays mocked separately (see
+  // mocks/bdoAssignmentMock.ts).
+  projectManagerId: string | null;
 
   createdAt: string;
 
@@ -44,6 +48,8 @@ export interface CreateInitiativeRequest {
   priority: number,
   timelineDays: number,
   categoryId: string,
-  projectManagerId: string,
+  // Real — the Group Head selects the Project Manager in the same form,
+  // sent directly to the API now (see CreateInitiativeModal.tsx).
+  projectManagerId: string | null,
 }
 

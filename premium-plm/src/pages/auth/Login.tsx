@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom"
 import { loginUser } from "../../service/LoginService"
 import { saveAuthSession } from "../../apicalls/authStorage";
 import {checkApiHealth} from "../../service/healthApi"
+import { getLandingRouteForRoles } from "../../utils/roleRouting";
 
 import LoginLayout from "../../components/auth/LoginLayout";
 
@@ -69,7 +70,7 @@ function Login() {
                 )}ms`,
             );
 
-            navigate("/dashboard");
+            navigate(getLandingRouteForRoles(response.data.roles));
         } catch (error) {
             if(error instanceof Error) {
                 setErrorMessage(error.message);

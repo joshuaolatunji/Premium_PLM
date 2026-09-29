@@ -3,10 +3,14 @@ import type { PortfolioInitiative } from "../../src/types/dashboardTypes";
 
 interface PortfolioOverviewProps {
   initiatives: PortfolioInitiative[];
+  onAction: (initiative: PortfolioInitiative) => void;
+  onViewAll: () => void;
 }
 
 function PortfolioOverview({
   initiatives,
+  onAction,
+  onViewAll,
 }: PortfolioOverviewProps) {
   return (
     <section className="dashboard-panel portfolio-overview">
@@ -16,7 +20,7 @@ function PortfolioOverview({
           <p>All active initiatives across the product lifecycle.</p>
         </div>
 
-        <button type="button" className="text-button">
+        <button type="button" className="text-button" onClick={onViewAll}>
           View all
           <ChevronRight size={15} />
         </button>
@@ -30,7 +34,7 @@ function PortfolioOverview({
               <th>Priority</th>
               <th>Current stage</th>
               <th>Owner</th>
-              <th>Progress</th>
+              <th>Timeline elapsed</th>
               <th>Days left</th>
               <th>Status</th>
               <th>
@@ -65,7 +69,7 @@ function PortfolioOverview({
                       <div
                         className="progress-track"
                         role="progressbar"
-                        aria-label={`${initiative.name} progress`}
+                        aria-label={`${initiative.name} timeline elapsed`}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-valuenow={initiative.progress}
@@ -123,6 +127,7 @@ function PortfolioOverview({
                   <button
                     type="button"
                     className="table-action"
+                    onClick={() => onAction(initiative)}
                   >
                     {initiative.action}
                   </button>

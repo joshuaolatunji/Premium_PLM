@@ -3,10 +3,14 @@ import type { BRDQueueItem } from "../../src/types/dashboardTypes";
 
 interface BRDApprovalQueueProps {
   items: BRDQueueItem[];
+  onReview: (id: string) => void;
+  onViewAll: () => void;
 }
 
 function BRDApprovalQueue({
   items,
+  onReview,
+  onViewAll,
 }: BRDApprovalQueueProps) {
   return (
     <section className="dashboard-panel brd-queue">
@@ -16,7 +20,7 @@ function BRDApprovalQueue({
           <p>Proposals waiting for your decision.</p>
         </div>
 
-        <button type="button" className="text-button">
+        <button type="button" className="text-button" onClick={onViewAll}>
           View all
           <ChevronRight size={15} />
         </button>
@@ -59,6 +63,7 @@ function BRDApprovalQueue({
             <button
               type="button"
               className="brd-queue__review"
+              onClick={() => onReview(item.id)}
             >
               Review BRD
               <ChevronRight size={14} />

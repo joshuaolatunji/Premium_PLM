@@ -1,4 +1,6 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import { clearAuthSession } from "./authStorage";
+
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface ApiRequestOptions extends RequestInit {
     token?: string;
@@ -60,6 +62,17 @@ export async function apiClient<T>(
     }
 
     if (!response.ok) {
+        // A 401 on a request that carried a token means the session itself
+        // is invalid (expired or revoked) — every page was otherwise left
+        // showing its own generic "couldn't load" message with no way out
+        // except a manual re-login. Requests with no token (e.g. the login
+        // call itself) reach here on bad credentials, not an expired
+        // session, so they're left alone to show their own error message.
+        if (response.status === 401 && token) {
+            clearAuthSession();
+            window.location.href = "/login";
+        }
+
         const message =
             data && typeof data === "object" && "message" in data
                 ? String((data as { message?: unknown }).message)
