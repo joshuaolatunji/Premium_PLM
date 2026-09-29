@@ -68,7 +68,7 @@ function currentStageFor(proposal: ProductProposal | null): string {
   }
 
   if (proposal.status === "Approved") {
-    return "Approved";
+    return "BRD Approved";
   }
 
   return "BRD under review";

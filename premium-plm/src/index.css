@@ -1820,12 +1820,17 @@ p.initiatives-empty {
 }
 
 .initiative-detail-grid_value {
-  display: block;
+  display: inline-block;
 
   color: var(--color-ink);
 
   font-size: 14px;
   font-weight: 600;
+}
+
+
+.initiative-detail-grid_value::first-letter {
+  text-transform: uppercase;
 }
 
 .brd-readonly-value {
@@ -2659,6 +2664,10 @@ p.initiatives-empty {
   font-size: 0.8125rem;
   font-weight: 500;
   line-height: 1.45;
+}
+
+.governance-activity__action::first-letter{
+  text-transform: uppercase;
 }
 
 .governance-activity__initiative {

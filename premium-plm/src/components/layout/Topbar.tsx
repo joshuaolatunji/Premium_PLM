@@ -26,7 +26,7 @@ function Topbar() {
                 <span>Premium PLM</span>
                 <span>/</span>
                 <span>Dashboard</span>
-                <strong>Dashboard</strong>
+
             </div>
 
             <div className="topbar_actions">
