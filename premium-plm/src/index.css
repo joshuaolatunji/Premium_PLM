@@ -21,10 +21,12 @@
 html,
 body,
 #root {
-  min-height: 100%;
+  height: 100%;
 }
 
 body {
+  overflow: hidden;
+
   font-family: "IBM Plex Sans", sans-serif;
   color: var(--color-ink);
   background-color: var(--color-surface);
@@ -188,8 +190,18 @@ a {
   align-items: center;
   gap: var(--space-3);
 
+  width: 100%;
   padding: var(--space-4);
+  border: none;
   border-top: 1px solid rgb(255 255 255 / 10%);
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar_footer:hover {
+  background: rgb(255 255 255 / 5%);
 }
 
 .sidebar_avatar,
@@ -212,6 +224,7 @@ a {
 .sidebar_user-name {
   font-size: 11px;
   font-weight: 600;
+  color: white;
 }
 
 .sidebar_user-role {
@@ -341,6 +354,13 @@ a {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .topbar_avatar {
@@ -1246,12 +1266,17 @@ a {
     color 150ms ease;
 }
 
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .button--primary {
   background-color: var(--premium-red);
   color: #ffffff;
 }
 
-.button--primary:hover {
+.button--primary:not(:disabled):hover {
   filter: brightness(0.94);
 }
 
@@ -1261,8 +1286,29 @@ a {
   color: #33363b;
 }
 
-.button--secondary:hover {
+.button--secondary:not(:disabled):hover {
   background-color: #f8f8f8;
+}
+
+.button--dark {
+  background-color: var(--color-ink);
+  color: #ffffff;
+}
+
+.button--dark:not(:disabled):hover {
+  filter: brightness(1.3);
+}
+
+/* Prevents stretching full-width inside a flex-column parent (e.g.
+   .proposal-section) where that's not wanted. */
+.button--align-start {
+  align-self: flex-start;
+}
+
+.bdo-submit-footer {
+  width: 100%;
+  min-height: 56px;
+  font-size: 1rem;
 }
 
 /* =========================
@@ -1278,11 +1324,29 @@ a {
 
 .dashboard-stat-card {
   min-width: 0;
+  width: 100%;
   padding: 22px 20px;
 
   border: 1px solid #e6e7e9;
   border-radius: 8px;
   background-color: #ffffff;
+
+  text-align: left;
+  font: inherit;
+}
+
+.dashboard-stat-card--clickable {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dashboard-stat-card--clickable:hover {
+  border-color: #c7cad1;
+}
+
+.dashboard-stat-card--active {
+  border-color: var(--color-ink, #292b2f);
+  box-shadow: 0 0 0 1px var(--color-ink, #292b2f);
 }
 
 .dashboard-stat-card__label {
@@ -1525,13 +1589,18 @@ a {
   padding: 5px 10px;
   border-radius: 5px;
 
-  background-color: #fff4f3;
-  color: #b42318;
-
   font-size: 0.75rem;
   font-weight: 600;
   white-space: nowrap;
 }
+
+/* Mirrors .priority-distribution__rank--N / __fill--N so a priority reads
+   as the same color everywhere it's shown. */
+.priority-badge--1 { background-color: var(--color-danger-tint); color: var(--color-danger); }
+.priority-badge--2 { background-color: var(--color-warning-tint); color: var(--color-warning); }
+.priority-badge--3 { background-color: var(--color-info-tint); color: var(--color-info); }
+.priority-badge--4 { background-color: #eceef0; color: var(--color-ink-disabled); }
+.priority-badge--5 { background-color: #f4f5f6; color: var(--color-ink-muted); }
 
 .progress-cell {
   display: flex;
@@ -1621,9 +1690,25 @@ a {
   cursor: pointer;
 }
 
-.table-action:hover {
+.table-action:not(:disabled):hover {
   border-color: #c6c8cc;
   background-color: #fafafa;
+}
+
+.table-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.table-action--premium {
+  border-color: var(--premium-red);
+  background-color: var(--premium-red);
+  color: #ffffff;
+}
+
+.table-action--premium:not(:disabled):hover {
+  border-color: var(--premium-red-dark);
+  background-color: var(--premium-red-dark);
 }
 
 .brd-reviews-actions {
@@ -1709,15 +1794,22 @@ a {
   gap: var(--space-3);
 
   margin-bottom: var(--space-4);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-4) var(--space-5);
 
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--premium-red);
+  border-left: 4px solid var(--premium-red);
   border-radius: var(--radius-2);
-  background: var(--color-surface-alt);
+  background: var(--premium-tint);
+  box-shadow: var(--shadow-card);
 
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-ink-secondary);
+  color: var(--color-ink);
+}
+
+.initiatives-bulk-bar_count strong {
+  color: var(--premium-red);
+  font-size: 15px;
 }
 
 .initiatives-bulk-bar_actions {
@@ -1782,6 +1874,12 @@ p.initiatives-empty {
   gap: var(--space-2);
 }
 
+.profile-identity-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
 .initiative-detail-description {
   padding: var(--space-5) var(--space-6);
   color: var(--color-ink-secondary);
@@ -1843,39 +1941,9 @@ p.initiatives-empty {
    Priorities Board
    ========================= */
 
-.priorities-confirm-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-
-  margin-bottom: var(--space-5);
-  padding: var(--space-4);
-
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-2);
-  background: var(--color-surface-alt);
-
-  font-size: 13px;
-  color: var(--color-ink-secondary);
-}
-
-.priorities-confirm-bar_actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.priorities-confirm-bar_actions .button {
-  min-height: 36px;
-  padding: 0 16px;
-  font-size: 13px;
-}
-
 .priorities-board {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   gap: var(--space-4);
 
   overflow-x: auto;
@@ -1954,6 +2022,7 @@ p.initiatives-empty {
   flex-direction: column;
   gap: var(--space-3);
 
+  flex: 1;
   min-height: 120px;
   padding: var(--space-3);
 }
@@ -2275,6 +2344,36 @@ p.initiatives-empty {
   font-size: 13px;
 }
 
+.bdo-upload-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  margin: 0 var(--space-6) var(--space-4);
+}
+
+.bdo-upload-progress_track {
+  height: 6px;
+  overflow: hidden;
+
+  border-radius: 999px;
+  background: var(--color-surface-alt);
+}
+
+.bdo-upload-progress_fill {
+  display: block;
+  height: 100%;
+
+  border-radius: inherit;
+  background: var(--premium-red);
+  transition: width 150ms ease;
+}
+
+.bdo-upload-progress_label {
+  font-size: 11px;
+  color: var(--color-ink-muted);
+}
+
 .bdo-upload-list {
   display: flex;
   flex-direction: column;
@@ -2294,9 +2393,29 @@ p.initiatives-empty {
   border-radius: var(--radius-1);
 }
 
-.bdo-upload-list_item a {
-  flex: 1;
+.bdo-upload-list_icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
 
+  width: 32px;
+  height: 32px;
+
+  border-radius: var(--radius-1);
+  background: var(--color-surface-alt);
+  color: var(--color-ink-muted);
+}
+
+.bdo-upload-list_info {
+  flex: 1;
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bdo-upload-list_name {
   color: var(--color-ink);
   font-size: 13px;
   font-weight: 500;
@@ -2306,15 +2425,34 @@ p.initiatives-empty {
   white-space: nowrap;
 }
 
-.bdo-upload-list_item a:hover {
-  text-decoration: underline;
-}
-
 .bdo-upload-list_meta {
   flex-shrink: 0;
 
   color: var(--color-ink-muted);
   font-size: 11px;
+}
+
+.bdo-upload-list_open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+
+  padding: 6px 12px;
+
+  border: 1px solid var(--premium-red);
+  border-radius: var(--radius-1);
+
+  background: var(--premium-red);
+  color: #ffffff;
+
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.bdo-upload-list_open:hover {
+  border-color: var(--premium-red-dark);
+  background: var(--premium-red-dark);
 }
 
 .bdo-upload-list_remove {
@@ -2479,6 +2617,7 @@ p.initiatives-empty {
 .priority-distribution__rank--2 { color: var(--color-warning); }
 .priority-distribution__rank--3 { color: var(--color-info); }
 .priority-distribution__rank--4 { color: var(--color-ink-disabled); }
+.priority-distribution__rank--5 { color: var(--color-ink-muted); }
 
 .priority-distribution__count {
   color: var(--color-info);
@@ -2502,6 +2641,7 @@ p.initiatives-empty {
 .priority-distribution__fill--2 { background-color: var(--color-warning); }
 .priority-distribution__fill--3 { background-color: var(--color-info); }
 .priority-distribution__fill--4 { background-color: #9aa0a8; }
+.priority-distribution__fill--5 { background-color: #c3c7cd; }
 
 /* =========================
    At-Risk & Overdue
@@ -2777,6 +2917,26 @@ p.initiatives-empty {
 .status-badge--approved {
   background-color: var(--color-success-tint);
   color: var(--color-success);
+}
+
+/* Dashboard "Current stage" column — one modifier per currentStageFor()
+   value in Dashboard.tsx, slugified the same way the Status column already
+   slugifies InitiativeStatus. */
+.status-badge--bdo-documentation-drafting,
+.status-badge--brd-drafting {
+  background-color: var(--color-info-tint);
+  color: var(--color-info);
+}
+
+.status-badge--awaiting-gh-documentation-approval,
+.status-badge--brd-under-review {
+  background-color: var(--color-warning-tint);
+  color: var(--color-warning);
+}
+
+.status-badge--bdo-documentation-rejected {
+  background-color: var(--color-danger-tint);
+  color: var(--color-danger);
 }
 
 .role-chip-list {

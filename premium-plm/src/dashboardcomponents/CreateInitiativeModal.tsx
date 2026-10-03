@@ -6,10 +6,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createCategory, getCategories } from "../service/CategoryService";
 import { getAllUsers } from "../service/UserService";
 import { createInitiative, getProductInitiatives } from "../service/InitiativeService";
-import { assignInitiativeToBdo } from "../mocks/bdoAssignmentMock";
 import { ApiError } from "../apicalls/apiClient";
 import { INITIATIVE_PRIORITIES } from "../types/initiativeTypes";
 import type { CreateInitiativeRequest } from "../types/initiativeTypes";
+import { capitalize } from "../utils/text";
 import InitiativeCreatedPanel from "./InitiativeCreatedPanel";
 
 interface CreatedInitiativeInfo {
@@ -23,9 +23,9 @@ interface CreateInitiativeModalProps {
   onClose: () => void;
 }
 
-// projectManagerId is filled in from the pmId select below at submit time
-// (the real create-initiative endpoint now accepts it) — bdoId has no real
-// field yet, so it's assigned separately via the mock service after creation.
+// projectManagerId and bdoId are filled in from the pmId/bdoId selects
+// below at submit time — the real create-initiative endpoint accepts both
+// directly now.
 const EMPTY_FORM: CreateInitiativeRequest = {
   projectName: "",
   description: "",
@@ -33,6 +33,7 @@ const EMPTY_FORM: CreateInitiativeRequest = {
   timelineDays: 30,
   categoryId: "",
   projectManagerId: null,
+  bdoId: null,
 };
 
 // Rendered by the parent only while the modal should be open (see
@@ -129,49 +130,41 @@ function CreateInitiativeModal({ onClose }: CreateInitiativeModalProps) {
   );
 
   const mutation = useMutation({
-    mutationFn: async (variables: {
-      payload: CreateInitiativeRequest;
-      bdoId: string;
-    }) => {
-      const created = await createInitiative(variables.payload);
+    mutationFn: async (payload: CreateInitiativeRequest) => {
+      const created = await createInitiative(payload);
       let initiativeId = created?.id ?? null;
 
       // The create-initiative response schema is undocumented — if it
       // didn't hand back the new record's id, fall back to matching it by
       // name in a fresh list, the same defensive pattern used for BRD
-      // proposals. Without an id there's nothing to key the BDO assignment
-      // on, so it's skipped (and reported) if even that fails.
+      // proposals.
       if (!initiativeId) {
         const refreshed = await getProductInitiatives();
         initiativeId =
-          refreshed.find((initiative) => initiative.projectName === variables.payload.projectName)
+          refreshed.find((initiative) => initiative.projectName === payload.projectName)
             ?.id ?? null;
-      }
-
-      if (initiativeId) {
-        await assignInitiativeToBdo(initiativeId, variables.bdoId);
       }
 
       return initiativeId;
     },
-    onSuccess: (initiativeId, variables) => {
+    onSuccess: (initiativeId, payload) => {
       queryClient.invalidateQueries({ queryKey: ["product-initiatives"] });
       queryClient.invalidateQueries({ queryKey: ["product-initiatives-my-assigned"] });
 
-      const bdo = bdos.find((user) => user.userId === variables.bdoId);
-      const pm = pms.find((user) => user.userId === variables.payload.projectManagerId);
+      const bdo = bdos.find((user) => user.userId === payload.bdoId);
+      const pm = pms.find((user) => user.userId === payload.projectManagerId);
 
       if (!initiativeId) {
         setErrorMessage(
-          "The initiative was created, but its id couldn't be confirmed, so it couldn't be assigned to a BDO yet. Refresh and assign it from the initiative list.",
+          "The initiative was created, but its id couldn't be confirmed. Refresh the initiative list to find it.",
         );
       }
 
       setCreatedInfo({
         initiativeId,
-        projectName: variables.payload.projectName,
-        bdoName: bdo ? bdo.userName : null,
-        pmName: pm ? pm.userName : null,
+        projectName: payload.projectName,
+        bdoName: bdo ? capitalize(bdo.userName) : null,
+        pmName: pm ? capitalize(pm.userName) : null,
       });
     },
     onError: (error) => {
@@ -219,7 +212,7 @@ function CreateInitiativeModal({ onClose }: CreateInitiativeModalProps) {
       return;
     }
 
-    mutation.mutate({ payload: { ...form, projectManagerId: pmId }, bdoId });
+    mutation.mutate({ ...form, projectManagerId: pmId, bdoId });
   }
 
   if (createdInfo) {
@@ -468,7 +461,7 @@ function CreateInitiativeModal({ onClose }: CreateInitiativeModalProps) {
 
                 {bdos.map((user) => (
                   <option key={user.userId} value={user.userId}>
-                    {user.userName} ({user.email})
+                    {capitalize(user.userName)} ({user.email})
                   </option>
                 ))}
               </select>
@@ -505,7 +498,7 @@ function CreateInitiativeModal({ onClose }: CreateInitiativeModalProps) {
 
                 {pms.map((user) => (
                   <option key={user.userId} value={user.userId}>
-                    {user.userName} ({user.email})
+                    {capitalize(user.userName)} ({user.email})
                   </option>
                 ))}
               </select>

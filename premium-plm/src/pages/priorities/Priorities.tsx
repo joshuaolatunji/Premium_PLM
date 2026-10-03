@@ -1,13 +1,16 @@
 import { useMemo, useState, type DragEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getProductInitiatives, updateInitiativePriority } from "../../service/InitiativeService";
 import { getAllUsers } from "../../service/UserService";
+import { getProposalByInitiativeId } from "../../service/ProposalService";
+import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
 import { ApiError } from "../../apicalls/apiClient";
 import { INITIATIVE_PRIORITIES } from "../../types/initiativeTypes";
 import type { ProductInitiative } from "../../types/initiativeTypes";
-import { deriveStatus, STATUS_LABEL } from "../../utils/initiativeStatus";
+import { currentStageFor, deriveStatus, stageBadgeClass } from "../../utils/initiativeStatus";
+import { capitalize } from "../../utils/text";
 
 interface PendingMove {
   initiativeId: string;
@@ -44,13 +47,47 @@ function Priorities() {
       return "Unassigned";
     }
 
-    return usersQuery.data?.find((user) => user.userId === id)?.userName ?? "Unassigned";
+    return capitalize(
+      usersQuery.data?.find((user) => user.userId === id)?.userName ?? "Unassigned",
+    );
   }
 
   const initiatives = useMemo(
     () => initiativesQuery.data ?? [],
     [initiativesQuery.data],
   );
+
+  // One proposal + one discovery lookup per initiative, run in parallel —
+  // same N+1 pattern already used for the full org-wide list on the
+  // Dashboard, Audit Trail, and Initiatives pages. Needed so each card's
+  // stage badge matches the same "current stage" shown everywhere else.
+  const proposalQueries = useQueries({
+    queries: initiatives.map((initiative) => ({
+      queryKey: ["product-proposal", initiative.id],
+      queryFn: () => getProposalByInitiativeId(initiative.id),
+      enabled: Boolean(initiative.id),
+    })),
+  });
+
+  const discoveryQueries = useQueries({
+    queries: initiatives.map((initiative) => ({
+      queryKey: ["product-discovery", initiative.id],
+      queryFn: () => getDiscoveryByInitiativeId(initiative.id),
+      enabled: Boolean(initiative.id),
+    })),
+  });
+
+  const stageById = useMemo(() => {
+    const map = new Map<string, string>();
+
+    initiatives.forEach((initiative, index) => {
+      const bdoSubmissionStatus = discoveryQueries[index]?.data?.status ?? "NotStarted";
+      const proposal = proposalQueries[index]?.data ?? null;
+      map.set(initiative.id, currentStageFor(bdoSubmissionStatus, proposal));
+    });
+
+    return map;
+  }, [initiatives, proposalQueries, discoveryQueries]);
 
   // Grouped by priority tier, most urgent (soonest deadline) first within
   // each tier. There's no separate rank field in the API to persist a
@@ -82,20 +119,37 @@ function Priorities() {
   }, [initiatives]);
 
   const moveMutation = useMutation({
-    mutationFn: async ({ id, priority }: { id: string; priority: number }) => {
-      await updateInitiativePriority(id, priority);
-      // Wait for the refetch itself (not just fire-and-forget invalidation)
-      // so the board is already showing the new grouping by the time the
-      // confirm bar closes — otherwise a successful move can look like
-      // nothing happened for a moment.
-      await queryClient.invalidateQueries({ queryKey: ["product-initiatives"] });
+    mutationFn: ({ id, priority }: { id: string; priority: number }) =>
+      updateInitiativePriority(id, priority),
+    // Optimistic: the board updates the instant you confirm, from data we
+    // already have, instead of waiting on a second network round trip
+    // (a full refetch) before the confirm bar can close.
+    onMutate: async ({ id, priority }) => {
+      await queryClient.cancelQueries({ queryKey: ["product-initiatives"] });
+
+      const previous = queryClient.getQueryData<ProductInitiative[]>([
+        "product-initiatives",
+      ]);
+
+      queryClient.setQueryData<ProductInitiative[]>(["product-initiatives"], (current) =>
+        current?.map((initiative) =>
+          initiative.id === id ? { ...initiative, priority } : initiative,
+        ),
+      );
+
+      return { previous };
     },
-    onSuccess: (_data, variables) => {
-      setPendingMove(null);
-      setDragError("");
-      setDragStatus(`Priority updated to ${tierLabel(variables.priority)}.`);
-    },
-    onError: (error) => {
+    // No onSuccess needed — confirmMove() below already closes the bar and
+    // shows the success message the instant you click Confirm, rather than
+    // waiting on this real request (which can be slow on a cold backend
+    // instance). onError rolls back to the exact prior snapshot and
+    // reports a failure if the real request eventually fails, even though
+    // the bar's already closed.
+    onError: (error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["product-initiatives"], context.previous);
+      }
+
       setDragStatus("");
       setDragError(
         error instanceof ApiError
@@ -108,7 +162,14 @@ function Priorities() {
   function handleDragStart(event: DragEvent<HTMLDivElement>, initiative: ProductInitiative) {
     event.dataTransfer.setData("text/plain", initiative.id);
     event.dataTransfer.effectAllowed = "move";
-    setDraggingId(initiative.id);
+
+    // Deferred on purpose: setDraggingId re-renders this exact card (its
+    // class changes to show the "dragging" style) — doing that
+    // synchronously, in the same tick the browser is still picking the
+    // element up as a native drag source, is enough for some browsers to
+    // abandon the drag entirely. Letting the browser finish starting the
+    // drag first avoids that.
+    setTimeout(() => setDraggingId(initiative.id), 0);
   }
 
   function handleDragEnd() {
@@ -138,7 +199,17 @@ function Priorities() {
 
   function confirmMove() {
     if (!pendingMove) return;
-    moveMutation.mutate({ id: pendingMove.initiativeId, priority: pendingMove.toPriority });
+
+    const { initiativeId, toPriority } = pendingMove;
+    moveMutation.mutate({ id: initiativeId, priority: toPriority });
+
+    // Close immediately and show success from the optimistic update above —
+    // don't make the user sit watching a spinner for the real request,
+    // which can be slow on a cold backend instance. onError still corrects
+    // this (rollback + error banner) if that request eventually fails.
+    setPendingMove(null);
+    setDragError("");
+    setDragStatus(`Priority updated to ${tierLabel(toPriority)}.`);
   }
 
   return (
@@ -157,34 +228,46 @@ function Priorities() {
       </header>
 
       {pendingMove && (
-        <section className="priorities-confirm-bar" role="alertdialog" aria-label="Confirm priority change">
-          <span>
-            Move <strong>{pendingMove.projectName}</strong> from{" "}
-            <strong>{tierLabel(pendingMove.fromPriority)}</strong> to{" "}
-            <strong>{tierLabel(pendingMove.toPriority)}</strong>? This updates
-            its priority immediately.
-          </span>
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onClick={() => setPendingMove(null)}
+        >
+          <div
+            className="modal-panel modal-panel--compact"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="priority-confirm-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-panel_header">
+              <h2 id="priority-confirm-title">Confirm priority change</h2>
+            </div>
 
-          <div className="priorities-confirm-bar_actions">
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => setPendingMove(null)}
-              disabled={moveMutation.isPending}
-            >
-              Cancel
-            </button>
+            <div className="modal-panel_body">
+              <p className="brd-confirm-copy">
+                Move <strong>{pendingMove.projectName}</strong> from{" "}
+                <strong>{tierLabel(pendingMove.fromPriority)}</strong> to{" "}
+                <strong>{tierLabel(pendingMove.toPriority)}</strong>? This
+                updates its priority immediately.
+              </p>
+            </div>
 
-            <button
-              type="button"
-              className="button button--primary"
-              onClick={confirmMove}
-              disabled={moveMutation.isPending}
-            >
-              {moveMutation.isPending ? "Updating…" : "Confirm"}
-            </button>
+            <div className="modal-panel_footer">
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => setPendingMove(null)}
+              >
+                Cancel
+              </button>
+
+              <button type="button" className="button button--primary" onClick={confirmMove}>
+                Confirm
+              </button>
+            </div>
           </div>
-        </section>
+        </div>
       )}
 
       {dragStatus && (
@@ -199,17 +282,25 @@ function Priorities() {
         </p>
       )}
 
-      {initiativesQuery.isLoading && (
+      {(initiativesQuery.isLoading ||
+        proposalQueries.some((query) => query.isLoading) ||
+        discoveryQueries.some((query) => query.isLoading)) && (
         <p className="initiatives-empty">Loading initiatives…</p>
       )}
 
-      {initiativesQuery.isError && (
-        <p className="initiatives-empty initiatives-empty--error">
-          Couldn't load initiatives. Try refreshing the page.
-        </p>
-      )}
+      {!initiativesQuery.isLoading &&
+        (initiativesQuery.isError ||
+          proposalQueries.some((query) => query.isError) ||
+          discoveryQueries.some((query) => query.isError)) && (
+          <p className="initiatives-empty initiatives-empty--error">
+            Couldn't load initiatives. Try refreshing the page.
+          </p>
+        )}
 
-      {!initiativesQuery.isLoading && !initiativesQuery.isError && (
+      {!initiativesQuery.isLoading &&
+        !initiativesQuery.isError &&
+        !proposalQueries.some((query) => query.isLoading || query.isError) &&
+        !discoveryQueries.some((query) => query.isLoading || query.isError) && (
         <div className="priorities-board">
           {INITIATIVE_PRIORITIES.map((priority) => {
             const bucket = columns.get(priority.value) ?? [];
@@ -218,7 +309,10 @@ function Priorities() {
               <div
                 key={priority.value}
                 className="priorities-column"
-                onDragOver={(event) => event.preventDefault()}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                }}
                 onDrop={(event) => handleDrop(event, priority.value)}
               >
                 <div className="priorities-column_header">
@@ -235,7 +329,8 @@ function Priorities() {
                   )}
 
                   {bucket.map((initiative) => {
-                    const { status, daysLeft } = deriveStatus(initiative);
+                    const { daysLeft } = deriveStatus(initiative);
+                    const stage = stageById.get(initiative.id) ?? "BDO Documentation Drafting";
 
                     return (
                       <div
@@ -258,9 +353,7 @@ function Priorities() {
                         </span>
 
                         <div className="priorities-card_footer">
-                          <span className={`status-badge status-badge--${status}`}>
-                            {STATUS_LABEL[status]}
-                          </span>
+                          <span className={stageBadgeClass(stage)}>{stage}</span>
 
                           {daysLeft !== null && (
                             <span className={daysLeft < 0 ? "days-left days-left--overdue" : "days-left"}>

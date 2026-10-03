@@ -1,55 +1,75 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
-import { getInitiativeById } from "../../service/InitiativeService";
-import { getInitiativeIdsAssignedToBdo } from "../../mocks/bdoAssignmentMock";
-import { getSubmissionStatus } from "../../mocks/bdoDocumentsMock";
+import { getMyAssignedInitiatives } from "../../service/InitiativeService";
+import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
 import { getCurrentUserId } from "../../apicalls/authStorage";
-import { priorityLabel } from "../../utils/initiativeStatus";
+import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
 
+// "NotStarted" is our own placeholder for "no discovery record exists
+// yet" (the real API has no concept of it). "Submitted" and "Rejected"
+// are confirmed live; "Approved" follows the same pattern but hasn't
+// been directly observed yet.
 const STATUS_LABEL: Record<string, string> = {
   NotStarted: "Not started",
-  InProgress: "In progress",
-  SubmittedForApproval: "Submitted for approval",
+  Submitted: "Submitted for approval",
+  Approved: "Approved",
+  Rejected: "Rejected",
 };
+
+function statusBadgeClass(status: string) {
+  switch (status) {
+    case "Submitted":
+      return "status-badge status-badge--awaiting-gh-documentation-approval";
+    case "Approved":
+      return "status-badge status-badge--approved";
+    case "Rejected":
+      return "status-badge status-badge--bdo-documentation-rejected";
+    default:
+      return "status-badge status-badge--not-started";
+  }
+}
 
 function BdoDashboard() {
   const navigate = useNavigate();
   const currentUserId = getCurrentUserId();
 
-  const assignedIdsQuery = useQuery({
-    queryKey: ["bdo-assigned-initiative-ids", currentUserId],
-    queryFn: () => getInitiativeIdsAssignedToBdo(currentUserId as string),
-    enabled: Boolean(currentUserId),
+  // Both GET /api/product-initiatives and /my-assigned are confirmed
+  // (live-tested) to return 403 for the BDO role — a backend authorization
+  // gap, reported to the backend team, not fixable from here. Left
+  // pointing at /my-assigned (the same endpoint the PM workspace uses)
+  // since that's the more likely one to end up authorized for BDO too;
+  // swap this back to getProductInitiatives if the backend fixes the
+  // other endpoint instead. The bdoId filter below is a client-side
+  // safety net in case the endpoint ever returns a broader set than just
+  // this BDO's own initiatives.
+  const initiativesQuery = useQuery({
+    queryKey: ["product-initiatives-my-assigned"],
+    queryFn: getMyAssignedInitiatives,
   });
 
-  const assignedIds = assignedIdsQuery.data ?? [];
+  const assignedInitiatives = useMemo(
+    () =>
+      (initiativesQuery.data ?? []).filter(
+        (initiative) => initiative.bdoId === currentUserId,
+      ),
+    [initiativesQuery.data, currentUserId],
+  );
 
-  const initiativeQueries = useQueries({
-    queries: assignedIds.map((initiativeId) => ({
-      queryKey: ["product-initiative", initiativeId],
-      queryFn: () => getInitiativeById(initiativeId),
-      enabled: Boolean(initiativeId),
-    })),
-  });
-
-  const statusQueries = useQueries({
-    queries: assignedIds.map((initiativeId) => ({
-      queryKey: ["bdo-submission-status", initiativeId],
-      queryFn: () => getSubmissionStatus(initiativeId),
-      enabled: Boolean(initiativeId),
+  const discoveryQueries = useQueries({
+    queries: assignedInitiatives.map((initiative) => ({
+      queryKey: ["product-discovery", initiative.id],
+      queryFn: () => getDiscoveryByInitiativeId(initiative.id),
+      enabled: Boolean(initiative.id),
     })),
   });
 
   const isLoading =
-    assignedIdsQuery.isLoading ||
-    initiativeQueries.some((query) => query.isLoading) ||
-    statusQueries.some((query) => query.isLoading);
+    initiativesQuery.isLoading || discoveryQueries.some((query) => query.isLoading);
 
   const hasError =
-    assignedIdsQuery.isError ||
-    initiativeQueries.some((query) => query.isError) ||
-    statusQueries.some((query) => query.isError);
+    initiativesQuery.isError || discoveryQueries.some((query) => query.isError);
 
   return (
     <div className="dashboard-page">
@@ -64,11 +84,6 @@ function BdoDashboard() {
           </p>
         </div>
       </header>
-
-      <p className="mock-data-notice">
-        Initiative assignment is temporary, local-only data until the real
-        BDO assignment API is ready — it resets if you reload the page.
-      </p>
 
       <section className="dashboard-panel">
         <div className="portfolio-table-wrapper">
@@ -103,16 +118,11 @@ function BdoDashboard() {
 
               {!isLoading &&
                 !hasError &&
-                assignedIds.map((initiativeId, index) => {
-                  const initiative = initiativeQueries[index]?.data;
-                  const status = statusQueries[index]?.data ?? "NotStarted";
-
-                  if (!initiative) {
-                    return null;
-                  }
+                assignedInitiatives.map((initiative, index) => {
+                  const status = discoveryQueries[index]?.data?.status ?? "NotStarted";
 
                   return (
-                    <tr key={initiativeId}>
+                    <tr key={initiative.id}>
                       <td>
                         <div className="initiative-cell">
                           <strong>{initiative.projectName}</strong>
@@ -121,13 +131,13 @@ function BdoDashboard() {
                       </td>
 
                       <td>
-                        <span className="priority-badge">
+                        <span className={priorityBadgeClass(initiative.priority)}>
                           {priorityLabel(initiative.priority)}
                         </span>
                       </td>
 
                       <td>
-                        <span className="status-badge status-badge--not-started">
+                        <span className={statusBadgeClass(status)}>
                           {STATUS_LABEL[status] ?? status}
                         </span>
                       </td>
@@ -136,7 +146,7 @@ function BdoDashboard() {
                         <button
                           type="button"
                           className="table-action"
-                          onClick={() => navigate(`/dashboard/bdo/${initiativeId}`)}
+                          onClick={() => navigate(`/dashboard/bdo/${initiative.id}`)}
                         >
                           {status === "NotStarted" ? "Start documentation" : "Continue"}
                         </button>
@@ -145,7 +155,7 @@ function BdoDashboard() {
                   );
                 })}
 
-              {!isLoading && !hasError && assignedIds.length === 0 && (
+              {!isLoading && !hasError && assignedInitiatives.length === 0 && (
                 <tr>
                   <td colSpan={4} className="initiatives-empty">
                     No initiatives are currently assigned to you.

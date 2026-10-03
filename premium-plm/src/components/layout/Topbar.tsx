@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import UserAvatar from "../ui/UserAvatar";
 import { getStoredUser } from "../../apicalls/authStorage";
-import { capitalize } from "../../utils/text";
+import { capitalize, formatRoleName } from "../../utils/text";
 import { getUnreadCount } from "../../service/NotificationService";
 
 
@@ -52,21 +52,25 @@ function Topbar() {
                     )}
                 </button>
 
-                <div className="topbar_user">
+                <button
+                    type="button"
+                    className="topbar_user"
+                    onClick={() => navigate("/dashboard/profile")}
+                >
                     <div className="topbar_avatar">
                         <UserAvatar name={displayName} size="md"/>
                     </div>
-                </div>
 
-                <div>
-                    <p className="topbar_user-name">
-                        <strong>{displayName}</strong>
-                    </p>
+                    <div>
+                        <p className="topbar_user-name">
+                            <strong>{displayName}</strong>
+                        </p>
 
-                    <p className="topbar_user-role">
-                        <span>{roles.length > 0 ? roles.join(" · ") : "—"}</span>
-                    </p>
-                </div>
+                        <p className="topbar_user-role">
+                            <span>{roles.length > 0 ? roles.map(formatRoleName).join(" · ") : "—"}</span>
+                        </p>
+                    </div>
+                </button>
 
 
 

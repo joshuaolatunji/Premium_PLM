@@ -5,7 +5,7 @@
 // does this call the real endpoint, so the BRD then shows up in the
 // already-real BRD Reviews screen for the Group Head. State lives in
 // memory for the session only and resets on page reload — same convention
-// as the other mock modules (mocks/bdoDocumentsMock.ts etc).
+// as the other session-only mock modules in this folder.
 
 import { submitProposalForReview } from "../service/ProposalService";
 import type { BrdBdoDecisionRecord, BrdBdoLegStatus } from "../types/brdApprovalTypes";

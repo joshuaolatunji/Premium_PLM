@@ -4,7 +4,8 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { getMyAssignedInitiatives } from "../../service/InitiativeService";
 import { getProposalByInitiativeId } from "../../service/ProposalService";
-import { priorityLabel } from "../../utils/initiativeStatus";
+import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
+import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
 import { brdStatusBadgeClass } from "../../utils/brdStatus";
 import type { ProductInitiative } from "../../types/initiativeTypes";
 import type { ProductProposal } from "../../types/proposalTypes";
@@ -13,10 +14,11 @@ interface BrdRowProps {
   initiative: ProductInitiative;
   proposal?: ProductProposal;
   cta: string;
+  bdoDocsApproved: boolean;
   onOpen: (initiativeId: string) => void;
 }
 
-function BrdRow({ initiative, proposal, cta, onOpen }: BrdRowProps) {
+function BrdRow({ initiative, proposal, cta, bdoDocsApproved, onOpen }: BrdRowProps) {
   return (
     <tr>
       <td>
@@ -27,7 +29,7 @@ function BrdRow({ initiative, proposal, cta, onOpen }: BrdRowProps) {
       </td>
 
       <td>
-        <span className="priority-badge">{priorityLabel(initiative.priority)}</span>
+        <span className={priorityBadgeClass(initiative.priority)}>{priorityLabel(initiative.priority)}</span>
       </td>
 
       {proposal && (
@@ -40,7 +42,13 @@ function BrdRow({ initiative, proposal, cta, onOpen }: BrdRowProps) {
       )}
 
       <td>
-        <button type="button" className="table-action" onClick={() => onOpen(initiative.id)}>
+        <button
+          type="button"
+          className="table-action"
+          onClick={() => onOpen(initiative.id)}
+          disabled={!bdoDocsApproved}
+          title={!bdoDocsApproved ? "Available once the BDO's documentation is approved" : undefined}
+        >
           {cta}
         </button>
       </td>
@@ -77,18 +85,38 @@ function BrdHub() {
     })),
   });
 
+  // "Start/Continue BRD" stays disabled until this is "Approved" — same
+  // gate as MyWork.tsx. A BRD isn't needed at all until the Group Head has
+  // approved the BDO's documentation.
+  const discoveryQueries = useQueries({
+    queries: initiatives.map((initiative) => ({
+      queryKey: ["product-discovery", initiative.id],
+      queryFn: () => getDiscoveryByInitiativeId(initiative.id),
+      enabled: Boolean(initiative.id),
+    })),
+  });
+
   const isLoading =
-    assignedInitiativesQuery.isLoading || proposalQueries.some((query) => query.isLoading);
+    assignedInitiativesQuery.isLoading ||
+    proposalQueries.some((query) => query.isLoading) ||
+    discoveryQueries.some((query) => query.isLoading);
 
   const hasError =
-    assignedInitiativesQuery.isError || proposalQueries.some((query) => query.isError);
+    assignedInitiativesQuery.isError ||
+    proposalQueries.some((query) => query.isError) ||
+    discoveryQueries.some((query) => query.isError);
 
   const notStarted: ProductInitiative[] = [];
   const inProgress: { initiative: ProductInitiative; proposal: ProductProposal }[] = [];
+  const bdoDocsApprovedById = new Map<string, boolean>();
 
   if (!isLoading && !hasError) {
     initiatives.forEach((initiative, index) => {
       const proposal = proposalQueries[index]?.data;
+      bdoDocsApprovedById.set(
+        initiative.id,
+        discoveryQueries[index]?.data?.status === "Approved",
+      );
 
       if (proposal) {
         inProgress.push({ initiative, proposal });
@@ -148,6 +176,7 @@ function BrdHub() {
                       key={initiative.id}
                       initiative={initiative}
                       cta="Start BRD"
+                      bdoDocsApproved={bdoDocsApprovedById.get(initiative.id) ?? false}
                       onOpen={openBrd}
                     />
                   ))}
@@ -192,6 +221,7 @@ function BrdHub() {
                       initiative={initiative}
                       proposal={proposal}
                       cta="Continue BRD"
+                      bdoDocsApproved={bdoDocsApprovedById.get(initiative.id) ?? false}
                       onOpen={openBrd}
                     />
                   ))}

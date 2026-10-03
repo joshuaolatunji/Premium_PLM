@@ -70,3 +70,21 @@ export async function resetUserPassword(
     body: JSON.stringify(payload),
   });
 }
+
+export async function activateUser(userId: string): Promise<void> {
+  const token = getToken();
+
+  await apiClient<unknown>(`api/PLMAdmin/users/${userId}/activate-user`, {
+    method: "PUT",
+    token: token ?? undefined,
+  });
+}
+
+export async function deactivateUser(userId: string): Promise<void> {
+  const token = getToken();
+
+  await apiClient<unknown>(`api/PLMAdmin/users/${userId}/deactivate-user`, {
+    method: "PUT",
+    token: token ?? undefined,
+  });
+}

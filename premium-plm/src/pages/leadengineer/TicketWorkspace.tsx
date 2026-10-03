@@ -5,28 +5,29 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getInitiativeById } from "../../service/InitiativeService";
 import { getProposalByInitiativeId } from "../../service/ProposalService";
-import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
+import {
+  getDiscoveryAttachments,
+  getDiscoveryByInitiativeId,
+  getDiscoveryWorkflowLinks,
+  openDiscoveryAttachment,
+} from "../../service/ProductDiscoveryService";
 import { getAllUsers } from "../../service/UserService";
+import { ApiError } from "../../apicalls/apiClient";
 import {
   assignTicketToDeveloper,
   getTicketById,
   getTicketRejection,
   reviewTicket,
 } from "../../mocks/ticketsMock";
-import {
-  getDesignScreens,
-  getLogicFlowDocuments,
-} from "../../mocks/bdoDocumentsMock";
 import BrdReadOnlyView from "../../components/brd/BrdReadOnlyView";
-import UploadedFileList from "../../components/bdo/UploadedFileList";
 import DecisionModal, { type Decision } from "../../components/review/DecisionModal";
-import { priorityLabel } from "../../utils/initiativeStatus";
+import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
 import { ticketStatusBadgeClass, ticketStatusLabel } from "../../utils/ticketStatus";
+import { capitalize } from "../../utils/text";
 
 // Mocked — tickets, and the developer assignment on them, have no real
-// endpoint yet (see mocks/ticketsMock.ts). The BRD/discovery lookups below
-// are real; logic flow and design screens stay mocked (see
-// mocks/bdoDocumentsMock.ts).
+// endpoint yet (see mocks/ticketsMock.ts). The BRD/discovery/attachments/
+// links lookups below are all real.
 function TicketWorkspace() {
   const { ticketId } = useParams<{ ticketId: string }>();
   const navigate = useNavigate();
@@ -63,16 +64,18 @@ function TicketWorkspace() {
     enabled: Boolean(initiativeId),
   });
 
-  const logicFlowQuery = useQuery({
-    queryKey: ["bdo-logic-flow", initiativeId],
-    queryFn: () => getLogicFlowDocuments(initiativeId as string),
-    enabled: Boolean(initiativeId),
+  const discoveryId = discoveryQuery.data?.id ?? null;
+
+  const attachmentsQuery = useQuery({
+    queryKey: ["discovery-attachments", discoveryId],
+    queryFn: () => getDiscoveryAttachments(discoveryId as string),
+    enabled: Boolean(discoveryId),
   });
 
-  const designScreensQuery = useQuery({
-    queryKey: ["bdo-design-screens", initiativeId],
-    queryFn: () => getDesignScreens(initiativeId as string),
-    enabled: Boolean(initiativeId),
+  const workflowLinksQuery = useQuery({
+    queryKey: ["discovery-workflow-links", discoveryId],
+    queryFn: () => getDiscoveryWorkflowLinks(discoveryId as string),
+    enabled: Boolean(discoveryId),
   });
 
   const usersQuery = useQuery({
@@ -86,6 +89,25 @@ function TicketWorkspace() {
     enabled: Boolean(ticketId),
   });
 
+  const openAttachmentMutation = useMutation({
+    mutationFn: ({ attachmentId, targetWindow }: { attachmentId: string; targetWindow: Window | null }) =>
+      openDiscoveryAttachment(attachmentId, targetWindow),
+    onSuccess: () => setErrorMessage(""),
+    onError: (error) => {
+      setErrorMessage(
+        error instanceof ApiError ? error.message : "Unable to open that attachment. Try again.",
+      );
+    },
+  });
+
+  // Opened synchronously in the click handler (before the mutation's first
+  // await) so browsers still treat it as a user-gesture-triggered window,
+  // not a blocked popup.
+  function handleOpenAttachment(attachmentId: string) {
+    const targetWindow = window.open("", "_blank");
+    openAttachmentMutation.mutate({ attachmentId, targetWindow });
+  }
+
   const developers = (usersQuery.data ?? []).filter((user) =>
     user.role.includes("SoftwareEngineer"),
   );
@@ -95,7 +117,9 @@ function TicketWorkspace() {
       return "Unassigned";
     }
 
-    return usersQuery.data?.find((user) => user.userId === userId)?.userName ?? "Unassigned";
+    return capitalize(
+      usersQuery.data?.find((user) => user.userId === userId)?.userName ?? "Unassigned",
+    );
   }
 
   const assignMutation = useMutation({
@@ -161,8 +185,8 @@ function TicketWorkspace() {
       (initiativeQuery.isLoading ||
         proposalQuery.isLoading ||
         discoveryQuery.isLoading ||
-        logicFlowQuery.isLoading ||
-        designScreensQuery.isLoading));
+        attachmentsQuery.isLoading ||
+        workflowLinksQuery.isLoading));
 
   const hasError =
     ticketQuery.isError ||
@@ -198,8 +222,8 @@ function TicketWorkspace() {
   const initiative = initiativeQuery.data!;
   const proposal = proposalQuery.data;
   const discovery = discoveryQuery.data;
-  const logicFlowFiles = logicFlowQuery.data ?? [];
-  const designScreenFiles = designScreensQuery.data ?? [];
+  const attachments = attachmentsQuery.data ?? [];
+  const workflowLinks = workflowLinksQuery.data ?? [];
 
   return (
     <div className="dashboard-page">
@@ -219,7 +243,7 @@ function TicketWorkspace() {
           <p className="dashboard-subtitle">{ticket.description}</p>
 
           <p className="dashboard-subtitle initiative-detail-badges">
-            <span className="priority-badge">{priorityLabel(initiative.priority)}</span>
+            <span className={priorityBadgeClass(initiative.priority)}>{priorityLabel(initiative.priority)}</span>
             <span className={ticketStatusBadgeClass(ticket.status)}>
               {ticketStatusLabel(ticket.status)}
             </span>
@@ -357,30 +381,60 @@ function TicketWorkspace() {
       <section className="dashboard-panel initiative-detail-panel">
         <div className="dashboard-panel__header">
           <div>
-            <h2>Logic flow document</h2>
+            <h2>Attachments</h2>
           </div>
         </div>
 
         <div className="bdo-upload-section">
-          <UploadedFileList
-            files={logicFlowFiles}
-            emptyLabel="No logic flow document was uploaded."
-          />
+          {attachments.length === 0 ? (
+            <p className="bdo-upload-empty">No attachments were uploaded.</p>
+          ) : (
+            <ul className="bdo-upload-list">
+              {attachments.map((attachment) => (
+                <li key={attachment.id} className="bdo-upload-list_item">
+                  <div className="bdo-upload-list_info">
+                    <span className="bdo-upload-list_name">{attachment.fileName}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="bdo-upload-list_open"
+                    onClick={() => handleOpenAttachment(attachment.id)}
+                    disabled={openAttachmentMutation.isPending}
+                  >
+                    Open
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
 
       <section className="dashboard-panel initiative-detail-panel">
         <div className="dashboard-panel__header">
           <div>
-            <h2>Design screens documentation</h2>
+            <h2>Design links</h2>
           </div>
         </div>
 
         <div className="bdo-upload-section">
-          <UploadedFileList
-            files={designScreenFiles}
-            emptyLabel="No design screens were uploaded."
-          />
+          {workflowLinks.length === 0 ? (
+            <p className="bdo-upload-empty">No links were added.</p>
+          ) : (
+            <ul className="bdo-upload-list">
+              {workflowLinks.map((link) => (
+                <li key={link.id} className="bdo-upload-list_item">
+                  <a href={link.url} target="_blank" rel="noreferrer">
+                    {link.title}
+                  </a>
+                  {link.description && (
+                    <span className="bdo-upload-list_meta">{link.description}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
 
@@ -425,7 +479,7 @@ function TicketWorkspace() {
 
                   {developers.map((user) => (
                     <option key={user.userId} value={user.userId}>
-                      {user.userName} ({user.email})
+                      {capitalize(user.userName)} ({user.email})
                     </option>
                   ))}
                 </select>

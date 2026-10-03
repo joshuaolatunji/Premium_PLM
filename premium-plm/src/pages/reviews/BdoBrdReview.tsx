@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getInitiativeById } from "../../service/InitiativeService";
 import { getProposalByInitiativeId } from "../../service/ProposalService";
-import { reviewBrdAsBdo } from "../../mocks/brdBdoReviewMock";
+import { getBrdBdoLegStatus, reviewBrdAsBdo } from "../../mocks/brdBdoReviewMock";
 import BrdReadOnlyView from "../../components/brd/BrdReadOnlyView";
 import DecisionModal, { type Decision } from "../../components/review/DecisionModal";
 
@@ -26,6 +26,12 @@ function BdoBrdReview() {
   const proposalQuery = useQuery({
     queryKey: ["product-proposal", id],
     queryFn: () => getProposalByInitiativeId(id as string),
+    enabled: Boolean(id),
+  });
+
+  const bdoLegQuery = useQuery({
+    queryKey: ["brd-bdo-leg", id],
+    queryFn: () => getBrdBdoLegStatus(id as string),
     enabled: Boolean(id),
   });
 
@@ -56,7 +62,7 @@ function BdoBrdReview() {
     decisionMutation.mutate({ isApproved: pendingDecision === "approve", comment });
   }
 
-  const isLoading = initiativeQuery.isLoading || proposalQuery.isLoading;
+  const isLoading = initiativeQuery.isLoading || proposalQuery.isLoading || bdoLegQuery.isLoading;
   const hasError =
     initiativeQuery.isError ||
     !initiativeQuery.data ||
@@ -92,6 +98,26 @@ function BdoBrdReview() {
 
   if (!proposal) {
     return null;
+  }
+
+  // Once decided (forwarded to the Group Head, or rejected back to the
+  // PM), this leg is no longer the BDO's to act on — only "PendingBdoReview"
+  // is actionable.
+  if (bdoLegQuery.data && bdoLegQuery.data !== "PendingBdoReview") {
+    return (
+      <div className="dashboard-page">
+        <Link to="/dashboard/bdo-brd-reviews" className="text-button">
+          <ArrowLeft size={15} />
+          Back to BRD Reviews
+        </Link>
+
+        <p className="initiatives-empty initiative-detail-message">
+          {bdoLegQuery.data === "ForwardedToGroupHead"
+            ? `You already approved and forwarded ${initiative.projectName}'s BRD to the Group Head.`
+            : `You already rejected ${initiative.projectName}'s BRD. It's back with the PM to revise — this'll be available to review again once they resubmit it.`}
+        </p>
+      </div>
+    );
   }
 
   return (

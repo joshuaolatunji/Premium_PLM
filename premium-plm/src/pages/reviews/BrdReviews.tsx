@@ -6,8 +6,9 @@ import { getProductInitiatives } from "../../service/InitiativeService";
 import { getProposalByInitiativeId } from "../../service/ProposalService";
 import { getAllUsers } from "../../service/UserService";
 import { downloadBrdPdf } from "../../service/PdfService";
-import { priorityLabel } from "../../utils/initiativeStatus";
+import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
 import { brdStatusBadgeClass } from "../../utils/brdStatus";
+import { capitalize } from "../../utils/text";
 import type { ProductInitiative } from "../../types/initiativeTypes";
 import type { ProductProposal } from "../../types/proposalTypes";
 
@@ -57,13 +58,20 @@ function BrdReviews() {
       return "Unassigned";
     }
 
-    return usersQuery.data?.find((user) => user.userId === id)?.userName ?? "Unassigned";
+    return capitalize(
+      usersQuery.data?.find((user) => user.userId === id)?.userName ?? "Unassigned",
+    );
   }
 
-  // "Draft" is the one status string we've confirmed live — everything
-  // else (submitted, under review, approved, rejected — exact names
-  // unknown) reads as "needs attention" here, since we can't safely map
-  // unobserved status strings to specific meanings.
+  // "Draft" and "Approved" are the status strings we've confirmed live.
+  // "Rejected" is inferred (matches the same convention, and the
+  // discovery model's own confirmed Submitted/Approved/Rejected) — once
+  // rejected, a BRD goes back to the PM to revise and should leave this
+  // queue until it's resubmitted, same as it leaves BdoDocReviews once
+  // the Group Head rejects BDO documentation. Correct this if a real
+  // rejection reads differently. Anything else (submitted, under review —
+  // exact name unknown) reads as "needs attention" here, since we can't
+  // safely map other unobserved status strings to specific meanings.
   const awaitingReview: {
     initiative: ProductInitiative;
     proposal: ProductProposal;
@@ -74,7 +82,12 @@ function BrdReviews() {
     initiatives.forEach((initiative, index) => {
       const proposal = proposalQueries[index]?.data;
 
-      if (proposal && proposal.status !== "Draft") {
+      if (
+        proposal &&
+        proposal.status !== "Draft" &&
+        proposal.status !== "Approved" &&
+        proposal.status !== "Rejected"
+      ) {
         awaitingReview.push({
           initiative,
           proposal,
@@ -148,7 +161,7 @@ function BrdReviews() {
                     </td>
 
                     <td>
-                      <span className="priority-badge">
+                      <span className={priorityBadgeClass(initiative.priority)}>
                         {priorityLabel(initiative.priority)}
                       </span>
                     </td>

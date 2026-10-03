@@ -4,8 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getAllUsers } from "../../service/UserService";
 import {
+  activateUser,
   assignRole,
   createUser,
+  deactivateUser,
   getAllRoles,
   removeUserRole,
   resetUserPassword,
@@ -170,8 +172,9 @@ function AdminUsers() {
 
       <p className="mock-data-notice">
         There's no real "delete user" endpoint on the live API yet — only
-        role removal. "Remove" below just hides a user from this list for
-        this session; it resets if you reload the page.
+        activate/deactivate and role removal. "Remove" in the manage dialog
+        just hides a user from this list for this session; it resets if you
+        reload the page.
       </p>
 
       {isCreating && (
@@ -424,10 +427,28 @@ function ManageUserModal({
   const [passwordSuccess, setPasswordSuccess] = useState("");
 
   const [removeError, setRemoveError] = useState("");
+  const [statusError, setStatusError] = useState("");
 
   function invalidateUser() {
     queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
   }
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: () =>
+      user.isLockedOut ? activateUser(user.userId) : deactivateUser(user.userId),
+    onSuccess: () => {
+      setStatusError("");
+      invalidateUser();
+    },
+    onError: (error) => {
+      setStatusError(
+        errorMessageFrom(
+          error,
+          user.isLockedOut ? "Unable to activate this user." : "Unable to deactivate this user.",
+        ),
+      );
+    },
+  });
 
   const assignMutation = useMutation({
     mutationFn: (roleId: string) => assignRole({ userId: user.userId, roleId }),
@@ -518,6 +539,40 @@ function ManageUserModal({
         </div>
 
         <div className="modal-panel_body">
+          <div className="proposal-section">
+            <div className="form-field-row">
+              <div>
+                <label>Account status</label>
+
+                <p className="brd-status-message" role="status">
+                  {user.isLockedOut ? "Locked" : "Active"}
+                </p>
+              </div>
+
+              <div className="form-field">
+                <label>&nbsp;</label>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => toggleActiveMutation.mutate()}
+                  disabled={toggleActiveMutation.isPending}
+                >
+                  {toggleActiveMutation.isPending
+                    ? "Working…"
+                    : user.isLockedOut
+                      ? "Activate"
+                      : "Deactivate"}
+                </button>
+              </div>
+            </div>
+
+            {statusError && (
+              <p className="form-error" role="alert">
+                {statusError}
+              </p>
+            )}
+          </div>
+
           <div className="proposal-section">
             <div>
               <label>Roles</label>

@@ -105,6 +105,46 @@ function BrdReview() {
     );
   }
 
+  // Only a BRD that has actually left "Draft" has been submitted for
+  // review — anything still in Draft is the PM's own, unsent work, not
+  // something the Group Head can view or decide on here.
+  if (proposal.status === "Draft") {
+    return (
+      <div className="dashboard-page">
+        <Link to="/dashboard/brd-reviews" className="text-button">
+          <ArrowLeft size={15} />
+          Back to BRD Reviews
+        </Link>
+
+        <p className="initiatives-empty initiative-detail-message">
+          {initiative.projectName}'s BRD hasn't been submitted for review yet.
+        </p>
+      </div>
+    );
+  }
+
+  // Once rejected, this BRD is back with the PM to revise — it's no
+  // longer the Group Head's to review until it's resubmitted. ("Rejected"
+  // is inferred to match the same convention as "Draft"/"Approved" and the
+  // discovery model's own status values — not yet directly observed on a
+  // proposal; correct this if a real rejection reads differently.)
+  if (proposal.status === "Rejected") {
+    return (
+      <div className="dashboard-page">
+        <Link to="/dashboard/brd-reviews" className="text-button">
+          <ArrowLeft size={15} />
+          Back to BRD Reviews
+        </Link>
+
+        <p className="initiatives-empty initiative-detail-message">
+          You rejected {initiative.projectName}'s BRD. It's back with the PM
+          to revise — this'll be available to review again once they
+          resubmit it.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="dashboard-page">
       <Link to="/dashboard/brd-reviews" className="text-button">

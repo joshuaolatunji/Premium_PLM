@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
   Bell,
   Briefcase,
@@ -17,7 +17,7 @@ import {
 import UserAvatar from "../ui/UserAvatar"
 import { getStoredUser } from "../../apicalls/authStorage";
 import { resolvePrimaryRole } from "../../utils/roleRouting";
-import { capitalize } from "../../utils/text";
+import { capitalize, formatRoleName } from "../../utils/text";
 
 function navLinkClass({ isActive }: { isActive: boolean }) {
   return isActive ? "sidebar_link sidebar_link--active" : "sidebar_link";
@@ -60,10 +60,10 @@ function GroupHeadNav() {
                 <span>Notifications</span>
             </NavLink>
 
-            <a href="#" className="sidebar_link">
+            <NavLink to="/dashboard/audit-trail" className={navLinkClass}>
                 <History size={16} />
                 <span>Audit Trail</span>
-            </a>
+            </NavLink>
         </>
     );
 }
@@ -186,6 +186,7 @@ function DeveloperNav() {
 }
 
 function Sidebar() {
+    const navigate = useNavigate();
     const user = getStoredUser();
     const roles = user?.roles ?? [];
     const displayName = user?.userName ? capitalize(user.userName) : "Guest";
@@ -222,7 +223,11 @@ function Sidebar() {
             </nav>
 
 
-            <div className="sidebar_footer">
+            <button
+                type="button"
+                className="sidebar_footer"
+                onClick={() => navigate("/dashboard/profile")}
+            >
                 <div className="sidebar_avatar">
                     <UserAvatar name={displayName} />
                 </div>
@@ -233,11 +238,11 @@ function Sidebar() {
                     </p>
 
                     <p className="sidebar_user-role">
-                        <span>{roles.length > 0 ? roles.join(" · ") : "—"}</span>
+                        <span>{roles.length > 0 ? roles.map(formatRoleName).join(" · ") : "—"}</span>
                     </p>
                 </div>
 
-            </div>
+            </button>
 
 
 

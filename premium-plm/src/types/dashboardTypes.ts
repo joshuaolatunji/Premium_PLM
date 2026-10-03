@@ -17,6 +17,7 @@ export interface PortfolioInitiative {
   name: string;
   reference: string;
   priority: string;
+  priorityValue: number;
   currentStage: string;
   owner: string;
   progress: number | null;
@@ -29,6 +30,7 @@ export interface BRDQueueItem {
   id: string;
   initiative: string;
   priority: string;
+  priorityValue: number;
   owner: string;
   submittedDate: string;
   daysWaiting: number;

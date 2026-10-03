@@ -4,9 +4,9 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { getProductInitiatives } from "../../service/InitiativeService";
 import { getAllUsers } from "../../service/UserService";
-import { getBdoAssignment } from "../../mocks/bdoAssignmentMock";
-import { getSubmissionStatus } from "../../mocks/bdoDocumentsMock";
-import { priorityLabel } from "../../utils/initiativeStatus";
+import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
+import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
+import { capitalize } from "../../utils/text";
 import type { ProductInitiative } from "../../types/initiativeTypes";
 
 function BdoDocReviews() {
@@ -27,54 +27,38 @@ function BdoDocReviews() {
     [initiativesQuery.data],
   );
 
-  // One lookup per initiative for both the BDO assignment and the
-  // submission status — same "no bulk endpoint" situation as everywhere
-  // else in this mock, plus BRD reviews for the real equivalent.
-  const assignmentQueries = useQueries({
+  const discoveryQueries = useQueries({
     queries: initiatives.map((initiative) => ({
-      queryKey: ["bdo-assignment", initiative.id],
-      queryFn: () => getBdoAssignment(initiative.id),
-      enabled: Boolean(initiative.id),
-    })),
-  });
-
-  const statusQueries = useQueries({
-    queries: initiatives.map((initiative) => ({
-      queryKey: ["bdo-submission-status", initiative.id],
-      queryFn: () => getSubmissionStatus(initiative.id),
+      queryKey: ["product-discovery", initiative.id],
+      queryFn: () => getDiscoveryByInitiativeId(initiative.id),
       enabled: Boolean(initiative.id),
     })),
   });
 
   const isLoading =
-    initiativesQuery.isLoading ||
-    assignmentQueries.some((query) => query.isLoading) ||
-    statusQueries.some((query) => query.isLoading);
+    initiativesQuery.isLoading || discoveryQueries.some((query) => query.isLoading);
 
   const hasError =
-    initiativesQuery.isError ||
-    assignmentQueries.some((query) => query.isError) ||
-    statusQueries.some((query) => query.isError);
+    initiativesQuery.isError || discoveryQueries.some((query) => query.isError);
 
   function userName(id: string | null) {
     if (!id) {
       return "Unassigned";
     }
 
-    return usersQuery.data?.find((user) => user.userId === id)?.userName ?? "Unassigned";
+    return capitalize(
+      usersQuery.data?.find((user) => user.userId === id)?.userName ?? "Unassigned",
+    );
   }
 
   const awaitingReview: { initiative: ProductInitiative; bdoId: string | null }[] = [];
 
   if (!isLoading && !hasError) {
     initiatives.forEach((initiative, index) => {
-      const status = statusQueries[index]?.data;
+      const discovery = discoveryQueries[index]?.data;
 
-      if (status === "SubmittedForApproval") {
-        awaitingReview.push({
-          initiative,
-          bdoId: assignmentQueries[index]?.data?.bdoId ?? null,
-        });
+      if (discovery?.status === "Submitted") {
+        awaitingReview.push({ initiative, bdoId: initiative.bdoId });
       }
     });
   }
@@ -93,10 +77,12 @@ function BdoDocReviews() {
         </div>
       </header>
 
-      <p className="mock-data-notice">
-        Submission status here is temporary, local-only data until the real
-        BDO workflow API is ready — it resets if you reload the page.
-      </p>
+      {/* <p className="mock-data-notice">
+        This queue is now driven by the real submission status. The decision
+        you record (approve/reject) is also real, but its rejection comment
+        and the BDO's own view of it are still temporary, local-only data
+        until that part is confirmed.
+      </p> */}
 
       <section className="dashboard-panel">
         <div className="portfolio-table-wrapper">
@@ -141,7 +127,7 @@ function BdoDocReviews() {
                     </td>
 
                     <td>
-                      <span className="priority-badge">
+                      <span className={priorityBadgeClass(initiative.priority)}>
                         {priorityLabel(initiative.priority)}
                       </span>
                     </td>
@@ -151,7 +137,7 @@ function BdoDocReviews() {
                     <td>
                       <button
                         type="button"
-                        className="table-action"
+                        className="table-action table-action--premium"
                         onClick={() =>
                           navigate(`/dashboard/bdo-reviews/${initiative.id}`)
                         }

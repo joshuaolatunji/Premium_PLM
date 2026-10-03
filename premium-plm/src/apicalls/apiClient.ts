@@ -22,24 +22,54 @@ export class ApiError extends Error {
     }
 }
 
+// Without this, a dead connection (e.g. the free-tier backend cold-starting
+// or briefly unreachable) relies on the browser's own default timeout —
+// often 60s+ — before anything fails. Combined with React Query's default
+// retries, a page could look frozen on "Loading…" for well over a minute.
+// This isn't a 401/session-expiry case (no response ever comes back to
+// read a status from), so it's handled as its own distinct failure mode.
+const REQUEST_TIMEOUT_MS = 20_000;
+
 export async function apiClient<T>(
     endpoint: string,
     options: ApiRequestOptions = {},
 ): Promise<T> {
     const { token, headers, ...requestOptions } = options;
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...requestOptions,
-        headers: {
-            "Content-Type": "application/json",
-            ...headers,
-            ...(token
-                ? {
-                    Authorization: `Bearer ${token}`,
-                }
-                : {}),
-        },
-    });
+    // FormData bodies (file uploads) need the browser to set its own
+    // Content-Type with the multipart boundary — setting "application/json"
+    // on top of it breaks the upload.
+    const isFormData =
+        typeof FormData !== "undefined" && requestOptions.body instanceof FormData;
+
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS);
+
+    let response: Response;
+
+    try {
+        response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            ...requestOptions,
+            signal: timeoutController.signal,
+            headers: {
+                ...(isFormData ? {} : { "Content-Type": "application/json" }),
+                ...headers,
+                ...(token
+                    ? {
+                        Authorization: `Bearer ${token}`,
+                    }
+                    : {}),
+            },
+        });
+    } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+            throw new ApiError("The server took too long to respond. Try again.", 0, null);
+        }
+
+        throw new ApiError("Couldn't reach the server. Check your connection and try again.", 0, null);
+    } finally {
+        clearTimeout(timeoutId);
+    }
 
     // Some endpoints (e.g. a bare 200/204 with no response body) return an
     // empty payload. Reading as text first avoids response.json() throwing

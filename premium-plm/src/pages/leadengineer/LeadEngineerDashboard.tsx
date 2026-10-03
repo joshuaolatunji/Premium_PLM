@@ -7,6 +7,7 @@ import { getAllUsers } from "../../service/UserService";
 import { getTicketsForLeadEngineer } from "../../mocks/ticketsMock";
 import { getCurrentUserId } from "../../apicalls/authStorage";
 import { ticketStatusBadgeClass, ticketStatusLabel } from "../../utils/ticketStatus";
+import { capitalize } from "../../utils/text";
 
 // Mocked — tickets have no real endpoint yet (see mocks/ticketsMock.ts).
 function LeadEngineerDashboard() {
@@ -39,7 +40,9 @@ function LeadEngineerDashboard() {
       return "Unassigned";
     }
 
-    return usersQuery.data?.find((user) => user.userId === userId)?.userName ?? "Unassigned";
+    return capitalize(
+      usersQuery.data?.find((user) => user.userId === userId)?.userName ?? "Unassigned",
+    );
   }
 
   const isLoading = ticketsQuery.isLoading || initiativeQueries.some((query) => query.isLoading);

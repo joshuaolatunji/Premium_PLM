@@ -14,9 +14,9 @@ import CreateInitiativeModal from "../../dashboardcomponents/CreateInitiativeMod
 import { getProductInitiatives } from "../../service/InitiativeService";
 import { getProposalByInitiativeId } from "../../service/ProposalService";
 import { getAllUsers } from "../../service/UserService";
-import { getBdoAssignment } from "../../mocks/bdoAssignmentMock";
-import { getSubmissionStatus } from "../../mocks/bdoDocumentsMock";
-import { deriveStatus, priorityLabel } from "../../utils/initiativeStatus";
+import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
+import { currentStageFor, deriveStatus, priorityLabel } from "../../utils/initiativeStatus";
+import { capitalize } from "../../utils/text";
 import { INITIATIVE_PRIORITIES } from "../../types/initiativeTypes";
 
 import type { DerivedStatus } from "../../utils/initiativeStatus";
@@ -54,28 +54,17 @@ function formatShortDate(value: string): string {
   });
 }
 
-// No real field says whether a BRD is "in review", "rejected", etc. —
-// `status` is a real string, but only "Draft" and "Approved" are
-// confirmed values (see types/proposalTypes.ts). Anything else reads as a
-// generic "under review" rather than guessing at an unobserved string.
-function currentStageFor(proposal: ProductProposal | null): string {
-  if (!proposal) {
-    return "BRD not started";
-  }
-
-  if (proposal.status === "Draft") {
-    return "BRD in progress";
-  }
-
-  if (proposal.status === "Approved") {
-    return "BRD Approved";
-  }
-
-  return "BRD under review";
-}
+type StatFilterKey =
+  | "active"
+  | "brds-awaiting"
+  | "bdo-docs-awaiting"
+  | "on-track"
+  | "at-risk"
+  | "overdue";
 
 function Dashboard() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [statFilter, setStatFilter] = useState<StatFilterKey | null>(null);
   const navigate = useNavigate();
 
   const initiativesQuery = useQuery({
@@ -98,24 +87,11 @@ function Dashboard() {
     })),
   });
 
-  // Mocked — there's no real "who is the BDO" field yet (see
-  // mocks/bdoAssignmentMock.ts). Backs the portfolio table's "Owner" column.
-  // projectManagerId (used for the BRD queue's owner) is real now.
-  const bdoAssignmentQueries = useQueries({
+  // Backs the "BDO Docs Awaiting Review" stat card below.
+  const discoveryQueries = useQueries({
     queries: initiatives.map((initiative) => ({
-      queryKey: ["bdo-assignment", initiative.id],
-      queryFn: () => getBdoAssignment(initiative.id),
-      enabled: Boolean(initiative.id),
-    })),
-  });
-
-  // Mocked — there's no real endpoint for BDO documentation submission
-  // status yet (see mocks/bdoDocumentsMock.ts). Backs the "BDO Docs
-  // Awaiting Review" stat card below.
-  const bdoSubmissionStatusQueries = useQueries({
-    queries: initiatives.map((initiative) => ({
-      queryKey: ["bdo-submission-status", initiative.id],
-      queryFn: () => getSubmissionStatus(initiative.id),
+      queryKey: ["product-discovery", initiative.id],
+      queryFn: () => getDiscoveryByInitiativeId(initiative.id),
       enabled: Boolean(initiative.id),
     })),
   });
@@ -124,22 +100,22 @@ function Dashboard() {
     initiativesQuery.isLoading ||
     usersQuery.isLoading ||
     proposalQueries.some((query) => query.isLoading) ||
-    bdoAssignmentQueries.some((query) => query.isLoading) ||
-    bdoSubmissionStatusQueries.some((query) => query.isLoading);
+    discoveryQueries.some((query) => query.isLoading);
 
   const hasError =
     initiativesQuery.isError ||
     usersQuery.isError ||
     proposalQueries.some((query) => query.isError) ||
-    bdoAssignmentQueries.some((query) => query.isError) ||
-    bdoSubmissionStatusQueries.some((query) => query.isError);
+    discoveryQueries.some((query) => query.isError);
 
   function userName(userId: string | null) {
     if (!userId) {
       return "Unassigned";
     }
 
-    return usersQuery.data?.find((user) => user.userId === userId)?.userName ?? "Unassigned";
+    return capitalize(
+      usersQuery.data?.find((user) => user.userId === userId)?.userName ?? "Unassigned",
+    );
   }
 
   function userRole(userId: string) {
@@ -179,9 +155,9 @@ function Dashboard() {
       status,
       daysLeft,
       proposal: proposalQueries[index]?.data ?? null,
-      bdoId: bdoAssignmentQueries[index]?.data?.bdoId ?? null,
+      bdoId: initiative.bdoId,
       pmId: initiative.projectManagerId,
-      bdoSubmissionStatus: bdoSubmissionStatusQueries[index]?.data ?? "NotStarted",
+      bdoSubmissionStatus: discoveryQueries[index]?.data?.status ?? "NotStarted",
     };
   });
 
@@ -195,9 +171,15 @@ function Dashboard() {
     );
   }).length;
 
+  // Excludes "Rejected" (inferred, same convention as "Draft"/"Approved")
+  // — once the Group Head rejects a BRD, it goes back to the PM to revise
+  // and shouldn't still count as awaiting a decision.
   const awaitingReview = rows.filter(
     (row): row is typeof row & { proposal: ProductProposal } =>
-      Boolean(row.proposal) && row.proposal!.status !== "Draft",
+      Boolean(row.proposal) &&
+      row.proposal!.status !== "Draft" &&
+      row.proposal!.status !== "Approved" &&
+      row.proposal!.status !== "Rejected",
   );
 
   const overSlaCount = awaitingReview.filter(
@@ -205,7 +187,7 @@ function Dashboard() {
   ).length;
 
   const bdoDocsAwaitingReviewCount = rows.filter(
-    (row) => row.bdoSubmissionStatus === "SubmittedForApproval",
+    (row) => row.bdoSubmissionStatus === "Submitted",
   ).length;
 
   const onTrackCount = rows.filter((row) => row.status === "on-track").length;
@@ -216,51 +198,95 @@ function Dashboard() {
     return activeCount === 0 ? 0 : Math.round((count / activeCount) * 100);
   }
 
-  const stats: DashboardStat[] = [
+  const statCards: { key: StatFilterKey; stat: DashboardStat }[] = [
     {
-      label: "Active Initiatives",
-      value: activeCount,
-      description: `${createdThisMonthCount} added this month`,
-      descriptionType: "neutral",
+      key: "active",
+      stat: {
+        label: "Active Initiatives",
+        value: activeCount,
+        description: `${createdThisMonthCount} added this month`,
+        descriptionType: "neutral",
+      },
     },
     {
-      label: "BRDs Awaiting Review",
-      value: awaitingReview.length,
-      description: overSlaCount > 0 ? `${overSlaCount} over 3 days waiting` : "None over 3 days",
-      descriptionType: overSlaCount > 0 ? "danger" : "neutral",
+      key: "brds-awaiting",
+      stat: {
+        label: "BRDs Awaiting Review",
+        value: awaitingReview.length,
+        description:
+          overSlaCount > 0 ? `${overSlaCount} over 3 days waiting` : "None over 3 days",
+        descriptionType: overSlaCount > 0 ? "danger" : "neutral",
+      },
     },
     {
-      label: "BDO Docs Awaiting Review",
-      value: bdoDocsAwaitingReviewCount,
-      description: bdoDocsAwaitingReviewCount > 0 ? "Needs your decision" : "All caught up",
-      descriptionType: bdoDocsAwaitingReviewCount > 0 ? "warning" : "neutral",
+      key: "bdo-docs-awaiting",
+      stat: {
+        label: "BDO Docs Awaiting Review",
+        value: bdoDocsAwaitingReviewCount,
+        description: bdoDocsAwaitingReviewCount > 0 ? "Needs your decision" : "All caught up",
+        descriptionType: bdoDocsAwaitingReviewCount > 0 ? "warning" : "neutral",
+      },
     },
     {
-      label: "On Track",
-      value: onTrackCount,
-      description: `${portfolioPct(onTrackCount)}% of portfolio`,
-      descriptionType: "success",
+      key: "on-track",
+      stat: {
+        label: "On Track",
+        value: onTrackCount,
+        description: `${portfolioPct(onTrackCount)}% of portfolio`,
+        descriptionType: "success",
+      },
     },
     {
-      label: "At Risk",
-      value: atRiskCount,
-      description: `${portfolioPct(atRiskCount)}% of portfolio`,
-      descriptionType: "warning",
+      key: "at-risk",
+      stat: {
+        label: "At Risk",
+        value: atRiskCount,
+        description: `${portfolioPct(atRiskCount)}% of portfolio`,
+        descriptionType: "warning",
+      },
     },
     {
-      label: "Overdue",
-      value: overdueCount,
-      description: `${portfolioPct(overdueCount)}% of portfolio`,
-      descriptionType: "danger",
+      key: "overdue",
+      stat: {
+        label: "Overdue",
+        value: overdueCount,
+        description: `${portfolioPct(overdueCount)}% of portfolio`,
+        descriptionType: "danger",
+      },
     },
   ];
 
-  const portfolioInitiatives: PortfolioInitiative[] = [...rows]
-    .sort(
-      (a, b) => new Date(b.initiative.createdAt).getTime() - new Date(a.initiative.createdAt).getTime(),
-    )
-    .slice(0, 8)
-    .map(({ initiative, status, daysLeft, proposal, bdoId }) => {
+  function matchesStatFilter(row: (typeof rows)[number]): boolean {
+    switch (statFilter) {
+      case "brds-awaiting":
+        return Boolean(row.proposal) && awaitingReview.some((r) => r.initiative.id === row.initiative.id);
+      case "bdo-docs-awaiting":
+        return row.bdoSubmissionStatus === "SubmittedForApproval";
+      case "on-track":
+        return row.status === "on-track";
+      case "at-risk":
+        return row.status === "at-risk";
+      case "overdue":
+        return row.status === "overdue";
+      case "active":
+      case null:
+      default:
+        return true;
+    }
+  }
+
+  const filteredRows = statFilter ? rows.filter(matchesStatFilter) : rows;
+
+  const sortedFilteredRows = [...filteredRows].sort(
+    (a, b) => new Date(b.initiative.createdAt).getTime() - new Date(a.initiative.createdAt).getTime(),
+  );
+
+  // Capped to the 8 most recent only in the default, unfiltered view — once
+  // a stat card narrows the list, show every match instead of hiding some
+  // behind that cap.
+  const portfolioInitiatives: PortfolioInitiative[] = (
+    statFilter ? sortedFilteredRows : sortedFilteredRows.slice(0, 8)
+  ).map(({ initiative, status, daysLeft, proposal, bdoId, bdoSubmissionStatus }) => {
       const elapsedPct =
         initiative.timelineStartedAt && initiative.currentDeadline
           ? Math.min(
@@ -277,14 +303,20 @@ function Dashboard() {
             )
           : null;
 
-      const needsReview = Boolean(proposal && proposal.status !== "Draft" && proposal.status !== "Approved");
+      const needsReview = Boolean(
+        proposal &&
+          proposal.status !== "Draft" &&
+          proposal.status !== "Approved" &&
+          proposal.status !== "Rejected",
+      );
 
       return {
         id: initiative.id,
         name: initiative.projectName,
         reference: initiative.id.slice(0, 8),
         priority: priorityLabel(initiative.priority),
-        currentStage: currentStageFor(proposal),
+        priorityValue: initiative.priority,
+        currentStage: currentStageFor(bdoSubmissionStatus, proposal),
         owner: userName(bdoId),
         progress: elapsedPct,
         daysLeft,
@@ -298,6 +330,7 @@ function Dashboard() {
       id: initiative.id,
       initiative: initiative.projectName,
       priority: priorityLabel(initiative.priority),
+      priorityValue: initiative.priority,
       owner: userName(pmId),
       submittedDate: formatShortDate(proposal.creationDate),
       daysWaiting: Math.max(
@@ -364,21 +397,24 @@ function Dashboard() {
         <CreateInitiativeModal onClose={() => setIsCreateOpen(false)} />
       )}
 
-      <p className="mock-data-notice">
-        The portfolio table's "Owner" column and the "BDO Docs Awaiting
-        Review" count reflect temporary, local-only BDO assignment/submission
-        data until the real APIs are ready — they reset if you reload the
-        page.
-      </p>
+      {/* <p className="mock-data-notice">
+        The "BDO Docs Awaiting Review" count reflects temporary, local-only
+        submission data until the real submission/review API is ready — it
+        resets if you reload the page.
+      </p> */}
 
       <section
         className="dashboard-stats"
         aria-label="Portfolio summary"
       >
-        {stats.map((stat) => (
+        {statCards.map(({ key, stat }) => (
           <DashboardStatCard
             key={stat.label}
             stat={stat}
+            isActive={statFilter === key}
+            onClick={() =>
+              setStatFilter((current) => (current === key ? null : key))
+            }
           />
         ))}
       </section>
@@ -389,6 +425,12 @@ function Dashboard() {
             initiatives={portfolioInitiatives}
             onAction={handlePortfolioAction}
             onViewAll={() => navigate("/dashboard/initiatives")}
+            filterLabel={
+              statFilter
+                ? statCards.find((card) => card.key === statFilter)?.stat.label ?? null
+                : null
+            }
+            onClearFilter={() => setStatFilter(null)}
           />
 
           <AtRiskInitiatives

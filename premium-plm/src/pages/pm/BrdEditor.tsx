@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getInitiativeById } from "../../service/InitiativeService";
+import { getStoredUser } from "../../apicalls/authStorage";
+import { resolvePrimaryRole } from "../../utils/roleRouting";
 import {
   createProposal,
   getProposalByInitiativeId,
@@ -95,6 +97,15 @@ function BrdEditor() {
     queryFn: () => getProposalByInitiativeId(id as string),
     enabled: Boolean(id),
   });
+
+  // This is the PM's editable form — the Group Head (and Super Admin, who
+  // shares the same governance view) only ever gets the read-only review
+  // page, even if they land on this URL directly.
+  const primaryRole = resolvePrimaryRole(getStoredUser()?.roles ?? []);
+
+  if (primaryRole === "GroupHead" || primaryRole === "SuperAdmin") {
+    return <Navigate to={`/dashboard/brd-reviews/${id}`} replace />;
+  }
 
   if (initiativeQuery.isLoading || proposalQuery.isLoading) {
     return (

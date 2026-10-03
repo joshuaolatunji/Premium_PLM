@@ -6,6 +6,7 @@ import { getMyAssignedInitiatives } from "../../service/InitiativeService";
 import { getAllUsers } from "../../service/UserService";
 import { getTicketsForInitiative } from "../../mocks/ticketsMock";
 import { ticketStatusBadgeClass, ticketStatusLabel } from "../../utils/ticketStatus";
+import { capitalize } from "../../utils/text";
 import type { Ticket } from "../../types/ticketTypes";
 import type { ProductInitiative } from "../../types/initiativeTypes";
 
@@ -38,7 +39,9 @@ function MyTickets() {
   });
 
   function userName(userId: string) {
-    return usersQuery.data?.find((user) => user.userId === userId)?.userName ?? "Unassigned";
+    return capitalize(
+      usersQuery.data?.find((user) => user.userId === userId)?.userName ?? "Unassigned",
+    );
   }
 
   const isLoading = initiativesQuery.isLoading || ticketQueries.some((query) => query.isLoading);

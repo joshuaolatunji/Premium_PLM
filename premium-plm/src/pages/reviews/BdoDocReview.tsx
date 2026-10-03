@@ -1,16 +1,19 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileText, Link2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getInitiativeById } from "../../service/InitiativeService";
-import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
+import { getAllUsers } from "../../service/UserService";
+import { ApiError } from "../../apicalls/apiClient";
 import {
-  getDesignScreens,
-  getLogicFlowDocuments,
-  reviewBdoDocumentation,
-} from "../../mocks/bdoDocumentsMock";
-import UploadedFileList from "../../components/bdo/UploadedFileList";
+  getDiscoveryAttachments,
+  getDiscoveryByInitiativeId,
+  getDiscoveryWorkflowLinks,
+  openDiscoveryAttachment,
+  reviewDiscovery,
+} from "../../service/ProductDiscoveryService";
+import { capitalize } from "../../utils/text";
 import DecisionModal, { type Decision } from "../../components/review/DecisionModal";
 
 function BdoDocReview() {
@@ -33,28 +36,65 @@ function BdoDocReview() {
     enabled: Boolean(id),
   });
 
-  const logicFlowQuery = useQuery({
-    queryKey: ["bdo-logic-flow", id],
-    queryFn: () => getLogicFlowDocuments(id as string),
-    enabled: Boolean(id),
+  const usersQuery = useQuery({
+    queryKey: ["plm-users"],
+    queryFn: getAllUsers,
   });
 
-  const designScreensQuery = useQuery({
-    queryKey: ["bdo-design-screens", id],
-    queryFn: () => getDesignScreens(id as string),
-    enabled: Boolean(id),
+  function reviewerName(userId: string | null) {
+    if (!userId) {
+      return "the Group Head";
+    }
+
+    return capitalize(
+      usersQuery.data?.find((user) => user.userId === userId)?.userName ?? "the Group Head",
+    );
+  }
+
+  const discoveryId = discoveryQuery.data?.id ?? null;
+
+  const attachmentsQuery = useQuery({
+    queryKey: ["discovery-attachments", discoveryId],
+    queryFn: () => getDiscoveryAttachments(discoveryId as string),
+    enabled: Boolean(discoveryId),
   });
+
+  const workflowLinksQuery = useQuery({
+    queryKey: ["discovery-workflow-links", discoveryId],
+    queryFn: () => getDiscoveryWorkflowLinks(discoveryId as string),
+    enabled: Boolean(discoveryId),
+  });
+
+  const openAttachmentMutation = useMutation({
+    mutationFn: ({ attachmentId, targetWindow }: { attachmentId: string; targetWindow: Window | null }) =>
+      openDiscoveryAttachment(attachmentId, targetWindow),
+    onSuccess: () => setErrorMessage(""),
+    onError: (error) => {
+      setErrorMessage(
+        error instanceof ApiError ? error.message : "Unable to open that attachment. Try again.",
+      );
+    },
+  });
+
+  // Opened synchronously in the click handler (before the mutation's first
+  // await) so browsers still treat it as a user-gesture-triggered window,
+  // not a blocked popup.
+  function handleOpenAttachment(attachmentId: string) {
+    const targetWindow = window.open("", "_blank");
+    openAttachmentMutation.mutate({ attachmentId, targetWindow });
+  }
 
   const decisionMutation = useMutation({
     mutationFn: ({ isApproved, comment }: { isApproved: boolean; comment: string }) =>
-      reviewBdoDocumentation(id as string, { isApproved, comment }),
+      reviewDiscovery(id as string, { isApproved, comment }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["bdo-submission-status", id] });
-      queryClient.invalidateQueries({ queryKey: ["bdo-rejection", id] });
+      queryClient.invalidateQueries({ queryKey: ["product-discovery", id] });
       navigate("/dashboard/bdo-reviews");
     },
-    onError: () => {
-      setErrorMessage("Unable to record this decision. Try again.");
+    onError: (error) => {
+      setErrorMessage(
+        error instanceof ApiError ? error.message : "Unable to record this decision. Try again.",
+      );
     },
   });
 
@@ -68,18 +108,14 @@ function BdoDocReview() {
     decisionMutation.mutate({ isApproved: pendingDecision === "approve", comment });
   }
 
-  const isLoading =
-    initiativeQuery.isLoading ||
-    discoveryQuery.isLoading ||
-    logicFlowQuery.isLoading ||
-    designScreensQuery.isLoading;
+  // Only the initiative and discovery record are essential to review and
+  // decide on — attachments/links failing to load (e.g. an authorization
+  // gap on just that one endpoint) shouldn't block Approve/Reject on
+  // everything else that did load. Those two sections show their own
+  // inline error instead.
+  const isLoading = initiativeQuery.isLoading || discoveryQuery.isLoading;
 
-  const hasError =
-    initiativeQuery.isError ||
-    !initiativeQuery.data ||
-    discoveryQuery.isError ||
-    logicFlowQuery.isError ||
-    designScreensQuery.isError;
+  const hasError = initiativeQuery.isError || !initiativeQuery.data || discoveryQuery.isError;
 
   if (isLoading) {
     return (
@@ -107,8 +143,32 @@ function BdoDocReview() {
 
   const initiative = initiativeQuery.data;
   const discovery = discoveryQuery.data;
-  const logicFlowFiles = logicFlowQuery.data ?? [];
-  const designScreenFiles = designScreensQuery.data ?? [];
+
+  // Once rejected, this documentation is back with the BDO to revise —
+  // it's no longer the Group Head's to review until it's resubmitted
+  // ("Submitted" again). Approved stays viewable (nothing left to decide,
+  // but no harm in seeing the final version).
+  if (discovery?.status === "Rejected") {
+    return (
+      <div className="dashboard-page">
+        <Link to="/dashboard/bdo-reviews" className="text-button">
+          <ArrowLeft size={15} />
+          Back to BDO Reviews
+        </Link>
+
+        <p className="initiatives-empty initiative-detail-message">
+          You rejected {initiative.projectName}'s documentation
+          {discovery.reviewComment ? `: "${discovery.reviewComment}"` : "."} It's
+          back with the BDO to revise — this'll be available to review again
+          once they resubmit it.
+        </p>
+      </div>
+    );
+  }
+
+  const attachments = attachmentsQuery.data ?? [];
+  const workflowLinks = workflowLinksQuery.data ?? [];
+  const isDecided = discovery?.status === "Approved";
 
   return (
     <div className="dashboard-page">
@@ -130,31 +190,34 @@ function BdoDocReview() {
           </p>
         </div>
 
-        <div className="dashboard-header__actions">
-          <button
-            type="button"
-            className="button button--secondary brd-reject-button"
-            onClick={() => openDecision("reject")}
-            disabled={decisionMutation.isPending}
-          >
-            Reject
-          </button>
+        {!isDecided && (
+          <div className="dashboard-header__actions">
+            <button
+              type="button"
+              className="button button--secondary brd-reject-button"
+              onClick={() => openDecision("reject")}
+              disabled={decisionMutation.isPending}
+            >
+              Reject
+            </button>
 
-          <button
-            type="button"
-            className="button button--primary"
-            onClick={() => openDecision("approve")}
-            disabled={decisionMutation.isPending}
-          >
-            Approve
-          </button>
-        </div>
+            <button
+              type="button"
+              className="button button--primary"
+              onClick={() => openDecision("approve")}
+              disabled={decisionMutation.isPending}
+            >
+              Approve
+            </button>
+          </div>
+        )}
       </header>
 
-      <p className="mock-data-notice">
-        This documentation is temporary, local-only data until the real BDO
-        workflow API is ready.
-      </p>
+      {discovery?.status === "Approved" && (
+        <p className="brd-status-message" role="status">
+          Already approved by {reviewerName(discovery.reviewedByUserId)}.
+        </p>
+      )}
 
       <section className="dashboard-panel">
         <div className="dashboard-panel__header">
@@ -208,30 +271,85 @@ function BdoDocReview() {
       <section className="dashboard-panel initiative-detail-panel">
         <div className="dashboard-panel__header">
           <div>
-            <h2>Logic flow document</h2>
+            <h2>Attachments</h2>
           </div>
         </div>
 
         <div className="bdo-upload-section">
-          <UploadedFileList
-            files={logicFlowFiles}
-            emptyLabel="No logic flow document was uploaded."
-          />
+          {attachmentsQuery.isError ? (
+            <p className="initiatives-empty initiatives-empty--error">
+              Couldn't load attachments. Try refreshing the page.
+            </p>
+          ) : attachments.length === 0 ? (
+            <p className="bdo-upload-empty">No attachments were uploaded.</p>
+          ) : (
+            <ul className="bdo-upload-list">
+              {attachments.map((attachment) => (
+                <li key={attachment.id} className="bdo-upload-list_item">
+                  <span className="bdo-upload-list_icon">
+                    <FileText size={16} />
+                  </span>
+
+                  <div className="bdo-upload-list_info">
+                    <span className="bdo-upload-list_name">{attachment.fileName}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="bdo-upload-list_open"
+                    onClick={() => handleOpenAttachment(attachment.id)}
+                    disabled={openAttachmentMutation.isPending}
+                  >
+                    Open
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
 
       <section className="dashboard-panel initiative-detail-panel">
         <div className="dashboard-panel__header">
           <div>
-            <h2>Design screens documentation</h2>
+            <h2>Design links</h2>
           </div>
         </div>
 
         <div className="bdo-upload-section">
-          <UploadedFileList
-            files={designScreenFiles}
-            emptyLabel="No design screens were uploaded."
-          />
+          {workflowLinksQuery.isError ? (
+            <p className="initiatives-empty initiatives-empty--error">
+              Couldn't load design links. Try refreshing the page.
+            </p>
+          ) : workflowLinks.length === 0 ? (
+            <p className="bdo-upload-empty">No links were added.</p>
+          ) : (
+            <ul className="bdo-upload-list">
+              {workflowLinks.map((link) => (
+                <li key={link.id} className="bdo-upload-list_item">
+                  <span className="bdo-upload-list_icon">
+                    <Link2 size={16} />
+                  </span>
+
+                  <div className="bdo-upload-list_info">
+                    <span className="bdo-upload-list_name">{link.title}</span>
+                    {link.description && (
+                      <span className="bdo-upload-list_meta">{link.description}</span>
+                    )}
+                  </div>
+
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="bdo-upload-list_open"
+                  >
+                    Open link
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
 

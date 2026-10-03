@@ -1,18 +1,38 @@
 import { useMemo, useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   getProductInitiatives,
   updateInitiativePriority,
 } from "../../service/InitiativeService";
 import { getAllUsers } from "../../service/UserService";
+import { getProposalByInitiativeId } from "../../service/ProposalService";
+import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
 import { ApiError } from "../../apicalls/apiClient";
 import { INITIATIVE_PRIORITIES } from "../../types/initiativeTypes";
 import type { ProductInitiative } from "../../types/initiativeTypes";
 import CreateInitiativeModal from "../../dashboardcomponents/CreateInitiativeModal";
-import { deriveStatus, priorityLabel, STATUS_LABEL } from "../../utils/initiativeStatus";
+import {
+  currentStageFor,
+  deriveStatus,
+  priorityBadgeClass,
+  priorityLabel,
+  stageBadgeClass,
+} from "../../utils/initiativeStatus";
+import { capitalize } from "../../utils/text";
+
+// Every value currentStageFor() can return, in pipeline order — backs both
+// the status filter dropdown and the CSV export.
+const ALL_STAGES = [
+  "BDO Documentation Drafting",
+  "Awaiting GH Documentation Approval",
+  "BDO Documentation Rejected",
+  "BRD Drafting",
+  "BRD Under Review",
+  "Approved",
+];
 
 function toCsvValue(value: string) {
   return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
@@ -21,25 +41,26 @@ function toCsvValue(value: string) {
 function downloadInitiativesCsv(
   rows: ProductInitiative[],
   managerName: (id: string | null) => string,
+  stageFor: (initiativeId: string) => string,
 ) {
   const header = [
     "Initiative",
     "Priority",
     "Project manager",
-    "Status",
+    "Current stage",
     "Days left",
     "Extensions used",
     "Extensions remaining",
   ];
 
   const lines = rows.map((initiative) => {
-    const { status, daysLeft } = deriveStatus(initiative);
+    const { daysLeft } = deriveStatus(initiative);
 
     return [
       initiative.projectName,
       priorityLabel(initiative.priority),
       managerName(initiative.projectManagerId),
-      STATUS_LABEL[status],
+      stageFor(initiative.id),
       daysLeft === null ? "" : String(daysLeft),
       String(initiative.timelineExtensionCount),
       String(initiative.extensionsRemaining),
@@ -83,6 +104,54 @@ function Initiatives() {
     queryFn: getAllUsers,
   });
 
+  const initiatives = useMemo(
+    () => initiativesQuery.data ?? [],
+    [initiativesQuery.data],
+  );
+
+  // One proposal + one discovery lookup per initiative, run in parallel —
+  // same N+1 pattern already used for the full org-wide list on the
+  // Dashboard and Audit Trail pages. Needed so "current stage" can be
+  // computed and filtered on consistently with every other page.
+  const proposalQueries = useQueries({
+    queries: initiatives.map((initiative) => ({
+      queryKey: ["product-proposal", initiative.id],
+      queryFn: () => getProposalByInitiativeId(initiative.id),
+      enabled: Boolean(initiative.id),
+    })),
+  });
+
+  const discoveryQueries = useQueries({
+    queries: initiatives.map((initiative) => ({
+      queryKey: ["product-discovery", initiative.id],
+      queryFn: () => getDiscoveryByInitiativeId(initiative.id),
+      enabled: Boolean(initiative.id),
+    })),
+  });
+
+  const stagesLoading =
+    proposalQueries.some((query) => query.isLoading) ||
+    discoveryQueries.some((query) => query.isLoading);
+  const stagesError =
+    proposalQueries.some((query) => query.isError) ||
+    discoveryQueries.some((query) => query.isError);
+
+  const stageById = useMemo(() => {
+    const map = new Map<string, string>();
+
+    initiatives.forEach((initiative, index) => {
+      const bdoSubmissionStatus = discoveryQueries[index]?.data?.status ?? "NotStarted";
+      const proposal = proposalQueries[index]?.data ?? null;
+      map.set(initiative.id, currentStageFor(bdoSubmissionStatus, proposal));
+    });
+
+    return map;
+  }, [initiatives, proposalQueries, discoveryQueries]);
+
+  function stageFor(initiativeId: string) {
+    return stageById.get(initiativeId) ?? "BDO Documentation Drafting";
+  }
+
   const userNameById = useMemo(() => {
     const map = new Map<string, string>();
     (usersQuery.data ?? []).forEach((user) => map.set(user.userId, user.userName));
@@ -94,16 +163,8 @@ function Initiatives() {
       return "Unassigned";
     }
 
-    return userNameById.get(id) ?? "Unassigned";
+    return capitalize(userNameById.get(id) ?? "Unassigned");
   }
-
-  // react-query keeps a stable `data` reference across renders that don't
-  // change it, but `?? []` would create a fresh array every render — memoize
-  // so the filters below don't recompute on every keystroke elsewhere.
-  const initiatives = useMemo(
-    () => initiativesQuery.data ?? [],
-    [initiativesQuery.data],
-  );
 
   // Filter options are drawn from managers actually assigned to an
   // initiative, rather than every user with the role — a PM with nothing
@@ -147,17 +208,13 @@ function Initiatives() {
         return false;
       }
 
-      if (statusFilter !== "all") {
-        const { status } = deriveStatus(initiative);
-
-        if (status !== statusFilter) {
-          return false;
-        }
+      if (statusFilter !== "all" && stageById.get(initiative.id) !== statusFilter) {
+        return false;
       }
 
       return true;
     });
-  }, [initiatives, search, priorityFilter, managerFilter, statusFilter]);
+  }, [initiatives, search, priorityFilter, managerFilter, statusFilter, stageById]);
 
   const hasActiveFilters =
     Boolean(search) ||
@@ -224,7 +281,7 @@ function Initiatives() {
 
   function handleExportCsv() {
     const rows = filtered.filter((initiative) => selectedIds.has(initiative.id));
-    downloadInitiativesCsv(rows, managerName);
+    downloadInitiativesCsv(rows, managerName, stageFor);
   }
 
   const selectedCount = selectedIds.size;
@@ -301,13 +358,15 @@ function Initiatives() {
         <select
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value)}
-          aria-label="Filter by status"
+          aria-label="Filter by current stage"
         >
-          <option value="all">All statuses</option>
-          <option value="on-track">On track</option>
-          <option value="at-risk">At risk</option>
-          <option value="overdue">Overdue</option>
-          <option value="not-started">Not started</option>
+          <option value="all">All stages</option>
+
+          {ALL_STAGES.map((stage) => (
+            <option key={stage} value={stage}>
+              {stage}
+            </option>
+          ))}
         </select>
 
         {hasActiveFilters && (
@@ -319,8 +378,8 @@ function Initiatives() {
 
       {selectedCount > 0 && (
         <section className="initiatives-bulk-bar">
-          <span>
-            {selectedCount} initiative{selectedCount === 1 ? "" : "s"} selected
+          <span className="initiatives-bulk-bar_count">
+            <strong>{selectedCount}</strong> initiative{selectedCount === 1 ? "" : "s"} selected
           </span>
 
           <div className="initiatives-bulk-bar_actions">
@@ -338,7 +397,7 @@ function Initiatives() {
 
             <button
               type="button"
-              className="button button--secondary"
+              className="button button--primary"
               onClick={handleBulkPriorityApply}
               disabled={bulkPriorityMutation.isPending}
             >
@@ -349,7 +408,7 @@ function Initiatives() {
 
             <button
               type="button"
-              className="button button--secondary"
+              className="button button--dark"
               onClick={handleExportCsv}
             >
               Export CSV
@@ -396,7 +455,7 @@ function Initiatives() {
                 <th>Project manager</th>
                 <th>Days left</th>
                 <th>Extensions</th>
-                <th>Status</th>
+                <th>Current stage</th>
                 <th>
                   <span className="sr-only">Action</span>
                 </th>
@@ -404,7 +463,7 @@ function Initiatives() {
             </thead>
 
             <tbody>
-              {initiativesQuery.isLoading && (
+              {(initiativesQuery.isLoading || stagesLoading) && (
                 <tr>
                   <td colSpan={8} className="initiatives-empty">
                     Loading initiatives…
@@ -412,7 +471,7 @@ function Initiatives() {
                 </tr>
               )}
 
-              {initiativesQuery.isError && (
+              {!initiativesQuery.isLoading && (initiativesQuery.isError || stagesError) && (
                 <tr>
                   <td colSpan={8} className="initiatives-empty initiatives-empty--error">
                     Couldn't load initiatives. Try refreshing the page.
@@ -421,9 +480,12 @@ function Initiatives() {
               )}
 
               {!initiativesQuery.isLoading &&
+                !stagesLoading &&
                 !initiativesQuery.isError &&
+                !stagesError &&
                 filtered.map((initiative) => {
-                  const { status, daysLeft } = deriveStatus(initiative);
+                  const { daysLeft } = deriveStatus(initiative);
+                  const stage = stageFor(initiative.id);
                   const totalExtensions =
                     initiative.timelineExtensionCount +
                     initiative.extensionsRemaining;
@@ -447,7 +509,7 @@ function Initiatives() {
                       </td>
 
                       <td>
-                        <span className="priority-badge">
+                        <span className={priorityBadgeClass(initiative.priority)}>
                           {priorityLabel(initiative.priority)}
                         </span>
                       </td>
@@ -477,15 +539,13 @@ function Initiatives() {
                       </td>
 
                       <td>
-                        <span className={`status-badge status-badge--${status}`}>
-                          {STATUS_LABEL[status]}
-                        </span>
+                        <span className={stageBadgeClass(stage)}>{stage}</span>
                       </td>
 
                       <td>
                         <button
                           type="button"
-                          className="table-action"
+                          className="table-action table-action--premium"
                           onClick={() =>
                             navigate(`/dashboard/initiatives/${initiative.id}`)
                           }
@@ -498,7 +558,9 @@ function Initiatives() {
                 })}
 
               {!initiativesQuery.isLoading &&
+                !stagesLoading &&
                 !initiativesQuery.isError &&
+                !stagesError &&
                 filtered.length === 0 && (
                   <tr>
                     <td colSpan={8} className="initiatives-empty">

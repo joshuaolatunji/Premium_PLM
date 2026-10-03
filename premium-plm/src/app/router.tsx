@@ -24,6 +24,8 @@ import DeveloperDashboard from "../pages/developer/DeveloperDashboard";
 import DeveloperTicketWorkspace from "../pages/developer/DeveloperTicketWorkspace";
 import AdminUsers from "../pages/admin/AdminUsers";
 import AdminCategories from "../pages/admin/AdminCategories";
+import AuditTrail from "../pages/audit/AuditTrail";
+import Profile from "../pages/profile/Profile";
 import AppShell from "../components/layout/AppShell";
 import {Navigate} from "react-router-dom"
 // import ChangeTemporaryPassword from "../pages/auth/ChangeTemporaryPassword"
@@ -140,6 +142,14 @@ const router = createBrowserRouter([
             {
                 path: "admin/categories",
                 element: <AdminCategories />,
+            },
+            {
+                path: "audit-trail",
+                element: <AuditTrail />,
+            },
+            {
+                path: "profile",
+                element: <Profile />,
             },
         ],
     },

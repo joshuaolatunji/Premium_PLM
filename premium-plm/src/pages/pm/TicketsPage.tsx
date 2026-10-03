@@ -11,13 +11,20 @@ import {
   createTicket,
   getTicketsForInitiative,
 } from "../../mocks/ticketsMock";
-import { getCurrentUserId } from "../../apicalls/authStorage";
+import { getCurrentUserId, getStoredUser } from "../../apicalls/authStorage";
 import { ticketStatusBadgeClass, ticketStatusLabel } from "../../utils/ticketStatus";
+import { capitalize } from "../../utils/text";
+import { resolvePrimaryRole } from "../../utils/roleRouting";
 
 function TicketsPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const currentUserId = getCurrentUserId();
+
+  // Ticket creation and timeline allocation are the PM's job — the Group
+  // Head (and anyone else) can view this page to monitor progress, but
+  // not create or manage tickets.
+  const canManage = resolvePrimaryRole(getStoredUser()?.roles ?? []) === "ProjectManager";
 
   const [isCreating, setIsCreating] = useState(false);
   const [title, setTitle] = useState("");
@@ -54,7 +61,9 @@ function TicketsPage() {
   );
 
   function userName(userId: string) {
-    return usersQuery.data?.find((user) => user.userId === userId)?.userName ?? "Unassigned";
+    return capitalize(
+      usersQuery.data?.find((user) => user.userId === userId)?.userName ?? "Unassigned",
+    );
   }
 
   const createMutation = useMutation({
@@ -159,20 +168,24 @@ function TicketsPage() {
           <h1 className="dashboard-title">Tickets</h1>
 
           <p className="dashboard-subtitle">
-            Create and assign tickets to a Lead Engineer before starting the BRD.
+            {canManage
+              ? "Create and assign tickets to a Lead Engineer before starting the BRD."
+              : "Tickets for this initiative and their progress."}
           </p>
         </div>
 
-        <div className="dashboard-header__actions">
-          <button
-            type="button"
-            className="button button--primary"
-            onClick={() => setIsCreating(true)}
-            disabled={isCreating}
-          >
-            + New ticket
-          </button>
-        </div>
+        {canManage && (
+          <div className="dashboard-header__actions">
+            <button
+              type="button"
+              className="button button--primary"
+              onClick={() => setIsCreating(true)}
+              disabled={isCreating}
+            >
+              + New ticket
+            </button>
+          </div>
+        )}
       </header>
 
       <p className="mock-data-notice">
@@ -180,7 +193,7 @@ function TicketsPage() {
         ready — they reset if you reload the page.
       </p>
 
-      {isCreating && (
+      {canManage && isCreating && (
         <section className="dashboard-panel initiative-detail-panel">
           <div className="dashboard-panel__header">
             <div>
@@ -228,7 +241,7 @@ function TicketsPage() {
 
                 {leadEngineers.map((user) => (
                   <option key={user.userId} value={user.userId}>
-                    {user.userName} ({user.email})
+                    {capitalize(user.userName)} ({user.email})
                   </option>
                 ))}
               </select>
@@ -272,7 +285,7 @@ function TicketsPage() {
         </section>
       )}
 
-      {tickets.length > 0 && !isBrdApproved && (
+      {canManage && tickets.length > 0 && !isBrdApproved && (
         <p className="mock-data-notice">
           Timeline allocation unlocks once this initiative's BRD is approved.
         </p>
@@ -318,7 +331,7 @@ function TicketsPage() {
                     </td>
 
                     <td>
-                      {isBrdApproved ? (
+                      {isBrdApproved && canManage ? (
                         <div className="ticket-timeline-cell">
                           <input
                             type="number"

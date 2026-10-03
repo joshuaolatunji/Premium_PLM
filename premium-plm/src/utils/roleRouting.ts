@@ -16,11 +16,10 @@ export type PrimaryRole =
 // landing route, the `/dashboard` index redirect, and which sidebar nav
 // renders, so all three always agree with each other.
 //
-// "GroupHead" and "ProjectManager" are confirmed live (seen in real JWTs).
-// The other four role identity strings are placeholders — nothing
-// confirms the backend's real names for Super Admin/BDO/Lead
-// Engineer/Software Engineer yet, since no login has ever returned them.
-// Correct these the moment a real JWT with one of these roles is seen.
+// "GroupHead", "ProjectManager", and "BusinessDevelopmentOfficer" are
+// confirmed live (seen in real JWTs). "SuperAdmin", "LeadEngineer", and
+// "SoftwareEngineer" are still placeholders — correct them the moment a
+// real JWT with one of those roles is seen.
 const ROLE_PRIORITY: { role: Exclude<PrimaryRole, "Other">; path: string }[] = [
   { role: "SuperAdmin", path: "/dashboard" },
   { role: "GroupHead", path: "/dashboard" },

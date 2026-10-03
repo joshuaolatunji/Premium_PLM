@@ -1,29 +1,45 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import type { PortfolioInitiative } from "../../src/types/dashboardTypes";
+import { priorityBadgeClass, stageBadgeClass } from "../../src/utils/initiativeStatus";
 
 interface PortfolioOverviewProps {
   initiatives: PortfolioInitiative[];
   onAction: (initiative: PortfolioInitiative) => void;
   onViewAll: () => void;
+  filterLabel?: string | null;
+  onClearFilter?: () => void;
 }
 
 function PortfolioOverview({
   initiatives,
   onAction,
   onViewAll,
+  filterLabel,
+  onClearFilter,
 }: PortfolioOverviewProps) {
   return (
     <section className="dashboard-panel portfolio-overview">
       <div className="dashboard-panel__header">
         <div>
           <h2>Portfolio overview</h2>
-          <p>All active initiatives across the product lifecycle.</p>
+          <p>
+            {filterLabel
+              ? `Filtered by "${filterLabel}".`
+              : "All active initiatives across the product lifecycle."}
+          </p>
         </div>
 
-        <button type="button" className="text-button" onClick={onViewAll}>
-          View all
-          <ChevronRight size={15} />
-        </button>
+        {filterLabel && onClearFilter ? (
+          <button type="button" className="text-button" onClick={onClearFilter}>
+            Clear filter
+            <X size={15} />
+          </button>
+        ) : (
+          <button type="button" className="text-button" onClick={onViewAll}>
+            View all
+            <ChevronRight size={15} />
+          </button>
+        )}
       </div>
 
       <div className="portfolio-table-wrapper">
@@ -54,12 +70,16 @@ function PortfolioOverview({
                 </td>
 
                 <td>
-                  <span className="priority-badge">
+                  <span className={priorityBadgeClass(initiative.priorityValue)}>
                     {initiative.priority}
                   </span>
                 </td>
 
-                <td>{initiative.currentStage}</td>
+                <td>
+                  <span className={stageBadgeClass(initiative.currentStage)}>
+                    {initiative.currentStage}
+                  </span>
+                </td>
 
                 <td>{initiative.owner}</td>
 
@@ -126,7 +146,7 @@ function PortfolioOverview({
                 <td>
                   <button
                     type="button"
-                    className="table-action"
+                    className="table-action table-action--premium"
                     onClick={() => onAction(initiative)}
                   >
                     {initiative.action}

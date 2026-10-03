@@ -2,63 +2,47 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
-import { getInitiativeById } from "../../service/InitiativeService";
-import { getInitiativeIdsAssignedToBdo } from "../../mocks/bdoAssignmentMock";
+import { getProductInitiatives } from "../../service/InitiativeService";
 import { getBrdBdoLegStatus } from "../../mocks/brdBdoReviewMock";
 import { getCurrentUserId } from "../../apicalls/authStorage";
-import { priorityLabel } from "../../utils/initiativeStatus";
+import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
 
-// Mocked — there's no real "who is the BDO" field on an initiative and no
-// real approval-leg concept, so this mirrors pages/reviews/BdoDocReviews.tsx:
-// look up every initiative assigned to this BDO, then filter to the ones
-// whose BRD leg is pending.
+// The BRD approval-leg concept itself is still mocked (no real endpoint) —
+// but which initiatives belong to this BDO is real now (bdoId).
 function BdoBrdReviews() {
   const navigate = useNavigate();
   const currentUserId = getCurrentUserId();
 
-  const assignedIdsQuery = useQuery({
-    queryKey: ["bdo-assigned-initiative-ids", currentUserId],
-    queryFn: () => getInitiativeIdsAssignedToBdo(currentUserId as string),
-    enabled: Boolean(currentUserId),
+  const initiativesQuery = useQuery({
+    queryKey: ["product-initiatives"],
+    queryFn: getProductInitiatives,
   });
 
-  const assignedIds = useMemo(() => assignedIdsQuery.data ?? [], [assignedIdsQuery.data]);
-
-  const initiativeQueries = useQueries({
-    queries: assignedIds.map((initiativeId) => ({
-      queryKey: ["product-initiative", initiativeId],
-      queryFn: () => getInitiativeById(initiativeId),
-      enabled: Boolean(initiativeId),
-    })),
-  });
+  const assignedInitiatives = useMemo(
+    () =>
+      (initiativesQuery.data ?? []).filter(
+        (initiative) => initiative.bdoId === currentUserId,
+      ),
+    [initiativesQuery.data, currentUserId],
+  );
 
   const legStatusQueries = useQueries({
-    queries: assignedIds.map((initiativeId) => ({
-      queryKey: ["brd-bdo-leg", initiativeId],
-      queryFn: () => getBrdBdoLegStatus(initiativeId),
-      enabled: Boolean(initiativeId),
+    queries: assignedInitiatives.map((initiative) => ({
+      queryKey: ["brd-bdo-leg", initiative.id],
+      queryFn: () => getBrdBdoLegStatus(initiative.id),
+      enabled: Boolean(initiative.id),
     })),
   });
 
   const isLoading =
-    assignedIdsQuery.isLoading ||
-    initiativeQueries.some((query) => query.isLoading) ||
-    legStatusQueries.some((query) => query.isLoading);
+    initiativesQuery.isLoading || legStatusQueries.some((query) => query.isLoading);
 
   const hasError =
-    assignedIdsQuery.isError ||
-    initiativeQueries.some((query) => query.isError) ||
-    legStatusQueries.some((query) => query.isError);
+    initiativesQuery.isError || legStatusQueries.some((query) => query.isError);
 
-  const awaitingReview = assignedIds
-    .map((_initiativeId, index) => ({
-      initiative: initiativeQueries[index]?.data,
-      legStatus: legStatusQueries[index]?.data,
-    }))
-    .filter((row) => row.initiative && row.legStatus === "PendingBdoReview") as {
-    initiative: NonNullable<(typeof initiativeQueries)[number]["data"]>;
-    legStatus: "PendingBdoReview";
-  }[];
+  const awaitingReview = assignedInitiatives.filter(
+    (_initiative, index) => legStatusQueries[index]?.data === "PendingBdoReview",
+  );
 
   return (
     <div className="dashboard-page">
@@ -76,8 +60,8 @@ function BdoBrdReviews() {
       </header>
 
       <p className="mock-data-notice">
-        This approval leg is temporary, local-only data until the real BRD
-        approval-leg API is ready — it resets if you reload the page.
+        This approval-leg status is temporary, local-only data until the real
+        BRD approval-leg API is ready — it resets if you reload the page.
       </p>
 
       <section className="dashboard-panel">
@@ -112,7 +96,7 @@ function BdoBrdReviews() {
 
               {!isLoading &&
                 !hasError &&
-                awaitingReview.map(({ initiative }) => (
+                awaitingReview.map((initiative) => (
                   <tr key={initiative.id}>
                     <td>
                       <div className="initiative-cell">
@@ -122,7 +106,7 @@ function BdoBrdReviews() {
                     </td>
 
                     <td>
-                      <span className="priority-badge">
+                      <span className={priorityBadgeClass(initiative.priority)}>
                         {priorityLabel(initiative.priority)}
                       </span>
                     </td>

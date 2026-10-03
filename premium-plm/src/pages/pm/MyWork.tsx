@@ -5,8 +5,14 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { getMyAssignedInitiatives } from "../../service/InitiativeService";
 import { getProposalByInitiativeId } from "../../service/ProposalService";
 import { getTicketsForInitiative } from "../../mocks/ticketsMock";
-import { getSubmissionStatus } from "../../mocks/bdoDocumentsMock";
-import { deriveStatus, priorityLabel, STATUS_LABEL } from "../../utils/initiativeStatus";
+import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
+import {
+  currentStageFor,
+  deriveStatus,
+  priorityBadgeClass,
+  priorityLabel,
+  stageBadgeClass,
+} from "../../utils/initiativeStatus";
 import { brdStatusBadgeClass } from "../../utils/brdStatus";
 import DashboardStatCard from "../../dashboardcomponents/DashboardStatCard";
 import type { DashboardStat } from "../../types/dashboardTypes";
@@ -46,14 +52,12 @@ function MyWork() {
     })),
   });
 
-  // Mocked — there's no real BDO documentation submission-status field yet
-  // (see mocks/bdoDocumentsMock.ts). "Start BRD" stays disabled until this
-  // is "Approved" — the PM's whole workflow begins once the Group Head
-  // approves the BDO's documentation.
-  const bdoSubmissionStatusQueries = useQueries({
+  // "Start BRD" stays disabled until this is "Approved" — the PM's whole
+  // workflow begins once the Group Head approves the BDO's documentation.
+  const discoveryQueries = useQueries({
     queries: initiatives.map((initiative) => ({
-      queryKey: ["bdo-submission-status", initiative.id],
-      queryFn: () => getSubmissionStatus(initiative.id),
+      queryKey: ["product-discovery", initiative.id],
+      queryFn: () => getDiscoveryByInitiativeId(initiative.id),
       enabled: Boolean(initiative.id),
     })),
   });
@@ -79,11 +83,9 @@ function MyWork() {
   }
 
   const isLoading =
-    assignedInitiativesQuery.isLoading ||
-    bdoSubmissionStatusQueries.some((query) => query.isLoading);
+    assignedInitiativesQuery.isLoading || discoveryQueries.some((query) => query.isLoading);
   const hasError =
-    assignedInitiativesQuery.isError ||
-    bdoSubmissionStatusQueries.some((query) => query.isError);
+    assignedInitiativesQuery.isError || discoveryQueries.some((query) => query.isError);
 
   const stats: DashboardStat[] = useMemo(() => {
     const dueSoon = initiatives.filter((initiative) => {
@@ -95,9 +97,14 @@ function MyWork() {
       (initiative) => deriveStatus(initiative).status === "overdue",
     ).length;
 
-    const brdsNotStarted = proposalQueries.filter(
-      (query) => query.isSuccess && query.data === null,
-    ).length;
+    // Only counts initiatives actually ready for a BRD — the BDO's
+    // documentation must be approved first, so a rejected or still-pending
+    // one shouldn't inflate this card (there's nothing the PM can act on
+    // yet either way).
+    const brdsNotStarted = proposalQueries.filter((query, index) => {
+      const bdoDocsApproved = discoveryQueries[index]?.data?.status === "Approved";
+      return bdoDocsApproved && query.isSuccess && query.data === null;
+    }).length;
 
     return [
       {
@@ -125,7 +132,7 @@ function MyWork() {
         descriptionType: overdue > 0 ? "danger" : "success",
       },
     ];
-  }, [initiatives, proposalQueries]);
+  }, [initiatives, proposalQueries, discoveryQueries]);
 
   return (
     <div className="dashboard-page">
@@ -140,11 +147,6 @@ function MyWork() {
           </p>
         </div>
       </header>
-
-      <p className="mock-data-notice">
-        BDO documentation status is temporary, local-only data until the
-        real API is ready — it resets if you reload the page.
-      </p>
 
       <section className="dashboard-stats" aria-label="My work summary">
         {stats.map((stat) => (
@@ -166,7 +168,7 @@ function MyWork() {
               <tr>
                 <th>Initiative</th>
                 <th>Priority</th>
-                <th>Status</th>
+                <th>Current stage</th>
                 <th>Days left</th>
                 <th>Tickets</th>
                 <th>BRD</th>
@@ -196,11 +198,16 @@ function MyWork() {
               {!isLoading &&
                 !hasError &&
                 initiatives.map((initiative, index) => {
-                  const { status, daysLeft } = deriveStatus(initiative);
+                  const { daysLeft } = deriveStatus(initiative);
                   const brd = brdStatusFor(index);
                   const ticketCount = ticketQueries[index]?.data?.length ?? 0;
-                  const bdoDocsApproved =
-                    bdoSubmissionStatusQueries[index]?.data === "Approved";
+                  const bdoSubmissionStatus =
+                    discoveryQueries[index]?.data?.status ?? "NotStarted";
+                  const bdoDocsApproved = bdoSubmissionStatus === "Approved";
+                  const stage = currentStageFor(
+                    bdoSubmissionStatus,
+                    proposalQueries[index]?.data ?? null,
+                  );
 
                   return (
                     <tr key={initiative.id}>
@@ -212,15 +219,13 @@ function MyWork() {
                       </td>
 
                       <td>
-                        <span className="priority-badge">
+                        <span className={priorityBadgeClass(initiative.priority)}>
                           {priorityLabel(initiative.priority)}
                         </span>
                       </td>
 
                       <td>
-                        <span className={`status-badge status-badge--${status}`}>
-                          {STATUS_LABEL[status]}
-                        </span>
+                        <span className={stageBadgeClass(stage)}>{stage}</span>
                       </td>
 
                       <td>

@@ -1,5 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import type { BRDQueueItem } from "../../src/types/dashboardTypes";
+import { priorityBadgeClass } from "../../src/utils/initiativeStatus";
 
 interface BRDApprovalQueueProps {
   items: BRDQueueItem[];
@@ -38,7 +39,7 @@ function BRDApprovalQueue({
                 <span>{item.owner}</span>
               </div>
 
-              <span className="priority-badge">
+              <span className={priorityBadgeClass(item.priorityValue)}>
                 {item.priority}
               </span>
             </div>

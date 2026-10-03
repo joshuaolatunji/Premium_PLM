@@ -1,29 +1,26 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileText, Link2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getInitiativeById } from "../../service/InitiativeService";
 import {
+  addDiscoveryWorkflowLink,
   createDiscovery,
+  deleteDiscoveryAttachment,
+  getDiscoveryAttachments,
   getDiscoveryByInitiativeId,
+  getDiscoveryWorkflowLinks,
+  openDiscoveryAttachment,
+  submitDiscovery,
   updateDiscovery,
+  uploadDiscoveryAttachments,
 } from "../../service/ProductDiscoveryService";
-import {
-  getBdoRejection,
-  getDesignScreens,
-  getLogicFlowDocuments,
-  getSubmissionStatus,
-  removeDesignScreen,
-  removeLogicFlowDocument,
-  submitBdoDocumentation,
-  uploadDesignScreen,
-  uploadLogicFlowDocument,
-} from "../../mocks/bdoDocumentsMock";
+import { getAllUsers } from "../../service/UserService";
 import { ApiError } from "../../apicalls/apiClient";
 import { EMPTY_DISCOVERY_FORM } from "../../types/discoveryTypes";
 import type { DiscoveryFormFields, ProductDiscovery } from "../../types/discoveryTypes";
-import UploadedFileList from "../../components/bdo/UploadedFileList";
+import { capitalize } from "../../utils/text";
 import BdoSubmittedPanel from "../../components/bdo/BdoSubmittedPanel";
 
 function BdoInitiativeWorkspace() {
@@ -112,8 +109,7 @@ function BdoInitiativeWorkspaceForm({
   onViewInitiative,
 }: BdoInitiativeWorkspaceFormProps) {
   const queryClient = useQueryClient();
-  const logicFlowInputRef = useRef<HTMLInputElement>(null);
-  const designScreenInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   const [discoveryId, setDiscoveryId] = useState<string | null>(
     initialDiscovery?.id ?? null,
@@ -123,7 +119,20 @@ function BdoInitiativeWorkspaceForm({
   );
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+
+  // Auto-dismisses the "Discovery document saved." message rather than
+  // leaving it sitting on screen indefinitely.
+  useEffect(() => {
+    if (!statusMessage) return;
+    const timeoutId = setTimeout(() => setStatusMessage(""), 30_000);
+    return () => clearTimeout(timeoutId);
+  }, [statusMessage]);
+
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [linkTitle, setLinkTitle] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkDescription, setLinkDescription] = useState("");
 
   function updateField<K extends keyof DiscoveryFormFields>(
     key: K,
@@ -132,32 +141,50 @@ function BdoInitiativeWorkspaceForm({
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  const logicFlowQuery = useQuery({
-    queryKey: ["bdo-logic-flow", initiativeId],
-    queryFn: () => getLogicFlowDocuments(initiativeId),
+  const attachmentsQuery = useQuery({
+    queryKey: ["discovery-attachments", discoveryId],
+    queryFn: () => getDiscoveryAttachments(discoveryId as string),
+    enabled: Boolean(discoveryId),
   });
 
-  const designScreensQuery = useQuery({
-    queryKey: ["bdo-design-screens", initiativeId],
-    queryFn: () => getDesignScreens(initiativeId),
+  const workflowLinksQuery = useQuery({
+    queryKey: ["discovery-workflow-links", discoveryId],
+    queryFn: () => getDiscoveryWorkflowLinks(discoveryId as string),
+    enabled: Boolean(discoveryId),
   });
 
-  const submissionStatusQuery = useQuery({
-    queryKey: ["bdo-submission-status", initiativeId],
-    queryFn: () => getSubmissionStatus(initiativeId),
+  // Same query key the parent's discoveryQuery already populated, so this
+  // reads the cached record immediately with no extra loading flash, and
+  // picks up fresh data once saveDiscoveryMutation/submitMutation
+  // invalidate it.
+  const discoveryStatusQuery = useQuery({
+    queryKey: ["product-discovery", initiativeId],
+    queryFn: () => getDiscoveryByInitiativeId(initiativeId),
+    enabled: Boolean(initiativeId),
   });
 
-  const rejectionQuery = useQuery({
-    queryKey: ["bdo-rejection", initiativeId],
-    queryFn: () => getBdoRejection(initiativeId),
+  const usersQuery = useQuery({
+    queryKey: ["plm-users"],
+    queryFn: getAllUsers,
   });
 
-  const submissionStatus = submissionStatusQuery.data ?? "NotStarted";
+  function reviewerName(userId: string | null) {
+    if (!userId) {
+      return "the Group Head";
+    }
+
+    return capitalize(
+      usersQuery.data?.find((user) => user.userId === userId)?.userName ?? "the Group Head",
+    );
+  }
+
+  // "NotStarted" is our own placeholder for "no discovery record exists
+  // yet". "Submitted", "Rejected", and "Approved" are confirmed live.
+  const submissionStatus = discoveryStatusQuery.data?.status ?? "NotStarted";
   // Locked while awaiting a decision or once approved — editing shouldn't
   // be possible until the Group Head has responded. A rejection unlocks it
   // again so the BDO can fix and resubmit.
-  const isLocked =
-    submissionStatus === "SubmittedForApproval" || submissionStatus === "Approved";
+  const isLocked = submissionStatus === "Submitted" || submissionStatus === "Approved";
 
   const saveDiscoveryMutation = useMutation({
     mutationFn: async () => {
@@ -194,58 +221,100 @@ function BdoInitiativeWorkspaceForm({
     },
   });
 
-  const uploadLogicFlowMutation = useMutation({
-    mutationFn: (file: File) => uploadLogicFlowDocument(initiativeId, file),
+  const uploadAttachmentsMutation = useMutation({
+    mutationFn: (files: File[]) =>
+      uploadDiscoveryAttachments(discoveryId as string, files, setUploadProgress),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["bdo-logic-flow", initiativeId] });
+      setUploadProgress(null);
+      setErrorMessage("");
+      queryClient.invalidateQueries({ queryKey: ["discovery-attachments", discoveryId] });
+    },
+    onError: (error) => {
+      setUploadProgress(null);
+      setErrorMessage(
+        error instanceof ApiError ? error.message : "Unable to upload that file. Try again.",
+      );
     },
   });
 
-  const removeLogicFlowMutation = useMutation({
-    mutationFn: (fileId: string) => removeLogicFlowDocument(initiativeId, fileId),
+  const removeAttachmentMutation = useMutation({
+    mutationFn: (attachmentId: string) => deleteDiscoveryAttachment(attachmentId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["bdo-logic-flow", initiativeId] });
+      setErrorMessage("");
+      queryClient.invalidateQueries({ queryKey: ["discovery-attachments", discoveryId] });
+    },
+    onError: (error) => {
+      setErrorMessage(
+        error instanceof ApiError ? error.message : "Unable to remove that attachment. Try again.",
+      );
     },
   });
 
-  const uploadDesignScreenMutation = useMutation({
-    mutationFn: (file: File) => uploadDesignScreen(initiativeId, file),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["bdo-design-screens", initiativeId] });
+  const openAttachmentMutation = useMutation({
+    mutationFn: ({ attachmentId, targetWindow }: { attachmentId: string; targetWindow: Window | null }) =>
+      openDiscoveryAttachment(attachmentId, targetWindow),
+    onSuccess: () => setErrorMessage(""),
+    onError: (error) => {
+      setErrorMessage(
+        error instanceof ApiError ? error.message : "Unable to open that attachment. Try again.",
+      );
     },
   });
 
-  const removeDesignScreenMutation = useMutation({
-    mutationFn: (fileId: string) => removeDesignScreen(initiativeId, fileId),
+  // Opened synchronously in the click handler (before the mutation's first
+  // await) so browsers still treat it as a user-gesture-triggered window,
+  // not a blocked popup.
+  function handleOpenAttachment(attachmentId: string) {
+    const targetWindow = window.open("", "_blank");
+    openAttachmentMutation.mutate({ attachmentId, targetWindow });
+  }
+
+  const addLinkMutation = useMutation({
+    mutationFn: () =>
+      addDiscoveryWorkflowLink(discoveryId as string, {
+        title: linkTitle.trim(),
+        url: linkUrl.trim(),
+        description: linkDescription.trim(),
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["bdo-design-screens", initiativeId] });
+      setLinkTitle("");
+      setLinkUrl("");
+      setLinkDescription("");
+      setErrorMessage("");
+      queryClient.invalidateQueries({ queryKey: ["discovery-workflow-links", discoveryId] });
+    },
+    onError: (error) => {
+      setErrorMessage(
+        error instanceof ApiError ? error.message : "Unable to add that link. Try again.",
+      );
     },
   });
 
   const submitMutation = useMutation({
-    mutationFn: () => submitBdoDocumentation(initiativeId),
+    mutationFn: () => submitDiscovery(discoveryId as string),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["bdo-submission-status", initiativeId],
-      });
-      queryClient.invalidateQueries({ queryKey: ["bdo-rejection", initiativeId] });
+      queryClient.invalidateQueries({ queryKey: ["product-discovery", initiativeId] });
       setHasSubmitted(true);
     },
-    onError: () => {
-      setErrorMessage("Unable to submit documentation for approval. Try again.");
+    onError: (error) => {
+      setErrorMessage(
+        error instanceof ApiError
+          ? error.message
+          : "Unable to submit documentation for approval. Try again.",
+      );
     },
   });
 
-  const logicFlowFiles = logicFlowQuery.data ?? [];
-  const designScreenFiles = designScreensQuery.data ?? [];
+  const attachments = attachmentsQuery.data ?? [];
+  const workflowLinks = workflowLinksQuery.data ?? [];
 
   const canSubmit =
-    Boolean(discoveryId) && logicFlowFiles.length > 0 && designScreenFiles.length > 0;
+    Boolean(discoveryId) && attachments.length > 0 && workflowLinks.length > 0;
 
   const isBusy =
     saveDiscoveryMutation.isPending ||
-    uploadLogicFlowMutation.isPending ||
-    uploadDesignScreenMutation.isPending ||
+    uploadAttachmentsMutation.isPending ||
+    addLinkMutation.isPending ||
     submitMutation.isPending;
 
   if (hasSubmitted) {
@@ -276,37 +345,13 @@ function BdoInitiativeWorkspaceForm({
           <h1 className="dashboard-title">{initiativeName}</h1>
 
           <p className="dashboard-subtitle">
-            Prepare the product discovery, logic flow, and design screens
-            documentation, then submit for Group Head approval.
+            Prepare the product discovery, attachments, and design links,
+            then submit for Group Head approval.
           </p>
-        </div>
-
-        <div className="dashboard-header__actions">
-          {!isLocked && (
-            <button
-              type="button"
-              className="button button--primary"
-              onClick={() => submitMutation.mutate()}
-              disabled={!canSubmit || isBusy}
-              title={!canSubmit ? "Save discovery and upload both document types first" : undefined}
-            >
-              {submitMutation.isPending
-                ? "Submitting…"
-                : submissionStatus === "Rejected"
-                  ? "Resubmit for approval"
-                  : "Submit for approval"}
-            </button>
-          )}
         </div>
       </header>
 
-      <p className="mock-data-notice">
-        Document uploads and submission status here are temporary, local-only
-        data until the real endpoints are ready — they reset if you reload
-        the page.
-      </p>
-
-      {submissionStatus === "SubmittedForApproval" && (
+      {submissionStatus === "Submitted" && (
         <p className="brd-status-message" role="status">
           Submitted — awaiting the Group Head's decision.
         </p>
@@ -314,14 +359,16 @@ function BdoInitiativeWorkspaceForm({
 
       {submissionStatus === "Approved" && (
         <p className="brd-status-message" role="status">
-          Approved by the Group Head. The Project Manager has been notified
-          and can begin BRD preparation.
+          Approved by {reviewerName(discoveryStatusQuery.data?.reviewedByUserId ?? null)}. The
+          Project Manager has been notified and can begin BRD preparation.
         </p>
       )}
 
-      {submissionStatus === "Rejected" && rejectionQuery.data && (
+      {submissionStatus === "Rejected" && (
         <div className="bdo-rejection-notice">
-          <strong>Rejected by the Group Head:</strong> {rejectionQuery.data.comment}
+          <strong>Rejected by {reviewerName(discoveryStatusQuery.data?.reviewedByUserId ?? null)}:</strong>{" "}
+          {discoveryStatusQuery.data?.reviewComment || "No comment was provided."} Revise your
+          documentation and resubmit.
         </div>
       )}
 
@@ -351,7 +398,9 @@ function BdoInitiativeWorkspaceForm({
               onClick={() => saveDiscoveryMutation.mutate()}
               disabled={isBusy}
             >
-              {saveDiscoveryMutation.isPending ? "Saving…" : "Save discovery"}
+              {discoveryId
+                ? saveDiscoveryMutation.isPending ? "Saving…" : "Save discovery"
+                : saveDiscoveryMutation.isPending ? "Creating…" : "Create discovery"}
             </button>
           )}
         </div>
@@ -417,86 +466,195 @@ function BdoInitiativeWorkspaceForm({
       <section className="dashboard-panel initiative-detail-panel">
         <div className="dashboard-panel__header">
           <div>
-            <h2>Logic flow document</h2>
-            <p>Mocked — no real upload endpoint yet.</p>
+            <h2>Attachments</h2>
+            <p>Logic flow document and any other supporting files.</p>
           </div>
 
           {!isLocked && (
             <button
               type="button"
               className="button button--secondary"
-              onClick={() => logicFlowInputRef.current?.click()}
-              disabled={uploadLogicFlowMutation.isPending}
+              onClick={() => attachmentInputRef.current?.click()}
+              disabled={uploadAttachmentsMutation.isPending || !discoveryId}
+              title={!discoveryId ? "Save discovery first" : undefined}
             >
-              {uploadLogicFlowMutation.isPending ? "Uploading…" : "Upload file"}
+              {uploadAttachmentsMutation.isPending ? "Uploading…" : "Upload files"}
             </button>
           )}
 
           <input
-            ref={logicFlowInputRef}
+            ref={attachmentInputRef}
             type="file"
+            multiple
             className="sr-only"
             onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) uploadLogicFlowMutation.mutate(file);
+              const files = event.target.files ? Array.from(event.target.files) : [];
+              if (files.length > 0) uploadAttachmentsMutation.mutate(files);
               event.target.value = "";
             }}
           />
         </div>
 
+        {uploadProgress !== null && (
+          <div className="bdo-upload-progress">
+            <div className="bdo-upload-progress_track">
+              <span
+                className="bdo-upload-progress_fill"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+            <span className="bdo-upload-progress_label">Uploading… {uploadProgress}%</span>
+          </div>
+        )}
+
         <div className="bdo-upload-section">
-          <UploadedFileList
-            files={logicFlowFiles}
-            emptyLabel="No logic flow document uploaded yet."
-            onRemove={
-              isLocked ? undefined : (fileId) => removeLogicFlowMutation.mutate(fileId)
-            }
-            isRemoving={removeLogicFlowMutation.isPending}
-          />
+          {attachments.length === 0 ? (
+            <p className="bdo-upload-empty">No attachments uploaded yet.</p>
+          ) : (
+            <ul className="bdo-upload-list">
+              {attachments.map((attachment) => (
+                <li key={attachment.id} className="bdo-upload-list_item">
+                  <span className="bdo-upload-list_icon">
+                    <FileText size={16} />
+                  </span>
+
+                  <div className="bdo-upload-list_info">
+                    <span className="bdo-upload-list_name">{attachment.fileName}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="bdo-upload-list_open"
+                    onClick={() => handleOpenAttachment(attachment.id)}
+                    disabled={openAttachmentMutation.isPending}
+                  >
+                    Open
+                  </button>
+
+                  {!isLocked && (
+                    <button
+                      type="button"
+                      className="bdo-upload-list_remove"
+                      onClick={() => removeAttachmentMutation.mutate(attachment.id)}
+                      disabled={removeAttachmentMutation.isPending}
+                      aria-label={`Remove ${attachment.fileName}`}
+                    >
+                      ×
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
 
       <section className="dashboard-panel initiative-detail-panel">
         <div className="dashboard-panel__header">
           <div>
-            <h2>Design screens documentation</h2>
-            <p>Mocked — no real upload endpoint yet. Supports multiple files.</p>
+            <h2>Design links</h2>
+            <p>Links to design screens or other resources.</p>
           </div>
-
-          {!isLocked && (
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => designScreenInputRef.current?.click()}
-              disabled={uploadDesignScreenMutation.isPending}
-            >
-              {uploadDesignScreenMutation.isPending ? "Uploading…" : "Upload file"}
-            </button>
-          )}
-
-          <input
-            ref={designScreenInputRef}
-            type="file"
-            className="sr-only"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) uploadDesignScreenMutation.mutate(file);
-              event.target.value = "";
-            }}
-          />
         </div>
 
         <div className="bdo-upload-section">
-          <UploadedFileList
-            files={designScreenFiles}
-            emptyLabel="No design screens uploaded yet."
-            onRemove={
-              isLocked ? undefined : (fileId) => removeDesignScreenMutation.mutate(fileId)
-            }
-            isRemoving={removeDesignScreenMutation.isPending}
-          />
+          {workflowLinks.length === 0 ? (
+            <p className="bdo-upload-empty">No links added yet.</p>
+          ) : (
+            <ul className="bdo-upload-list">
+              {workflowLinks.map((link) => (
+                <li key={link.id} className="bdo-upload-list_item">
+                  <span className="bdo-upload-list_icon">
+                    <Link2 size={16} />
+                  </span>
+
+                  <div className="bdo-upload-list_info">
+                    <span className="bdo-upload-list_name">{link.title}</span>
+                    {link.description && (
+                      <span className="bdo-upload-list_meta">{link.description}</span>
+                    )}
+                  </div>
+
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="bdo-upload-list_open"
+                  >
+                    Open link
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
+
+        {!isLocked && (
+          <div className="proposal-section">
+            <div className="form-field-row">
+              <div className="form-field">
+                <label htmlFor="linkTitle">Title</label>
+                <input
+                  id="linkTitle"
+                  type="text"
+                  value={linkTitle}
+                  onChange={(event) => setLinkTitle(event.target.value)}
+                  placeholder="e.g. Design screens (Figma)"
+                />
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="linkUrl">URL</label>
+                <input
+                  id="linkUrl"
+                  type="url"
+                  value={linkUrl}
+                  onChange={(event) => setLinkUrl(event.target.value)}
+                  placeholder="https://…"
+                />
+              </div>
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="linkDescription">Description</label>
+              <input
+                id="linkDescription"
+                type="text"
+                value={linkDescription}
+                onChange={(event) => setLinkDescription(event.target.value)}
+                placeholder="Briefly describe this link"
+              />
+            </div>
+
+            <button
+              type="button"
+              className="button button--primary button--align-start"
+              onClick={() => addLinkMutation.mutate()}
+              disabled={
+                addLinkMutation.isPending || !linkTitle.trim() || !linkUrl.trim() || !discoveryId
+              }
+            >
+              {addLinkMutation.isPending ? "Submitting…" : "Submit link"}
+            </button>
+          </div>
+        )}
       </section>
+
+      {!isLocked && (
+        <button
+          type="button"
+          className="button button--primary bdo-submit-footer"
+          onClick={() => submitMutation.mutate()}
+          disabled={!canSubmit || isBusy}
+          title={!canSubmit ? "Save discovery and upload both document types first" : undefined}
+        >
+          {submitMutation.isPending
+            ? "Submitting…"
+            : submissionStatus === "Rejected"
+              ? "Resubmit for approval"
+              : "Submit for approval"}
+        </button>
+      )}
     </div>
   );
 }
