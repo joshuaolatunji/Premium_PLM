@@ -3,12 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { getProductInitiatives } from "../../service/InitiativeService";
-import { getBrdBdoLegStatus } from "../../mocks/brdBdoReviewMock";
+import { getProposalByInitiativeId } from "../../service/ProposalService";
 import { getCurrentUserId } from "../../apicalls/authStorage";
-import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
+import {
+  isBrdAwaitingBdoDecision,
+  priorityBadgeClass,
+  priorityLabel,
+} from "../../utils/initiativeStatus";
 
-// The BRD approval-leg concept itself is still mocked (no real endpoint) —
-// but which initiatives belong to this BDO is real now (bdoId).
+// Which initiatives belong to this BDO is real (bdoId), and so is the BRD's
+// status — a BRD is awaiting this BDO while its proposal status is at the
+// BDO stage.
 function BdoBrdReviews() {
   const navigate = useNavigate();
   const currentUserId = getCurrentUserId();
@@ -26,22 +31,22 @@ function BdoBrdReviews() {
     [initiativesQuery.data, currentUserId],
   );
 
-  const legStatusQueries = useQueries({
+  const proposalQueries = useQueries({
     queries: assignedInitiatives.map((initiative) => ({
-      queryKey: ["brd-bdo-leg", initiative.id],
-      queryFn: () => getBrdBdoLegStatus(initiative.id),
+      queryKey: ["product-proposal", initiative.id],
+      queryFn: () => getProposalByInitiativeId(initiative.id),
       enabled: Boolean(initiative.id),
     })),
   });
 
   const isLoading =
-    initiativesQuery.isLoading || legStatusQueries.some((query) => query.isLoading);
+    initiativesQuery.isLoading || proposalQueries.some((query) => query.isLoading);
 
   const hasError =
-    initiativesQuery.isError || legStatusQueries.some((query) => query.isError);
+    initiativesQuery.isError || proposalQueries.some((query) => query.isError);
 
-  const awaitingReview = assignedInitiatives.filter(
-    (_initiative, index) => legStatusQueries[index]?.data === "PendingBdoReview",
+  const awaitingReview = assignedInitiatives.filter((_initiative, index) =>
+    isBrdAwaitingBdoDecision(proposalQueries[index]?.data?.status),
   );
 
   return (
@@ -58,11 +63,6 @@ function BdoBrdReviews() {
           </p>
         </div>
       </header>
-
-      <p className="mock-data-notice">
-        This approval-leg status is temporary, local-only data until the real
-        BRD approval-leg API is ready — it resets if you reload the page.
-      </p>
 
       <section className="dashboard-panel">
         <div className="portfolio-table-wrapper">

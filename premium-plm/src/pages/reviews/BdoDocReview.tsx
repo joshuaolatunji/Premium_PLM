@@ -227,41 +227,24 @@ function BdoDocReview() {
         </div>
 
         {discovery ? (
-          <div className="initiative-detail-grid">
-            <div>
-              <span className="initiative-detail-grid_label">Business logic</span>
-              <span className="initiative-detail-grid_value brd-readonly-value">
-                {discovery.businessLogic || "—"}
-              </span>
-            </div>
-
-            <div>
-              <span className="initiative-detail-grid_label">Customer journey</span>
-              <span className="initiative-detail-grid_value brd-readonly-value">
-                {discovery.customerJourney || "—"}
-              </span>
-            </div>
-
-            <div>
-              <span className="initiative-detail-grid_label">User flow</span>
-              <span className="initiative-detail-grid_value brd-readonly-value">
-                {discovery.userFlow || "—"}
-              </span>
-            </div>
-
-            <div>
-              <span className="initiative-detail-grid_label">Business process</span>
-              <span className="initiative-detail-grid_value brd-readonly-value">
-                {discovery.businessProcess || "—"}
-              </span>
-            </div>
-
-            <div>
-              <span className="initiative-detail-grid_label">Assumptions</span>
-              <span className="initiative-detail-grid_value brd-readonly-value">
-                {discovery.assumptions || "—"}
-              </span>
-            </div>
+          <div className="proposal-section">
+            {[
+              { id: "businessLogic", label: "Business logic", value: discovery.businessLogic },
+              { id: "customerJourney", label: "Customer journey", value: discovery.customerJourney },
+              { id: "userFlow", label: "User flow", value: discovery.userFlow },
+              { id: "businessProcess", label: "Business process", value: discovery.businessProcess },
+              { id: "assumptions", label: "Assumptions", value: discovery.assumptions },
+            ].map((field) => (
+              <div className="form-field" key={field.id}>
+                <label htmlFor={`review-${field.id}`}>{field.label}</label>
+                <textarea
+                  id={`review-${field.id}`}
+                  rows={3}
+                  readOnly
+                  value={field.value || "—"}
+                />
+              </div>
+            ))}
           </div>
         ) : (
           <p className="initiatives-empty">No discovery document was saved.</p>

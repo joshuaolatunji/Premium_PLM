@@ -1,15 +1,20 @@
+import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { getInitiativeById } from "../../service/InitiativeService";
 import { getAllUsers } from "../../service/UserService";
 import { getProposalByInitiativeId } from "../../service/ProposalService";
+import { downloadBrdPdf } from "../../service/PdfService";
+import { getTicketsForInitiative } from "../../mocks/ticketsMock";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
-import { getBrdBdoLegStatus } from "../../mocks/brdBdoReviewMock";
 import {
   currentStageFor,
   deriveStatus,
+  isAwaitingGroupHeadDecision,
+  isBrdAwaitingBdoDecision,
+  isBrdAwaitingGroupHeadDecision,
   priorityBadgeClass,
   priorityLabel,
   stageBadgeClass,
@@ -57,12 +62,18 @@ function InitiativeDetail() {
     enabled: Boolean(id),
   });
 
-  // Mocked — the BDO leg (see mocks/brdBdoReviewMock.ts) sits in front of
-  // the real submit-for-review call, so a BDO's "Review BRD" gate can't
-  // use proposal.status the way the Group Head's does.
-  const bdoLegQuery = useQuery({
-    queryKey: ["brd-bdo-leg", id],
-    queryFn: () => getBrdBdoLegStatus(id as string),
+  const downloadBrdMutation = useMutation({
+    mutationFn: () =>
+      downloadBrdPdf(id as string, initiativeQuery.data?.projectName ?? "BRD"),
+    onError: () => setDownloadError("Unable to download the BRD PDF. Try again."),
+    onSuccess: () => setDownloadError(""),
+  });
+
+  const [downloadError, setDownloadError] = useState("");
+
+  const ticketsQuery = useQuery({
+    queryKey: ["tickets", id],
+    queryFn: () => getTicketsForInitiative(id as string),
     enabled: Boolean(id),
   });
 
@@ -73,22 +84,18 @@ function InitiativeDetail() {
   const primaryRole = resolvePrimaryRole(getStoredUser()?.roles ?? []);
   const isReviewerRole = primaryRole === "GroupHead" || primaryRole === "SuperAdmin";
   const isBdoReviewerRole = primaryRole === "BusinessDevelopmentOfficer";
-  // The BDO leg only forwards to the real submit-for-review endpoint once
-  // the BDO approves, so "not Draft" here already implies the BDO's leg
-  // has passed — this stays correct for the Group Head without needing to
-  // read the (mocked) leg status itself. Excludes "Rejected" so a BRD the
-  // Group Head already rejected isn't still shown as reviewable — it's
-  // back with the PM until resubmitted. ("Rejected" is inferred to match
-  // the same capitalized-word convention confirmed for "Draft"/"Approved"
-  // and for the discovery model's own Submitted/Approved/Rejected — not
-  // yet directly observed on a proposal, so correct this if it reads
-  // differently once a real rejection is tested.)
-  const proposalSubmitted = Boolean(
-    proposalQuery.data &&
-      proposalQuery.data.status !== "Draft" &&
-      proposalQuery.data.status !== "Rejected",
-  );
-  const bdoReviewReady = bdoLegQuery.data === "PendingBdoReview";
+  // Project Managers create tickets, so their Tickets tab is always open.
+  // Everyone else only gets it once a ticket exists for this initiative.
+  const ticketsAvailable =
+    primaryRole === "ProjectManager" || (ticketsQuery.data?.length ?? 0) > 0;
+  // Excludes the BDO stage and "Rejected": a BRD still with the BDO, or
+  // rejected back to the PM, isn't the Group Head's to review yet.
+  // ("Rejected" is inferred to match the capitalized-word convention of
+  // "Draft"/"Approved" — correct this if a real rejection reads differently.)
+  const proposalSubmitted =
+    isBrdAwaitingGroupHeadDecision(proposalQuery.data?.status) ||
+    proposalQuery.data?.status === "Approved";
+  const bdoReviewReady = isBrdAwaitingBdoDecision(proposalQuery.data?.status);
 
   // "Submitted" and "Rejected" are confirmed live on the discovery record;
   // "Approved" follows the same pattern but hasn't been directly observed.
@@ -97,7 +104,7 @@ function InitiativeDetail() {
   // submission goes back to the BDO to revise and is no longer the Group
   // Head's to review until it's resubmitted.
   const bdoDocsReviewReady =
-    discoveryQuery.data?.status === "Submitted" ||
+    isAwaitingGroupHeadDecision(discoveryQuery.data?.status) ||
     discoveryQuery.data?.status === "Approved";
   const bdoDocsApproved = discoveryQuery.data?.status === "Approved";
   // The BRD can't meaningfully be reviewed until the BDO's documentation is
@@ -175,6 +182,8 @@ function InitiativeDetail() {
             type="button"
             className="button button--secondary"
             onClick={() => navigate(`/dashboard/initiatives/${initiative.id}/tickets`)}
+            disabled={!ticketsAvailable}
+            title={ticketsAvailable ? undefined : "Available once the Project Manager has created a ticket"}
           >
             Tickets
           </button>
@@ -197,23 +206,34 @@ function InitiativeDetail() {
                 Review BDO Docs
               </button>
 
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => navigate(`/dashboard/brd-reviews/${initiative.id}`)}
-                disabled={!brdReviewReady}
-                title={
-                  !bdoDocsApproved
-                    ? "Available once the BDO's documentation is approved"
-                    : !proposalSubmitted
-                      ? proposalQuery.data?.status === "Rejected"
-                        ? "Back with the PM to revise — available again once resubmitted"
-                        : "Not yet submitted for review"
-                      : undefined
-                }
-              >
-                Review BRD
-              </button>
+              {proposalQuery.data?.status === "Approved" ? (
+                <button
+                  type="button"
+                  className="button button--primary"
+                  onClick={() => downloadBrdMutation.mutate()}
+                  disabled={downloadBrdMutation.isPending}
+                >
+                  {downloadBrdMutation.isPending ? "Preparing PDF…" : "Download BRD"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => navigate(`/dashboard/brd-reviews/${initiative.id}`)}
+                  disabled={!brdReviewReady}
+                  title={
+                    !bdoDocsApproved
+                      ? "Available once the BDO's documentation is approved"
+                      : !proposalSubmitted
+                        ? proposalQuery.data?.status === "Rejected"
+                          ? "Back with the PM to revise — available again once resubmitted"
+                          : "Not yet submitted for review"
+                        : undefined
+                  }
+                >
+                  Review BRD
+                </button>
+              )}
             </>
           ) : isBdoReviewerRole ? (
             <button
@@ -238,6 +258,12 @@ function InitiativeDetail() {
           )}
         </div>
       </header>
+
+      {downloadError && (
+        <p className="form-error" role="alert">
+          {downloadError}
+        </p>
+      )}
 
       <section className="dashboard-panel">
         <div className="dashboard-panel__header">

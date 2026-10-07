@@ -21,7 +21,7 @@ export type PrimaryRole =
 // "SoftwareEngineer" are still placeholders — correct them the moment a
 // real JWT with one of those roles is seen.
 const ROLE_PRIORITY: { role: Exclude<PrimaryRole, "Other">; path: string }[] = [
-  { role: "SuperAdmin", path: "/dashboard" },
+  { role: "SuperAdmin", path: "/dashboard/admin/users" },
   { role: "GroupHead", path: "/dashboard" },
   { role: "BusinessDevelopmentOfficer", path: "/dashboard/bdo" },
   { role: "ProjectManager", path: "/dashboard/my-work" },

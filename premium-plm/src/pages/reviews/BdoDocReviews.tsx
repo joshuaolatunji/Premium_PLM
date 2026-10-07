@@ -5,7 +5,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { getProductInitiatives } from "../../service/InitiativeService";
 import { getAllUsers } from "../../service/UserService";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
-import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
+import { isAwaitingGroupHeadDecision, priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
 import { capitalize } from "../../utils/text";
 import type { ProductInitiative } from "../../types/initiativeTypes";
 
@@ -57,7 +57,7 @@ function BdoDocReviews() {
     initiatives.forEach((initiative, index) => {
       const discovery = discoveryQueries[index]?.data;
 
-      if (discovery?.status === "Submitted") {
+      if (discovery && isAwaitingGroupHeadDecision(discovery.status)) {
         awaitingReview.push({ initiative, bdoId: initiative.bdoId });
       }
     });

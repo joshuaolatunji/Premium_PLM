@@ -15,7 +15,13 @@ import { getProductInitiatives } from "../../service/InitiativeService";
 import { getProposalByInitiativeId } from "../../service/ProposalService";
 import { getAllUsers } from "../../service/UserService";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
-import { currentStageFor, deriveStatus, priorityLabel } from "../../utils/initiativeStatus";
+import {
+  currentStageFor,
+  deriveStatus,
+  isAwaitingGroupHeadDecision,
+  isBrdAwaitingGroupHeadDecision,
+  priorityLabel,
+} from "../../utils/initiativeStatus";
 import { capitalize } from "../../utils/text";
 import { INITIATIVE_PRIORITIES } from "../../types/initiativeTypes";
 
@@ -176,10 +182,7 @@ function Dashboard() {
   // and shouldn't still count as awaiting a decision.
   const awaitingReview = rows.filter(
     (row): row is typeof row & { proposal: ProductProposal } =>
-      Boolean(row.proposal) &&
-      row.proposal!.status !== "Draft" &&
-      row.proposal!.status !== "Approved" &&
-      row.proposal!.status !== "Rejected",
+      Boolean(row.proposal) && isBrdAwaitingGroupHeadDecision(row.proposal!.status),
   );
 
   const overSlaCount = awaitingReview.filter(
@@ -187,7 +190,7 @@ function Dashboard() {
   ).length;
 
   const bdoDocsAwaitingReviewCount = rows.filter(
-    (row) => row.bdoSubmissionStatus === "Submitted",
+    (row) => isAwaitingGroupHeadDecision(row.bdoSubmissionStatus),
   ).length;
 
   const onTrackCount = rows.filter((row) => row.status === "on-track").length;
@@ -261,7 +264,7 @@ function Dashboard() {
       case "brds-awaiting":
         return Boolean(row.proposal) && awaitingReview.some((r) => r.initiative.id === row.initiative.id);
       case "bdo-docs-awaiting":
-        return row.bdoSubmissionStatus === "SubmittedForApproval";
+        return isAwaitingGroupHeadDecision(row.bdoSubmissionStatus);
       case "on-track":
         return row.status === "on-track";
       case "at-risk":
@@ -303,17 +306,13 @@ function Dashboard() {
             )
           : null;
 
-      const needsReview = Boolean(
-        proposal &&
-          proposal.status !== "Draft" &&
-          proposal.status !== "Approved" &&
-          proposal.status !== "Rejected",
-      );
+      const needsReview = isBrdAwaitingGroupHeadDecision(proposal?.status);
 
       return {
         id: initiative.id,
         name: initiative.projectName,
         reference: initiative.id.slice(0, 8),
+        createdOn: formatShortDate(initiative.createdAt),
         priority: priorityLabel(initiative.priority),
         priorityValue: initiative.priority,
         currentStage: currentStageFor(bdoSubmissionStatus, proposal),

@@ -6,6 +6,8 @@ import {
   X,
 } from "lucide-react";
 
+import { useNavigate } from "react-router-dom";
+
 import type { GovernanceActivity } from "../../src/types/dashboardTypes";
 
 interface RecentGovernanceActivityProps {
@@ -15,6 +17,8 @@ interface RecentGovernanceActivityProps {
 function RecentGovernanceActivity({
   activities,
 }: RecentGovernanceActivityProps) {
+  const navigate = useNavigate();
+
   function getActivityIcon(
     type: GovernanceActivity["type"],
   ) {
@@ -43,7 +47,11 @@ function RecentGovernanceActivity({
           </p>
         </div>
 
-        <button type="button" className="text-button">
+        <button
+          type="button"
+          className="text-button"
+          onClick={() => navigate("/dashboard/audit-trail")}
+        >
           Audit trail
           <ChevronRight size={15} />
         </button>

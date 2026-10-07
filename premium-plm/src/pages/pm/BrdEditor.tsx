@@ -10,17 +10,15 @@ import {
   createProposal,
   getProposalByInitiativeId,
   resubmitProposal,
+  submitProposalForReview,
   updateProposal,
 } from "../../service/ProposalService";
 import { downloadBrdPdf } from "../../service/PdfService";
-import {
-  getBrdBdoLegStatus,
-  getBrdBdoRejection,
-  submitBrdToBdo,
-} from "../../mocks/brdBdoReviewMock";
 import BrdSubmittedPanel from "../../components/brd/BrdSubmittedPanel";
 import BrdReadOnlyView from "../../components/brd/BrdReadOnlyView";
+import NumberInput from "../../components/ui/NumberInput";
 import { brdStatusBadgeClass } from "../../utils/brdStatus";
+import { isBrdAwaitingBdoDecision } from "../../utils/initiativeStatus";
 import { ApiError } from "../../apicalls/apiClient";
 import {
   EMPTY_PROPOSAL_FORM,
@@ -190,24 +188,6 @@ function BrdEditorForm({
   const proposalStatus = initialProposal?.status ?? null;
   const proposalVersion = initialProposal?.version ?? null;
 
-  // Mocked — the real submit-for-review endpoint has no concept of a BDO
-  // leg. "Submit for review" below lands here first; only once the BDO
-  // approves does it call the real endpoint (see mocks/brdBdoReviewMock.ts),
-  // so the real `proposalStatus` above stays "Draft" until then.
-  const bdoLegQuery = useQuery({
-    queryKey: ["brd-bdo-leg", initiativeId],
-    queryFn: () => getBrdBdoLegStatus(initiativeId),
-    enabled: Boolean(initiativeId),
-  });
-
-  const bdoRejectionQuery = useQuery({
-    queryKey: ["brd-bdo-rejection", initiativeId],
-    queryFn: () => getBrdBdoRejection(initiativeId),
-    enabled: Boolean(initiativeId),
-  });
-
-  const bdoLegStatus = bdoLegQuery.data ?? null;
-
   function updateField<K extends keyof ProposalFormFields>(
     key: K,
     value: ProposalFormFields[K],
@@ -265,13 +245,12 @@ function BrdEditorForm({
   });
 
   const submitMutation = useMutation({
-    mutationFn: () => submitBrdToBdo(initiativeId),
+    mutationFn: () => submitProposalForReview(proposalId as string),
     onSuccess: () => {
       setErrorMessage("");
       setPendingAction(null);
       setSubmittedAction("submit");
-      queryClient.invalidateQueries({ queryKey: ["brd-bdo-leg", initiativeId] });
-      queryClient.invalidateQueries({ queryKey: ["brd-bdo-rejection", initiativeId] });
+      queryClient.invalidateQueries({ queryKey: ["product-proposal", initiativeId] });
     },
     onError: (error) => {
       setPendingAction(null);
@@ -322,8 +301,6 @@ function BrdEditorForm({
     submitMutation.isPending ||
     resubmitMutation.isPending ||
     downloadPdfMutation.isPending;
-
-  const submitLabel = bdoLegStatus === "RejectedByBdo" ? "Resend to BDO" : "Submit for review";
 
   // ---- Functionalities ----
   function addFunctionality() {
@@ -430,43 +407,6 @@ function BrdEditorForm({
     );
   }
 
-  // Mocked leg: while the BDO is deciding, the real proposal is still
-  // "Draft" (submit-for-review hasn't been called yet), so editing must be
-  // blocked here separately from the real-status branch below.
-  if (initialProposal && bdoLegStatus === "PendingBdoReview") {
-    return (
-      <div className="dashboard-page">
-        <Link to={`/dashboard/initiatives/${initiativeId}`} className="text-button">
-          <ArrowLeft size={15} />
-          Back to {initiativeName}
-        </Link>
-
-        <header className="dashboard-header initiative-detail-header">
-          <div className="dashboard-header__content">
-            <p className="dashboard-breadcrumb">
-              PremiumPLM / Initiatives / {initiativeName} / BRD
-            </p>
-
-            <h1 className="dashboard-title">Business Requirements Document</h1>
-
-            <p className="dashboard-subtitle">
-              This BRD has been sent to the Business Development Officer and
-              is read-only until they decide.
-            </p>
-
-            <p className="dashboard-subtitle initiative-detail-badges">
-              <span className="status-badge status-badge--not-started">
-                Awaiting BDO review
-              </span>
-            </p>
-          </div>
-        </header>
-
-        <BrdReadOnlyView proposal={initialProposal} />
-      </div>
-    );
-  }
-
   // Once a BRD has left "Draft" it's been submitted for review, so editing
   // (Save draft / Submit for review) no longer applies — show the same
   // read-only view Group Head reviewers see instead. We don't know the
@@ -513,7 +453,7 @@ function BrdEditorForm({
               {downloadPdfMutation.isPending ? "Preparing PDF…" : "Download PDF"}
             </button>
 
-            {proposalStatus !== "Approved" && (
+            {proposalStatus !== "Approved" && !isBrdAwaitingBdoDecision(proposalStatus) && (
               <button
                 type="button"
                 className="button button--primary"
@@ -644,16 +584,10 @@ function BrdEditorForm({
             disabled={!proposalId || isBusy}
             title={!proposalId ? "Save a draft first" : undefined}
           >
-            {submitMutation.isPending ? "Submitting…" : submitLabel}
+            {submitMutation.isPending ? "Submitting…" : "Submit for review"}
           </button>
         </div>
       </header>
-
-      {bdoLegStatus === "RejectedByBdo" && bdoRejectionQuery.data && (
-        <div className="bdo-rejection-notice">
-          <strong>Rejected by the BDO:</strong> {bdoRejectionQuery.data.comment}
-        </div>
-      )}
 
       {statusMessage && (
         <p className="brd-status-message" role="status">
@@ -925,25 +859,19 @@ function BrdEditorForm({
           <div className="form-field-row">
             <div className="form-field">
               <label htmlFor="minimumAmount">Minimum amount</label>
-              <input
+              <NumberInput
                 id="minimumAmount"
-                type="number"
                 value={form.minimumAmount}
-                onChange={(event) =>
-                  updateField("minimumAmount", Number(event.target.value))
-                }
+                onValueChange={(value) => updateField("minimumAmount", value)}
               />
             </div>
 
             <div className="form-field">
               <label htmlFor="maximumAmount">Maximum amount</label>
-              <input
+              <NumberInput
                 id="maximumAmount"
-                type="number"
                 value={form.maximumAmount}
-                onChange={(event) =>
-                  updateField("maximumAmount", Number(event.target.value))
-                }
+                onValueChange={(value) => updateField("maximumAmount", value)}
               />
             </div>
           </div>
@@ -951,26 +879,20 @@ function BrdEditorForm({
           <div className="form-field-row">
             <div className="form-field">
               <label htmlFor="tenureInMonths">Tenure (months)</label>
-              <input
+              <NumberInput
                 id="tenureInMonths"
-                type="number"
                 value={form.tenureInMonths}
-                onChange={(event) =>
-                  updateField("tenureInMonths", Number(event.target.value))
-                }
+                onValueChange={(value) => updateField("tenureInMonths", value)}
               />
             </div>
 
             <div className="form-field">
               <label htmlFor="proposedInterestRate">Proposed interest rate (%)</label>
-              <input
+              <NumberInput
                 id="proposedInterestRate"
-                type="number"
                 step="0.01"
                 value={form.proposedInterestRate}
-                onChange={(event) =>
-                  updateField("proposedInterestRate", Number(event.target.value))
-                }
+                onValueChange={(value) => updateField("proposedInterestRate", value)}
               />
             </div>
           </div>
@@ -1281,7 +1203,7 @@ function BrdEditorForm({
           onClick={() => setPendingAction("submit")}
           disabled={!proposalId || isBusy}
         >
-          {submitMutation.isPending ? "Submitting…" : submitLabel}
+          {submitMutation.isPending ? "Submitting…" : "Submit for review"}
         </button>
       </div>
 

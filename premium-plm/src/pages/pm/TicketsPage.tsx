@@ -334,7 +334,7 @@ function TicketsPage() {
                       {isBrdApproved && canManage ? (
                         <div className="ticket-timeline-cell">
                           <input
-                            type="number"
+                            type="number" onFocus={(event) => event.target.select()}
                             min={0}
                             className="ticket-timeline-input"
                             value={

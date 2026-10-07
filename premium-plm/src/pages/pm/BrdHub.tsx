@@ -220,7 +220,7 @@ function BrdHub() {
                       key={initiative.id}
                       initiative={initiative}
                       proposal={proposal}
-                      cta="Continue BRD"
+                      cta={proposal.status === "Approved" ? "Open BRD" : "Continue BRD"}
                       bdoDocsApproved={bdoDocsApprovedById.get(initiative.id) ?? false}
                       onOpen={openBrd}
                     />

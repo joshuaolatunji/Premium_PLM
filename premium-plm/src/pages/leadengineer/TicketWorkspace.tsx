@@ -495,7 +495,7 @@ function TicketWorkspace() {
                 <label htmlFor="timelineDays">Timeline slice (days)</label>
                 <input
                   id="timelineDays"
-                  type="number"
+                  type="number" onFocus={(event) => event.target.select()}
                   min={0}
                   value={timelineDays}
                   onChange={(event) => setTimelineDays(event.target.value)}

@@ -47,6 +47,7 @@ function PortfolioOverview({
           <thead>
             <tr>
               <th>Initiative</th>
+              <th>Created</th>
               <th>Priority</th>
               <th>Current stage</th>
               <th>Owner</th>
@@ -68,6 +69,8 @@ function PortfolioOverview({
                     <span>{initiative.reference}</span>
                   </div>
                 </td>
+
+                <td>{initiative.createdOn}</td>
 
                 <td>
                   <span className={priorityBadgeClass(initiative.priorityValue)}>

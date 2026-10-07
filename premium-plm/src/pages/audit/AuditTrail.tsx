@@ -6,9 +6,9 @@ import { getProductInitiatives } from "../../service/InitiativeService";
 import { getProposalByInitiativeId } from "../../service/ProposalService";
 import { getAllUsers } from "../../service/UserService";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
-import { getBrdBdoRejection } from "../../mocks/brdBdoReviewMock";
 import { getTicketsForInitiative } from "../../mocks/ticketsMock";
 import { capitalize } from "../../utils/text";
+import { isAwaitingGroupHeadDecision } from "../../utils/initiativeStatus";
 
 interface AuditEvent {
   id: string;
@@ -67,14 +67,6 @@ function AuditTrail() {
     })),
   });
 
-  const brdBdoRejectionQueries = useQueries({
-    queries: initiatives.map((initiative) => ({
-      queryKey: ["brd-bdo-rejection", initiative.id],
-      queryFn: () => getBrdBdoRejection(initiative.id),
-      enabled: Boolean(initiative.id),
-    })),
-  });
-
   const ticketQueries = useQueries({
     queries: initiatives.map((initiative) => ({
       queryKey: ["tickets", initiative.id],
@@ -88,7 +80,6 @@ function AuditTrail() {
     usersQuery.isLoading ||
     proposalQueries.some((q) => q.isLoading) ||
     discoveryQueries.some((q) => q.isLoading) ||
-    brdBdoRejectionQueries.some((q) => q.isLoading) ||
     ticketQueries.some((q) => q.isLoading);
 
   const hasError =
@@ -96,7 +87,6 @@ function AuditTrail() {
     usersQuery.isError ||
     proposalQueries.some((q) => q.isError) ||
     discoveryQueries.some((q) => q.isError) ||
-    brdBdoRejectionQueries.some((q) => q.isError) ||
     ticketQueries.some((q) => q.isError);
 
   function userName(userId: string | null) {
@@ -148,7 +138,7 @@ function AuditTrail() {
 
       const discovery = discoveryQueries[index]?.data;
 
-      if (discovery?.status === "Submitted") {
+      if (discovery && isAwaitingGroupHeadDecision(discovery.status)) {
         events.push({
           id: `bdo-doc-submitted-${initiative.id}`,
           timestamp: discovery.updatedAt,
@@ -180,19 +170,6 @@ function AuditTrail() {
           initiativeName: initiative.projectName,
           type: "danger",
           isMocked: false,
-        });
-      }
-
-      const brdBdoRejection = brdBdoRejectionQueries[index]?.data;
-
-      if (brdBdoRejection) {
-        events.push({
-          id: `brd-bdo-rejected-${initiative.id}`,
-          timestamp: brdBdoRejection.decidedAt,
-          description: `BRD rejected by the BDO: "${brdBdoRejection.comment}"`,
-          initiativeName: initiative.projectName,
-          type: "danger",
-          isMocked: true,
         });
       }
 

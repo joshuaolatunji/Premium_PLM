@@ -155,8 +155,8 @@ function Login() {
                         </p>
                     )}
 
-                    <button 
-                        type="submit" 
+                    <button
+                        type="submit"
                         disabled={isLoading}
                         className="login-form_submit">
 

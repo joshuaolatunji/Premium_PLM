@@ -111,6 +111,19 @@ export async function submitDiscovery(discoveryId: string): Promise<DiscoverySub
   return response?.data ?? [];
 }
 
+// Re-submits a discovery the Group Head rejected. Separate from
+// submitDiscovery because the backend only accepts a plain submit from a
+// Draft; a rejected discovery must go through this endpoint instead.
+// Response body is undocumented, so it's treated as fire-and-confirm.
+export async function resubmitDiscovery(discoveryId: string): Promise<void> {
+  const token = getToken();
+
+  await apiClient<unknown>(`api/product-discovery/${discoveryId}/resubmit-discovery`, {
+    method: "POST",
+    token: token ?? undefined,
+  });
+}
+
 // Handles both the logic flow document and any other supporting files —
 // the real API has one generic attachments endpoint, no separate category
 // per file. Uses XMLHttpRequest instead of apiClient/fetch specifically

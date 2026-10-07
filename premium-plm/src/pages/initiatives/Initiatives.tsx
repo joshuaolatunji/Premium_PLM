@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Plus, Search } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -33,6 +33,14 @@ const ALL_STAGES = [
   "BRD Under Review",
   "Approved",
 ];
+
+function formatCreatedDate(value: string) {
+  return new Date(value).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 function toCsvValue(value: string) {
   return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
@@ -86,10 +94,19 @@ function Initiatives() {
   const queryClient = useQueryClient();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchParams] = useSearchParams();
+  const urlQuery = searchParams.get("q") ?? "";
+  const [search, setSearch] = useState(urlQuery);
+  const [lastUrlQuery, setLastUrlQuery] = useState(urlQuery);
+
+  if (urlQuery !== lastUrlQuery) {
+    setLastUrlQuery(urlQuery);
+    setSearch(urlQuery);
+  }
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [managerFilter, setManagerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkPriority, setBulkPriority] = useState(3);
   const [bulkError, setBulkError] = useState("");
@@ -182,6 +199,8 @@ function Initiatives() {
   }, [initiatives, userNameById]);
 
   const filtered = useMemo(() => {
+    const direction = sortOrder === "newest" ? 1 : -1;
+
     return initiatives.filter((initiative) => {
       if (search.trim()) {
         const term = search.trim().toLowerCase();
@@ -213,8 +232,11 @@ function Initiatives() {
       }
 
       return true;
-    });
-  }, [initiatives, search, priorityFilter, managerFilter, statusFilter, stageById]);
+    }).sort(
+      (a, b) =>
+        direction * (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    );
+  }, [initiatives, search, priorityFilter, managerFilter, statusFilter, stageById, sortOrder]);
 
   const hasActiveFilters =
     Boolean(search) ||
@@ -369,6 +391,15 @@ function Initiatives() {
           ))}
         </select>
 
+        <select
+          value={sortOrder}
+          onChange={(event) => setSortOrder(event.target.value as "newest" | "oldest")}
+          aria-label="Sort initiatives by creation date"
+        >
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+        </select>
+
         {hasActiveFilters && (
           <button type="button" className="text-button" onClick={clearFilters}>
             Clear all
@@ -451,6 +482,7 @@ function Initiatives() {
                   />
                 </th>
                 <th>Initiative</th>
+                <th>Created</th>
                 <th>Priority</th>
                 <th>Project manager</th>
                 <th>Days left</th>
@@ -465,7 +497,7 @@ function Initiatives() {
             <tbody>
               {(initiativesQuery.isLoading || stagesLoading) && (
                 <tr>
-                  <td colSpan={8} className="initiatives-empty">
+                  <td colSpan={9} className="initiatives-empty">
                     Loading initiatives…
                   </td>
                 </tr>
@@ -473,7 +505,7 @@ function Initiatives() {
 
               {!initiativesQuery.isLoading && (initiativesQuery.isError || stagesError) && (
                 <tr>
-                  <td colSpan={8} className="initiatives-empty initiatives-empty--error">
+                  <td colSpan={9} className="initiatives-empty initiatives-empty--error">
                     Couldn't load initiatives. Try refreshing the page.
                   </td>
                 </tr>
@@ -507,6 +539,8 @@ function Initiatives() {
                           <span>{initiative.id.slice(0, 8)}</span>
                         </div>
                       </td>
+
+                      <td>{formatCreatedDate(initiative.createdAt)}</td>
 
                       <td>
                         <span className={priorityBadgeClass(initiative.priority)}>
@@ -563,7 +597,7 @@ function Initiatives() {
                 !stagesError &&
                 filtered.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="initiatives-empty">
+                    <td colSpan={9} className="initiatives-empty">
                       {initiatives.length === 0
                         ? "No initiatives yet. Create one to get started."
                         : "No initiatives match your filters."}

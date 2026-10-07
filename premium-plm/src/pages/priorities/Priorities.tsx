@@ -1,4 +1,4 @@
-import { useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -23,6 +23,25 @@ function tierLabel(value: number) {
   return INITIATIVE_PRIORITIES.find((entry) => entry.value === value)?.label ?? `P${value}`;
 }
 
+// The tier whose column the pointer is over. A column is matched by its
+// horizontal band, from its top downward with no bottom limit, so a drop
+// below a column's last card (or below a short column) still lands in it.
+function priorityAtPoint(
+  columns: (HTMLElement | null)[],
+  x: number,
+  y: number,
+): number | null {
+  for (let index = 0; index < INITIATIVE_PRIORITIES.length; index += 1) {
+    const rect = columns[index]?.getBoundingClientRect();
+
+    if (rect && x >= rect.left && x <= rect.right && y >= rect.top) {
+      return INITIATIVE_PRIORITIES[index].value;
+    }
+  }
+
+  return null;
+}
+
 function Priorities() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -31,6 +50,13 @@ function Priorities() {
   const [dragError, setDragError] = useState("");
   const [dragStatus, setDragStatus] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  // The tier column the dragged card is currently over, so the whole column
+  // reads as the drop target wherever the pointer is inside it.
+  const [overPriority, setOverPriority] = useState<number | null>(null);
+  const columnRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // True only between a card's dragstart and its drop/dragend, so the
+  // document-level listeners below ignore unrelated drags on the page.
+  const dragActiveRef = useRef(false);
 
   const initiativesQuery = useQuery({
     queryKey: ["product-initiatives"],
@@ -56,6 +82,12 @@ function Priorities() {
     () => initiativesQuery.data ?? [],
     [initiativesQuery.data],
   );
+
+  const initiativesRef = useRef(initiatives);
+
+  useEffect(() => {
+    initiativesRef.current = initiatives;
+  }, [initiatives]);
 
   // One proposal + one discovery lookup per initiative, run in parallel —
   // same N+1 pattern already used for the full org-wide list on the
@@ -162,6 +194,7 @@ function Priorities() {
   function handleDragStart(event: DragEvent<HTMLDivElement>, initiative: ProductInitiative) {
     event.dataTransfer.setData("text/plain", initiative.id);
     event.dataTransfer.effectAllowed = "move";
+    dragActiveRef.current = true;
 
     // Deferred on purpose: setDraggingId re-renders this exact card (its
     // class changes to show the "dragging" style) — doing that
@@ -172,30 +205,63 @@ function Priorities() {
     setTimeout(() => setDraggingId(initiative.id), 0);
   }
 
-  function handleDragEnd() {
-    setDraggingId(null);
-  }
+  // Drop targeting is resolved from the pointer position anywhere on the
+  // page while a card is being dragged, rather than from whichever element
+  // the pointer happens to be over — that element-based routing is what
+  // dropped drops below a column's last card.
+  useEffect(() => {
+    function onDragOver(event: globalThis.DragEvent) {
+      if (!dragActiveRef.current) return;
 
-  function handleDrop(event: DragEvent<HTMLDivElement>, targetPriority: number) {
-    event.preventDefault();
-
-    const initiativeId = event.dataTransfer.getData("text/plain");
-    const initiative = initiatives.find((entry) => entry.id === initiativeId);
-    setDraggingId(null);
-
-    if (!initiative || initiative.priority === targetPriority) {
-      return;
+      event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = "move";
+      }
+      setOverPriority(priorityAtPoint(columnRefs.current, event.clientX, event.clientY));
     }
 
-    setDragError("");
-    setDragStatus("");
-    setPendingMove({
-      initiativeId: initiative.id,
-      projectName: initiative.projectName,
-      fromPriority: initiative.priority,
-      toPriority: targetPriority,
-    });
-  }
+    function onDrop(event: globalThis.DragEvent) {
+      if (!dragActiveRef.current) return;
+
+      event.preventDefault();
+      dragActiveRef.current = false;
+
+      const target = priorityAtPoint(columnRefs.current, event.clientX, event.clientY);
+      const initiativeId = event.dataTransfer?.getData("text/plain") ?? "";
+      const initiative = initiativesRef.current.find((entry) => entry.id === initiativeId);
+      setDraggingId(null);
+      setOverPriority(null);
+
+      if (target === null || !initiative || initiative.priority === target) {
+        return;
+      }
+
+      setDragError("");
+      setDragStatus("");
+      setPendingMove({
+        initiativeId: initiative.id,
+        projectName: initiative.projectName,
+        fromPriority: initiative.priority,
+        toPriority: target,
+      });
+    }
+
+    function onDragEnd() {
+      dragActiveRef.current = false;
+      setDraggingId(null);
+      setOverPriority(null);
+    }
+
+    document.addEventListener("dragover", onDragOver, true);
+    document.addEventListener("drop", onDrop, true);
+    document.addEventListener("dragend", onDragEnd, true);
+
+    return () => {
+      document.removeEventListener("dragover", onDragOver, true);
+      document.removeEventListener("drop", onDrop, true);
+      document.removeEventListener("dragend", onDragEnd, true);
+    };
+  }, []);
 
   function confirmMove() {
     if (!pendingMove) return;
@@ -302,18 +368,20 @@ function Priorities() {
         !proposalQueries.some((query) => query.isLoading || query.isError) &&
         !discoveryQueries.some((query) => query.isLoading || query.isError) && (
         <div className="priorities-board">
-          {INITIATIVE_PRIORITIES.map((priority) => {
+          {INITIATIVE_PRIORITIES.map((priority, index) => {
             const bucket = columns.get(priority.value) ?? [];
 
             return (
               <div
                 key={priority.value}
-                className="priorities-column"
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  event.dataTransfer.dropEffect = "move";
+                ref={(element) => {
+                  columnRefs.current[index] = element;
                 }}
-                onDrop={(event) => handleDrop(event, priority.value)}
+                className={
+                  overPriority === priority.value
+                    ? "priorities-column priorities-column--over"
+                    : "priorities-column"
+                }
               >
                 <div className="priorities-column_header">
                   <span className={`priorities-column_rank priorities-column_rank--${priority.value}`}>
@@ -342,7 +410,6 @@ function Priorities() {
                         }
                         draggable
                         onDragStart={(event) => handleDragStart(event, initiative)}
-                        onDragEnd={handleDragEnd}
                         onClick={() => navigate(`/dashboard/initiatives/${initiative.id}`)}
                         role="button"
                         tabIndex={0}

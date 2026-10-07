@@ -4,8 +4,8 @@ import { ArrowLeft } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getInitiativeById } from "../../service/InitiativeService";
-import { getProposalByInitiativeId } from "../../service/ProposalService";
-import { getBrdBdoLegStatus, reviewBrdAsBdo } from "../../mocks/brdBdoReviewMock";
+import { getProposalByInitiativeId, reviewProposal } from "../../service/ProposalService";
+import { isBrdAwaitingBdoDecision } from "../../utils/initiativeStatus";
 import BrdReadOnlyView from "../../components/brd/BrdReadOnlyView";
 import DecisionModal, { type Decision } from "../../components/review/DecisionModal";
 
@@ -29,21 +29,10 @@ function BdoBrdReview() {
     enabled: Boolean(id),
   });
 
-  const bdoLegQuery = useQuery({
-    queryKey: ["brd-bdo-leg", id],
-    queryFn: () => getBrdBdoLegStatus(id as string),
-    enabled: Boolean(id),
-  });
-
   const decisionMutation = useMutation({
     mutationFn: ({ isApproved, comment }: { isApproved: boolean; comment: string }) =>
-      reviewBrdAsBdo(id as string, proposalQuery.data?.id as string, {
-        isApproved,
-        comment,
-      }),
+      reviewProposal(proposalQuery.data?.id as string, { isApproved, comment }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["brd-bdo-leg", id] });
-      queryClient.invalidateQueries({ queryKey: ["brd-bdo-rejection", id] });
       queryClient.invalidateQueries({ queryKey: ["product-proposal", id] });
       navigate("/dashboard/bdo-brd-reviews");
     },
@@ -62,7 +51,7 @@ function BdoBrdReview() {
     decisionMutation.mutate({ isApproved: pendingDecision === "approve", comment });
   }
 
-  const isLoading = initiativeQuery.isLoading || proposalQuery.isLoading || bdoLegQuery.isLoading;
+  const isLoading = initiativeQuery.isLoading || proposalQuery.isLoading;
   const hasError =
     initiativeQuery.isError ||
     !initiativeQuery.data ||
@@ -100,10 +89,9 @@ function BdoBrdReview() {
     return null;
   }
 
-  // Once decided (forwarded to the Group Head, or rejected back to the
-  // PM), this leg is no longer the BDO's to act on — only "PendingBdoReview"
-  // is actionable.
-  if (bdoLegQuery.data && bdoLegQuery.data !== "PendingBdoReview") {
+  // Only a BRD still in the BDO's stage is actionable. Once decided it has
+  // either moved on to the Group Head or been rejected back to the PM.
+  if (!isBrdAwaitingBdoDecision(proposal.status)) {
     return (
       <div className="dashboard-page">
         <Link to="/dashboard/bdo-brd-reviews" className="text-button">
@@ -112,9 +100,9 @@ function BdoBrdReview() {
         </Link>
 
         <p className="initiatives-empty initiative-detail-message">
-          {bdoLegQuery.data === "ForwardedToGroupHead"
-            ? `You already approved and forwarded ${initiative.projectName}'s BRD to the Group Head.`
-            : `You already rejected ${initiative.projectName}'s BRD. It's back with the PM to revise — this'll be available to review again once they resubmit it.`}
+          {proposal.status === "Rejected"
+            ? `${initiative.projectName}'s BRD is back with the PM to revise. It will be available to review again once they resubmit it.`
+            : `This BRD is no longer waiting on your decision. It has already been forwarded to the Group Head or approved.`}
         </p>
       </div>
     );
@@ -161,11 +149,6 @@ function BdoBrdReview() {
           </button>
         </div>
       </header>
-
-      <p className="mock-data-notice">
-        This approval leg is temporary, local-only data until the real BRD
-        approval-leg API is ready.
-      </p>
 
       <BrdReadOnlyView proposal={proposal} />
 

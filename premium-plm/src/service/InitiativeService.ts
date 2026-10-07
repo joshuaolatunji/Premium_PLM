@@ -2,26 +2,41 @@ import { apiClient } from "../apicalls/apiClient";
 import { getToken } from "../apicalls/authStorage";
 
 import type { ApiResponse } from "../types/apiTypes"
-import type { CreateInitiativeRequest, ProductInitiative } from "../types/initiativeTypes";
+import {
+  priorityFromApi,
+  priorityToApi,
+  type CreateInitiativeRequest,
+  type ProductInitiative,
+} from "../types/initiativeTypes";
+
+// The API returns priority as an enum name ("Critical", "High", …). The app
+// works with the numeric tier, so each initiative is converted on the way in.
+type RawProductInitiative = Omit<ProductInitiative, "priority"> & {
+  priority: string | number;
+};
+
+function normalizeInitiative(raw: RawProductInitiative): ProductInitiative {
+  return { ...raw, priority: priorityFromApi(raw.priority) };
+}
 
 export async function getProductInitiatives(): Promise<ProductInitiative[]> {
   const token = getToken();
 
-  const response = await apiClient<ApiResponse<ProductInitiative[]>>
+  const response = await apiClient<ApiResponse<RawProductInitiative[]>>
   ( "api/product-initiatives", {
       method: "GET",
       token: token ?? undefined,
     },
   );
 
-  return response.data;
+  return response.data.map(normalizeInitiative);
 }
 
 // Initiatives where the current user is the assigned project manager.
 export async function getMyAssignedInitiatives(): Promise<ProductInitiative[]> {
   const token = getToken();
 
-  const response = await apiClient<ApiResponse<ProductInitiative[]>>(
+  const response = await apiClient<ApiResponse<RawProductInitiative[]>>(
     "api/product-initiatives/my-assigned",
     {
       method: "GET",
@@ -29,7 +44,7 @@ export async function getMyAssignedInitiatives(): Promise<ProductInitiative[]> {
     },
   );
 
-  return response.data;
+  return response.data.map(normalizeInitiative);
 }
 
 // Swagger documents this endpoint's 200 response with no body schema, but
@@ -41,16 +56,16 @@ export async function createInitiative(
 ): Promise<ProductInitiative | null> {
   const token = getToken();
 
-  const response = await apiClient<ApiResponse<ProductInitiative> | null>(
+  const response = await apiClient<ApiResponse<RawProductInitiative> | null>(
     "create-initiative",
     {
       method: "POST",
       token: token ?? undefined,
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, priority: priorityToApi(payload.priority) }),
     },
   );
 
-  return response?.data ?? null;
+  return response?.data ? normalizeInitiative(response.data) : null;
 }
 
 export async function getInitiativeById(
@@ -58,7 +73,7 @@ export async function getInitiativeById(
 ): Promise<ProductInitiative> {
   const token = getToken();
 
-  const response = await apiClient<ApiResponse<ProductInitiative>>(
+  const response = await apiClient<ApiResponse<RawProductInitiative>>(
     `api/product-initiatives/${id}/get-initiative`,
     {
       method: "GET",
@@ -66,7 +81,7 @@ export async function getInitiativeById(
     },
   );
 
-  return response.data;
+  return normalizeInitiative(response.data);
 }
 
 // The API only supports changing priority through this endpoint (a
@@ -79,8 +94,8 @@ export async function updateInitiativePriority(
 ): Promise<void> {
   const token = getToken();
 
-  await apiClient<ApiResponse<ProductInitiative> | null>(
-    `api/product-initiatives/${initiativeId}/update-initiative?newPriority=${newPriority}`,
+  await apiClient<ApiResponse<RawProductInitiative> | null>(
+    `api/product-initiatives/${initiativeId}/update-initiative?newPriority=${priorityToApi(newPriority)}`,
     {
       method: "PUT",
       token: token ?? undefined,

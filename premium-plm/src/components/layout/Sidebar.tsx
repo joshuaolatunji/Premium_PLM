@@ -12,6 +12,7 @@ import {
   Tags,
   Ticket,
   Users,
+  X,
 } from "lucide-react";
 
 import UserAvatar from "../ui/UserAvatar"
@@ -71,8 +72,6 @@ function GroupHeadNav() {
 function SuperAdminNav() {
     return (
         <>
-            <GroupHeadNav />
-
             <p className="sidebar_section-title">
                 Administration
             </p>
@@ -185,7 +184,15 @@ function DeveloperNav() {
     );
 }
 
-function Sidebar() {
+interface SidebarProps {
+    // Below the sidebar's breakpoint it's an off-canvas drawer; above it,
+    // these are both no-ops (the sidebar is permanently visible and the
+    // backdrop/close button are hidden by CSS).
+    open: boolean;
+    onClose: () => void;
+}
+
+function Sidebar({ open, onClose }: SidebarProps) {
     const navigate = useNavigate();
     const user = getStoredUser();
     const roles = user?.roles ?? [];
@@ -198,55 +205,77 @@ function Sidebar() {
     const primaryRole = resolvePrimaryRole(roles);
 
     return (
-        <aside className="sidebar">
-            <div className="sidebar_brand">
-                <div className="sidebar_brand-logo">
-                    <img src="/premium-logo-white.png" alt="Premium Trust Bank Logo" />
+        <>
+            {open && (
+                <div
+                    className="sidebar-backdrop"
+                    role="presentation"
+                    onClick={onClose}
+                />
+            )}
+
+            <aside className={open ? "sidebar sidebar--open" : "sidebar"}>
+                <div className="sidebar_brand">
+                    <div className="sidebar_brand-logo">
+                        <img src="/premium-logo-white.png" alt="Premium Trust Bank Logo" />
+                    </div>
+
+
+                    <div className="sidebar_product">
+                        Premium PLM
+                        <span>v1.0</span>
+                    </div>
+
+                    <button
+                        type="button"
+                        className="sidebar_close"
+                        onClick={onClose}
+                        aria-label="Close menu"
+                    >
+                        <X size={18} />
+                    </button>
                 </div>
 
-
-                <div className="sidebar_product">
-                    Premium PLM
-                    <span>v1.0</span>
-                </div>
-            </div>
-
-            <nav className="sidebar_navigation">
-                {primaryRole === "SuperAdmin" && <SuperAdminNav />}
-                {primaryRole === "BusinessDevelopmentOfficer" && <BdoNav />}
-                {primaryRole === "ProjectManager" && <ProjectManagerNav />}
-                {primaryRole === "LeadEngineer" && <LeadEngineerNav />}
-                {primaryRole === "SoftwareEngineer" && <DeveloperNav />}
-                {(primaryRole === "GroupHead" || primaryRole === "Other") && (
-                    <GroupHeadNav />
-                )}
-            </nav>
+                {/* Closing on any nav click is a no-op above the drawer
+                    breakpoint (the drawer is already "closed" there), and
+                    closes the drawer on mobile once a destination is picked. */}
+                <nav className="sidebar_navigation" onClick={onClose}>
+                    {primaryRole === "SuperAdmin" && <SuperAdminNav />}
+                    {primaryRole === "BusinessDevelopmentOfficer" && <BdoNav />}
+                    {primaryRole === "ProjectManager" && <ProjectManagerNav />}
+                    {primaryRole === "LeadEngineer" && <LeadEngineerNav />}
+                    {primaryRole === "SoftwareEngineer" && <DeveloperNav />}
+                    {(primaryRole === "GroupHead" || primaryRole === "Other") && (
+                        <GroupHeadNav />
+                    )}
+                </nav>
 
 
-            <button
-                type="button"
-                className="sidebar_footer"
-                onClick={() => navigate("/dashboard/profile")}
-            >
-                <div className="sidebar_avatar">
-                    <UserAvatar name={displayName} />
-                </div>
+                <button
+                    type="button"
+                    className="sidebar_footer"
+                    onClick={() => navigate("/dashboard/profile")}
+                >
+                    <div className="sidebar_avatar">
+                        <UserAvatar name={displayName} />
+                    </div>
 
-                <div>
-                    <p className="sidebar_user-name">
-                        <strong>{displayName}</strong>
-                    </p>
+                    <div>
+                        <p className="sidebar_user-name">
+                            <strong>{displayName}</strong>
+                        </p>
 
-                    <p className="sidebar_user-role">
-                        <span>{roles.length > 0 ? roles.map(formatRoleName).join(" · ") : "—"}</span>
-                    </p>
-                </div>
+                        <p className="sidebar_user-role">
+                            <span>{roles.length > 0 ? roles.map(formatRoleName).join(" · ") : "—"}</span>
+                        </p>
+                    </div>
 
-            </button>
+                </button>
 
 
 
-        </aside>
+            </aside>
+        </>
     )
 }
 

@@ -1,4 +1,5 @@
-import {Bell, Search} from "lucide-react";
+import {useState} from "react";
+import {Bell, Menu, Search} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import UserAvatar from "../ui/UserAvatar";
@@ -6,9 +7,16 @@ import { getStoredUser } from "../../apicalls/authStorage";
 import { capitalize, formatRoleName } from "../../utils/text";
 import { getUnreadCount } from "../../service/NotificationService";
 
+interface TopbarProps {
+    // Opens the sidebar drawer below its breakpoint; the button this calls
+    // is itself hidden by CSS above that breakpoint, where the sidebar is
+    // already permanently visible.
+    onMenuClick: () => void;
+}
 
-function Topbar() {
+function Topbar({ onMenuClick }: TopbarProps) {
     const navigate = useNavigate();
+    const [searchTerm, setSearchTerm] = useState("");
     const user = getStoredUser();
     const roles = user?.roles ?? [];
     const displayName = user?.userName ? capitalize(user.userName) : "Guest";
@@ -22,22 +30,49 @@ function Topbar() {
 
     return(
         <header className="topbar">
-            <div className="topbar_breadcrumb">
-                <span>Premium PLM</span>
-                <span>/</span>
-                <span>Dashboard</span>
+            <div className="topbar_left">
+                <button
+                    type="button"
+                    className="topbar_menu"
+                    onClick={onMenuClick}
+                    aria-label="Open menu"
+                >
+                    <Menu size={20} />
+                </button>
 
+                <div className="topbar_breadcrumb">
+                    <span>Premium PLM</span>
+                    <span>/</span>
+                    <span>Dashboard</span>
+
+                </div>
             </div>
 
             <div className="topbar_actions">
-                <div className="topbar_search">
+                <form
+                    className="topbar_search"
+                    role="search"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        const term = searchTerm.trim();
+                        navigate(
+                            term
+                                ? `/dashboard/initiatives?q=${encodeURIComponent(term)}`
+                                : "/dashboard/initiatives",
+                        );
+                        setSearchTerm("");
+                    }}
+                >
                     <Search size={16} />
 
                     <input
-                    type="text"
-                    placeholder="Search Initiatives, BRDs, People..." />
+                    type="search"
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder="Search initiatives..."
+                    aria-label="Search initiatives" />
 
-                </div>
+                </form>
 
                 <button
                     className="topbar_notification"

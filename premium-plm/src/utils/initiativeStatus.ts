@@ -47,6 +47,7 @@ export function deriveStatus(initiative: ProductInitiative): {
     if (daysLeft / totalDays <= 0.2) {
       return { status: "at-risk", daysLeft };
     }
+    
   }
 
   return { status: "on-track", daysLeft };
@@ -80,11 +81,40 @@ export function priorityBadgeClass(priority: number) {
 // only "Draft" and "Approved" are confirmed values (see
 // types/proposalTypes.ts) — anything else reads as a generic "under
 // review" rather than guessing at an unobserved string.
+// A discovery is awaiting the Group Head's decision whether it was submitted
+// for the first time ("Submitted") or sent back through resubmit-discovery
+// after a rejection ("Resubmitted") — the backend returns the latter after
+// a resubmit, so every check for "awaiting decision" goes through here.
+export function isAwaitingGroupHeadDecision(status: string | null | undefined): boolean {
+  return status === "Submitted" || status === "Resubmitted";
+}
+
+// A BRD awaits the Group Head only once it has left the BDO's first-leg
+// review. Draft/Approved/Rejected are excluded, and so is any BDO-stage
+// status ("PendingBDOReview" is the one confirmed live). The BDO-stage
+// match is a pattern because the exact set of BDO-stage strings isn't
+// fully documented — widen it if the backend adds another.
+export function isBrdAwaitingGroupHeadDecision(status: string | null | undefined): boolean {
+  if (!status) {
+    return false;
+  }
+
+  if (status === "Draft" || status === "Approved" || status === "Rejected") {
+    return false;
+  }
+
+  return !/bdo/i.test(status);
+}
+
+export function isBrdAwaitingBdoDecision(status: string | null | undefined): boolean {
+  return Boolean(status) && /bdo/i.test(status as string);
+}
+
 export function currentStageFor(
   bdoSubmissionStatus: string,
   proposal: ProductProposal | null,
 ): string {
-  if (bdoSubmissionStatus === "Submitted") {
+  if (isAwaitingGroupHeadDecision(bdoSubmissionStatus)) {
     return "Awaiting GH Documentation Approval";
   }
 
@@ -102,6 +132,10 @@ export function currentStageFor(
 
   if (proposal.status === "Approved") {
     return "Approved";
+  }
+
+  if (isBrdAwaitingBdoDecision(proposal.status)) {
+    return "BRD Awaiting BDO Review";
   }
 
   return "BRD Under Review";

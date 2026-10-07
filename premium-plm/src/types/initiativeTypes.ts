@@ -7,6 +7,25 @@ export const INITIATIVE_PRIORITIES = [
   { value: 5, label: "Low" },
 ] as const;
 
+// The API sends and expects priority as the enum name ("Critical", "High", …).
+// The app works with the numeric tier above, so these convert at the service
+// boundary only (see InitiativeService.ts).
+export function priorityToApi(value: number): string {
+  return INITIATIVE_PRIORITIES.find((entry) => entry.value === value)?.label ?? String(value);
+}
+
+export function priorityFromApi(value: unknown): number {
+  if (typeof value === "number") {
+    return value;
+  }
+
+  const match = INITIATIVE_PRIORITIES.find(
+    (entry) => entry.label.toLowerCase() === String(value).toLowerCase(),
+  );
+
+  return match?.value ?? 0;
+}
+
 export interface ProductInitiative {
   id: string;
   projectName: string;

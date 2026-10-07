@@ -16,6 +16,7 @@ export interface PortfolioInitiative {
   id: string;
   name: string;
   reference: string;
+  createdOn: string;
   priority: string;
   priorityValue: number;
   currentStage: string;

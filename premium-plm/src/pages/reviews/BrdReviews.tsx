@@ -6,7 +6,11 @@ import { getProductInitiatives } from "../../service/InitiativeService";
 import { getProposalByInitiativeId } from "../../service/ProposalService";
 import { getAllUsers } from "../../service/UserService";
 import { downloadBrdPdf } from "../../service/PdfService";
-import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
+import {
+  isBrdAwaitingGroupHeadDecision,
+  priorityBadgeClass,
+  priorityLabel,
+} from "../../utils/initiativeStatus";
 import { brdStatusBadgeClass } from "../../utils/brdStatus";
 import { capitalize } from "../../utils/text";
 import type { ProductInitiative } from "../../types/initiativeTypes";
@@ -82,12 +86,7 @@ function BrdReviews() {
     initiatives.forEach((initiative, index) => {
       const proposal = proposalQueries[index]?.data;
 
-      if (
-        proposal &&
-        proposal.status !== "Draft" &&
-        proposal.status !== "Approved" &&
-        proposal.status !== "Rejected"
-      ) {
+      if (proposal && isBrdAwaitingGroupHeadDecision(proposal.status)) {
         awaitingReview.push({
           initiative,
           proposal,

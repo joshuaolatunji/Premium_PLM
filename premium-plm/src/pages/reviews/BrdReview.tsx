@@ -10,6 +10,7 @@ import { ApiError } from "../../apicalls/apiClient";
 import BrdReadOnlyView from "../../components/brd/BrdReadOnlyView";
 import DecisionModal, { type Decision } from "../../components/review/DecisionModal";
 import { brdStatusBadgeClass } from "../../utils/brdStatus";
+import { isBrdAwaitingBdoDecision } from "../../utils/initiativeStatus";
 
 function BrdReview() {
   const { id } = useParams<{ id: string }>();
@@ -118,6 +119,24 @@ function BrdReview() {
 
         <p className="initiatives-empty initiative-detail-message">
           {initiative.projectName}'s BRD hasn't been submitted for review yet.
+        </p>
+      </div>
+    );
+  }
+
+  // Still in the BDO's first-leg review — the Group Head can't decide on it
+  // until the BDO approves and forwards it.
+  if (isBrdAwaitingBdoDecision(proposal.status)) {
+    return (
+      <div className="dashboard-page">
+        <Link to="/dashboard/brd-reviews" className="text-button">
+          <ArrowLeft size={15} />
+          Back to BRD Reviews
+        </Link>
+
+        <p className="initiatives-empty initiative-detail-message">
+          {initiative.projectName}'s BRD is still with the Business Development
+          Officer. It'll be available for your decision once they approve it.
         </p>
       </div>
     );

@@ -27,7 +27,7 @@ function DashboardHeader({ onOpenCreateInitiative, overSlaBrdCount }: DashboardH
         </p> */}
 
         <h1 className="dashboard-title">
-          Good morning, {user?.userName ? capitalize(user.userName) : "there"}
+          Hello, {user?.userName ? capitalize(user.userName) : "there"}
         </h1>
 
         <p className="dashboard-subtitle">

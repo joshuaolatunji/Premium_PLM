@@ -11,6 +11,7 @@ import { INITIATIVE_PRIORITIES } from "../types/initiativeTypes";
 import type { CreateInitiativeRequest } from "../types/initiativeTypes";
 import { capitalize } from "../utils/text";
 import InitiativeCreatedPanel from "./InitiativeCreatedPanel";
+import NumberInput from "../components/ui/NumberInput";
 
 interface CreatedInitiativeInfo {
   initiativeId: string | null;
@@ -325,16 +326,12 @@ function CreateInitiativeModal({ onClose }: CreateInitiativeModalProps) {
               <div className="form-field">
                 <label htmlFor="timelineDays">Timeline (days)</label>
 
-                <input
+                <NumberInput
                   id="timelineDays"
-                  type="number"
                   min={1}
                   value={form.timelineDays}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      timelineDays: Number(event.target.value),
-                    }))
+                  onValueChange={(value) =>
+                    setForm((current) => ({ ...current, timelineDays: value }))
                   }
                   required
                 />
@@ -502,7 +499,6 @@ function CreateInitiativeModal({ onClose }: CreateInitiativeModalProps) {
                   </option>
                 ))}
               </select>
-
               {usersQuery.isError && (
                 <p className="form-field_hint form-field_hint--error">
                   Couldn't load Project Managers. Try closing and reopening

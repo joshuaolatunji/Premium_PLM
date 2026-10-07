@@ -7,6 +7,7 @@
 @import "@fontsource/ibm-plex-mono/500.css";
 
 @import "./styles/tokens.css";
+@import "tailwindcss";
 
 /*GLOBAL STYLES*/
 
@@ -1451,7 +1452,7 @@ a {
 
 @media (min-width: 1100px) {
   .dashboard-grid {
-    grid-template-columns: minmax(0, 1fr) 400px;
+    grid-template-columns: minmax(0, 1fr) 360px;
     gap: 32px;
   }
 
@@ -1525,16 +1526,25 @@ a {
 
 .portfolio-table {
   width: 100%;
-  min-width: 900px;
   border-collapse: collapse;
 }
 
 .portfolio-table th,
 .portfolio-table td {
-  padding: 18px 20px;
+  padding: 16px 12px;
   border-bottom: 1px solid #f0f0f1;
   text-align: left;
   vertical-align: middle;
+}
+
+.portfolio-table th:first-child,
+.portfolio-table td:first-child {
+  padding-left: 20px;
+}
+
+.portfolio-table th:last-child,
+.portfolio-table td:last-child {
+  padding-right: 20px;
 }
 
 .portfolio-table th {
@@ -1544,7 +1554,13 @@ a {
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.portfolio-table .status-badge {
+  white-space: normal;
+  line-height: 1.3;
+  text-align: center;
 }
 
 .portfolio-table td {
@@ -1568,7 +1584,7 @@ a {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  min-width: 145px;
+  min-width: 120px;
 }
 
 .initiative-cell strong {
@@ -1960,6 +1976,11 @@ p.initiatives-empty {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-3);
   background: var(--color-surface-alt);
+}
+
+.priorities-column--over {
+  border-color: var(--color-info);
+  box-shadow: 0 0 0 2px var(--color-info-tint);
 }
 
 .priorities-column_header {
@@ -2934,6 +2955,11 @@ p.initiatives-empty {
   color: var(--color-warning);
 }
 
+.status-badge--brd-awaiting-bdo-review {
+  background-color: var(--color-info-tint);
+  color: var(--color-info);
+}
+
 .status-badge--bdo-documentation-rejected {
   background-color: var(--color-danger-tint);
   color: var(--color-danger);
@@ -2990,4 +3016,391 @@ p.initiatives-empty {
 .admin-users-empty-roles {
   color: var(--color-ink-muted);
   font-size: 0.75rem;
+}
+/* =========================
+   BDO workspace
+   ========================= */
+
+.bdo-workspace {
+  padding-bottom: 96px;
+}
+
+.bdo-workspace-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  background: var(--color-surface);
+}
+
+.bdo-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bdo-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+
+  color: var(--color-ink-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bdo-step_marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+
+  background: var(--color-surface-alt);
+  color: var(--color-ink-muted);
+  font-size: 12px;
+}
+
+.bdo-step_label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bdo-step--current {
+  border-color: var(--color-info);
+  color: var(--color-ink);
+}
+
+.bdo-step--current .bdo-step_marker {
+  background: var(--color-info);
+  color: #ffffff;
+}
+
+.bdo-step--done {
+  border-color: var(--color-success);
+  color: var(--color-ink);
+}
+
+.bdo-step--done .bdo-step_marker {
+  background: var(--color-success);
+  color: #ffffff;
+}
+
+.bdo-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.bdo-card_header {
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.bdo-card_header h2 {
+  margin: 0;
+}
+
+.bdo-card_header p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-ink-muted);
+  font-size: 13px;
+}
+
+.bdo-fields-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+
+  padding: var(--space-6);
+}
+
+.bdo-field--wide {
+  grid-column: 1 / -1;
+}
+
+.bdo-fields-grid .form-field textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.bdo-link-form {
+  border-top: 1px solid var(--color-border);
+}
+
+.bdo-card_footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+}
+
+.bdo-card_hint {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: 13px;
+}
+
+.bdo-action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+
+  margin-top: var(--space-6);
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-dropdown);
+}
+
+.bdo-action-bar_hint {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: 14px;
+}
+
+@media (min-width: 900px) {
+  .bdo-steps {
+    max-width: 100%;
+  }
+
+  .bdo-workspace-header {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .bdo-steps {
+    width: 520px;
+    flex-shrink: 0;
+  }
+
+  .bdo-fields-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .bdo-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bdo-card_footer,
+  .bdo-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Grid items are siblings, so the global "form-field + form-field" spacing
+   would push every field after the first down. Grid gap handles spacing. */
+.bdo-fields-grid .form-field {
+  margin-top: 0;
+}
+
+/* =========================
+   Shell — responsive
+   ========================= */
+
+/* Below 900px the sidebar is an off-canvas drawer instead of a permanent
+   column: fixed, slid off-screen, and brought in with .sidebar--open.
+   State lives in AppShell (open/onClose), shared by the hamburger button
+   below, the sidebar's own close button, its backdrop, and its nav links. */
+@media (max-width: 899px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 210;
+
+    width: 260px;
+    max-width: 85vw;
+
+    transform: translateX(-100%);
+    transition: transform 200ms ease;
+  }
+
+  .sidebar--open {
+    transform: translateX(0);
+    box-shadow: 12px 0 32px rgb(0 0 0 / 30%);
+  }
+
+  .sidebar_brand {
+    position: relative;
+  }
+
+  .sidebar_close {
+    display: inline-flex;
+  }
+}
+
+.sidebar_close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+
+  position: absolute;
+  top: var(--space-6);
+  right: var(--space-4);
+
+  width: 26px;
+  height: 26px;
+
+  border: none;
+  border-radius: var(--radius-1);
+  background: rgb(255 255 255 / 8%);
+
+  color: rgb(255 255 255 / 70%);
+  cursor: pointer;
+}
+
+.sidebar_close:hover {
+  background: rgb(255 255 255 / 15%);
+  color: white;
+}
+
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+
+  background: rgb(15 17 21 / 55%);
+}
+
+.topbar_left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+
+  min-width: 0;
+}
+
+.topbar_menu {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+
+  width: 32px;
+  height: 32px;
+
+  border: none;
+  background: transparent;
+
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+}
+
+@media (min-width: 900px) {
+  .topbar_menu,
+  .sidebar_close,
+  .sidebar-backdrop {
+    display: none;
+  }
+}
+
+.topbar_breadcrumb {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The hamburger button only exists below 900px (.sidebar's own
+   breakpoint), so it's competing for topbar space well above 640px —
+   this needs to kick in earlier than most other mobile breakpoints. */
+@media (max-width: 899px) {
+  .topbar {
+    padding: 0 var(--space-4);
+    gap: var(--space-2);
+  }
+
+  .topbar_actions {
+    gap: var(--space-2);
+  }
+
+  .topbar_search {
+    width: clamp(90px, 22vw, 220px);
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar_user-name,
+  .topbar_user-role {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar_search {
+    display: none;
+  }
+}
+
+/* =========================
+   App shell content — responsive padding
+   ========================= */
+
+.app-shell_content {
+  padding: var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .app-shell_content {
+    padding: var(--space-6);
+  }
+}
+
+@media (min-width: 1100px) {
+  .app-shell_content {
+    padding: var(--space-8);
+  }
+}
+
+/* =========================
+   Form field rows — responsive
+   ========================= */
+
+@media (max-width: 560px) {
+  .form-field-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Stops the touch "rubber-band" bounce past the end of a scrollable panel,
+   which otherwise reveals whatever's behind it (seen on the mobile shell:
+   scrolling past the last row in a short list bounced into blank space). */
+html,
+body {
+  overscroll-behavior-y: none;
+}
+
+.app-shell_content,
+.sidebar,
+.modal-panel_body {
+  overscroll-behavior: contain;
 }

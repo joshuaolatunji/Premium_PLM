@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, FileText, Link2 } from "lucide-react";
+import { ArrowLeft, Check, FileText, Link2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getInitiativeById } from "../../service/InitiativeService";
@@ -12,6 +12,7 @@ import {
   getDiscoveryByInitiativeId,
   getDiscoveryWorkflowLinks,
   openDiscoveryAttachment,
+  resubmitDiscovery,
   submitDiscovery,
   updateDiscovery,
   uploadDiscoveryAttachments,
@@ -21,6 +22,7 @@ import { ApiError } from "../../apicalls/apiClient";
 import { EMPTY_DISCOVERY_FORM } from "../../types/discoveryTypes";
 import type { DiscoveryFormFields, ProductDiscovery } from "../../types/discoveryTypes";
 import { capitalize } from "../../utils/text";
+import { isAwaitingGroupHeadDecision } from "../../utils/initiativeStatus";
 import BdoSubmittedPanel from "../../components/bdo/BdoSubmittedPanel";
 
 function BdoInitiativeWorkspace() {
@@ -184,7 +186,7 @@ function BdoInitiativeWorkspaceForm({
   // Locked while awaiting a decision or once approved — editing shouldn't
   // be possible until the Group Head has responded. A rejection unlocks it
   // again so the BDO can fix and resubmit.
-  const isLocked = submissionStatus === "Submitted" || submissionStatus === "Approved";
+  const isLocked = isAwaitingGroupHeadDecision(submissionStatus) || submissionStatus === "Approved";
 
   const saveDiscoveryMutation = useMutation({
     mutationFn: async () => {
@@ -291,7 +293,13 @@ function BdoInitiativeWorkspaceForm({
   });
 
   const submitMutation = useMutation({
-    mutationFn: () => submitDiscovery(discoveryId as string),
+    mutationFn: async () => {
+      if (submissionStatus === "Rejected") {
+        await resubmitDiscovery(discoveryId as string);
+      } else {
+        await submitDiscovery(discoveryId as string);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["product-discovery", initiativeId] });
       setHasSubmitted(true);
@@ -310,6 +318,23 @@ function BdoInitiativeWorkspaceForm({
 
   const canSubmit =
     Boolean(discoveryId) && attachments.length > 0 && workflowLinks.length > 0;
+
+  // What's still missing before submission, in the order the steps appear.
+  const missingSteps = [
+    !discoveryId && "save the discovery document",
+    attachments.length === 0 && "upload a document",
+    workflowLinks.length === 0 && "add a design link",
+  ].filter((step): step is string => Boolean(step));
+
+  // Progress strip: each step is done once its part is in place, and the
+  // first undone step is the one the BDO is on.
+  const steps = [
+    { label: "Discovery", done: Boolean(discoveryId) },
+    { label: "Documents", done: attachments.length > 0 },
+    { label: "Design links", done: workflowLinks.length > 0 },
+    { label: "Submit", done: isLocked },
+  ];
+  const currentStepIndex = steps.findIndex((step) => !step.done);
 
   const isBusy =
     saveDiscoveryMutation.isPending ||
@@ -330,14 +355,14 @@ function BdoInitiativeWorkspaceForm({
   }
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page bdo-workspace">
       <Link to="/dashboard/bdo" className="text-button">
         <ArrowLeft size={15} />
-        Back to {initiativeName}
+        Back to BDO workspace
       </Link>
 
-      <header className="dashboard-header initiative-detail-header">
-        <div className="dashboard-header__content">
+      <header className="bdo-workspace-header">
+        <div className="bdo-workspace-header_text">
           <p className="dashboard-breadcrumb">
             PremiumPLM / BDO workspace / {initiativeName}
           </p>
@@ -349,9 +374,28 @@ function BdoInitiativeWorkspaceForm({
             then submit for Group Head approval.
           </p>
         </div>
+
+        <ol className="bdo-steps" aria-label="Progress">
+          {steps.map((step, index) => {
+            const stateClass = step.done
+              ? "bdo-step--done"
+              : index === currentStepIndex
+                ? "bdo-step--current"
+                : "";
+
+            return (
+              <li key={step.label} className={`bdo-step ${stateClass}`}>
+                <span className="bdo-step_marker">
+                  {step.done ? <Check size={13} /> : index + 1}
+                </span>
+                <span className="bdo-step_label">{step.label}</span>
+              </li>
+            );
+          })}
+        </ol>
       </header>
 
-      {submissionStatus === "Submitted" && (
+      {isAwaitingGroupHeadDecision(submissionStatus) && (
         <p className="brd-status-message" role="status">
           Submitted — awaiting the Group Head's decision.
         </p>
@@ -384,33 +428,18 @@ function BdoInitiativeWorkspaceForm({
         </p>
       )}
 
-      <section className="dashboard-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <h2>Product discovery</h2>
-            <p>Real, saved to the initiative directly.</p>
-          </div>
-
-          {!isLocked && (
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => saveDiscoveryMutation.mutate()}
-              disabled={isBusy}
-            >
-              {discoveryId
-                ? saveDiscoveryMutation.isPending ? "Saving…" : "Save discovery"
-                : saveDiscoveryMutation.isPending ? "Creating…" : "Create discovery"}
-            </button>
-          )}
+      <section className="dashboard-panel bdo-card">
+        <div className="bdo-card_header">
+          <h2>Product discovery</h2>
+          <p>Describe the product. Changes are saved to the initiative directly.</p>
         </div>
 
-        <div className="proposal-section">
+        <div className="bdo-fields-grid">
           <div className="form-field">
             <label htmlFor="businessLogic">Business logic</label>
             <textarea
               id="businessLogic"
-              rows={3}
+              rows={5}
               disabled={isLocked}
               value={form.businessLogic}
               onChange={(event) => updateField("businessLogic", event.target.value)}
@@ -421,7 +450,7 @@ function BdoInitiativeWorkspaceForm({
             <label htmlFor="customerJourney">Customer journey</label>
             <textarea
               id="customerJourney"
-              rows={3}
+              rows={5}
               disabled={isLocked}
               value={form.customerJourney}
               onChange={(event) => updateField("customerJourney", event.target.value)}
@@ -432,7 +461,7 @@ function BdoInitiativeWorkspaceForm({
             <label htmlFor="userFlow">User flow</label>
             <textarea
               id="userFlow"
-              rows={3}
+              rows={5}
               disabled={isLocked}
               value={form.userFlow}
               onChange={(event) => updateField("userFlow", event.target.value)}
@@ -443,56 +472,51 @@ function BdoInitiativeWorkspaceForm({
             <label htmlFor="businessProcess">Business process</label>
             <textarea
               id="businessProcess"
-              rows={3}
+              rows={5}
               disabled={isLocked}
               value={form.businessProcess}
               onChange={(event) => updateField("businessProcess", event.target.value)}
             />
           </div>
 
-          <div className="form-field">
+          <div className="form-field bdo-field--wide">
             <label htmlFor="assumptions">Assumptions</label>
             <textarea
               id="assumptions"
-              rows={3}
+              rows={4}
               disabled={isLocked}
               value={form.assumptions}
               onChange={(event) => updateField("assumptions", event.target.value)}
             />
           </div>
         </div>
-      </section>
 
-      <section className="dashboard-panel initiative-detail-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <h2>Attachments</h2>
-            <p>Logic flow document and any other supporting files.</p>
-          </div>
+        {!isLocked && (
+          <div className="bdo-card_footer">
+            <p className="bdo-card_hint">
+              {discoveryId
+                ? "Saved to this initiative. Save again after you edit."
+                : "Save to create the discovery document for this initiative."}
+            </p>
 
-          {!isLocked && (
             <button
               type="button"
-              className="button button--secondary"
-              onClick={() => attachmentInputRef.current?.click()}
-              disabled={uploadAttachmentsMutation.isPending || !discoveryId}
-              title={!discoveryId ? "Save discovery first" : undefined}
+              className="button button--primary"
+              onClick={() => saveDiscoveryMutation.mutate()}
+              disabled={isBusy}
             >
-              {uploadAttachmentsMutation.isPending ? "Uploading…" : "Upload files"}
+              {discoveryId
+                ? saveDiscoveryMutation.isPending ? "Saving…" : "Save discovery"
+                : saveDiscoveryMutation.isPending ? "Creating…" : "Create discovery"}
             </button>
-          )}
+          </div>
+        )}
+      </section>
 
-          <input
-            ref={attachmentInputRef}
-            type="file"
-            multiple
-            className="sr-only"
-            onChange={(event) => {
-              const files = event.target.files ? Array.from(event.target.files) : [];
-              if (files.length > 0) uploadAttachmentsMutation.mutate(files);
-              event.target.value = "";
-            }}
-          />
+      <section className="dashboard-panel bdo-card">
+        <div className="bdo-card_header">
+          <h2>Documents</h2>
+          <p>Logic flow document and any other supporting files.</p>
         </div>
 
         {uploadProgress !== null && (
@@ -509,7 +533,7 @@ function BdoInitiativeWorkspaceForm({
 
         <div className="bdo-upload-section">
           {attachments.length === 0 ? (
-            <p className="bdo-upload-empty">No attachments uploaded yet.</p>
+            <p className="bdo-upload-empty">No documents uploaded yet.</p>
           ) : (
             <ul className="bdo-upload-list">
               {attachments.map((attachment) => (
@@ -547,14 +571,44 @@ function BdoInitiativeWorkspaceForm({
             </ul>
           )}
         </div>
+
+        <input
+          ref={attachmentInputRef}
+          type="file"
+          multiple
+          className="sr-only"
+          onChange={(event) => {
+            const files = event.target.files ? Array.from(event.target.files) : [];
+            if (files.length > 0) uploadAttachmentsMutation.mutate(files);
+            event.target.value = "";
+          }}
+        />
+
+        {!isLocked && (
+          <div className="bdo-card_footer">
+            <p className="bdo-card_hint">
+              {discoveryId
+                ? "Accepted: any file type. Upload as many as you need."
+                : "Save the discovery document first."}
+            </p>
+
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => attachmentInputRef.current?.click()}
+              disabled={uploadAttachmentsMutation.isPending || !discoveryId}
+              title={!discoveryId ? "Save discovery first" : undefined}
+            >
+              {uploadAttachmentsMutation.isPending ? "Uploading…" : "Upload files"}
+            </button>
+          </div>
+        )}
       </section>
 
-      <section className="dashboard-panel initiative-detail-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <h2>Design links</h2>
-            <p>Links to design screens or other resources.</p>
-          </div>
+      <section className="dashboard-panel bdo-card">
+        <div className="bdo-card_header">
+          <h2>Design links</h2>
+          <p>Links to design screens or other resources.</p>
         </div>
 
         <div className="bdo-upload-section">
@@ -590,8 +644,8 @@ function BdoInitiativeWorkspaceForm({
         </div>
 
         {!isLocked && (
-          <div className="proposal-section">
-            <div className="form-field-row">
+          <div className="bdo-link-form">
+            <div className="bdo-fields-grid">
               <div className="form-field">
                 <label htmlFor="linkTitle">Title</label>
                 <input
@@ -613,47 +667,63 @@ function BdoInitiativeWorkspaceForm({
                   placeholder="https://…"
                 />
               </div>
+
+              <div className="form-field bdo-field--wide">
+                <label htmlFor="linkDescription">Description</label>
+                <input
+                  id="linkDescription"
+                  type="text"
+                  value={linkDescription}
+                  onChange={(event) => setLinkDescription(event.target.value)}
+                  placeholder="Briefly describe this link"
+                />
+              </div>
             </div>
 
-            <div className="form-field">
-              <label htmlFor="linkDescription">Description</label>
-              <input
-                id="linkDescription"
-                type="text"
-                value={linkDescription}
-                onChange={(event) => setLinkDescription(event.target.value)}
-                placeholder="Briefly describe this link"
-              />
-            </div>
+            <div className="bdo-card_footer">
+              <p className="bdo-card_hint">
+                {discoveryId
+                  ? "Add a link, then it appears in the list above."
+                  : "Save the discovery document first."}
+              </p>
 
-            <button
-              type="button"
-              className="button button--primary button--align-start"
-              onClick={() => addLinkMutation.mutate()}
-              disabled={
-                addLinkMutation.isPending || !linkTitle.trim() || !linkUrl.trim() || !discoveryId
-              }
-            >
-              {addLinkMutation.isPending ? "Submitting…" : "Submit link"}
-            </button>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => addLinkMutation.mutate()}
+                disabled={
+                  addLinkMutation.isPending || !linkTitle.trim() || !linkUrl.trim() || !discoveryId
+                }
+              >
+                {addLinkMutation.isPending ? "Submitting…" : "Submit link"}
+              </button>
+            </div>
           </div>
         )}
       </section>
 
       {!isLocked && (
-        <button
-          type="button"
-          className="button button--primary bdo-submit-footer"
-          onClick={() => submitMutation.mutate()}
-          disabled={!canSubmit || isBusy}
-          title={!canSubmit ? "Save discovery and upload both document types first" : undefined}
-        >
-          {submitMutation.isPending
-            ? "Submitting…"
-            : submissionStatus === "Rejected"
-              ? "Resubmit for approval"
-              : "Submit for approval"}
-        </button>
+        <div className="bdo-action-bar">
+          <p className="bdo-action-bar_hint">
+            {canSubmit
+              ? "Everything is in place. Submit when you're ready."
+              : `Still needed: ${missingSteps.join(", ")}.`}
+          </p>
+
+          <button
+            type="button"
+            className="button button--primary"
+            onClick={() => submitMutation.mutate()}
+            disabled={!canSubmit || isBusy}
+            title={!canSubmit ? "Save discovery and upload both document types first" : undefined}
+          >
+            {submitMutation.isPending
+              ? "Submitting…"
+              : submissionStatus === "Rejected"
+                ? "Resubmit for approval"
+                : "Submit for approval"}
+          </button>
+        </div>
       )}
     </div>
   );

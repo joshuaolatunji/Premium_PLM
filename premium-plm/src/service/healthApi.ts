@@ -8,7 +8,7 @@ export interface HealthResponse {
 }
 
 export function checkApiHealth() {
-    return apiClient<HealthResponse>("health", {
+    return apiClient<HealthResponse>("api/health", {
         method:"GET",
         cache: "no-store",
     });

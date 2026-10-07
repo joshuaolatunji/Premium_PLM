@@ -275,16 +275,18 @@ function MyWork() {
                           onClick={() =>
                             navigate(`/dashboard/initiatives/${initiative.id}/brd`)
                           }
-                          disabled={!bdoDocsApproved || (!brd.hasDraft && ticketCount === 0)}
+                          disabled={!bdoDocsApproved}
                           title={
                             !bdoDocsApproved
                               ? "Available once the BDO's documentation is approved"
-                              : !brd.hasDraft && ticketCount === 0
-                                ? "Create at least one ticket before starting the BRD"
-                                : undefined
+                              : undefined
                           }
                         >
-                          {brd.hasDraft ? "Continue BRD" : "Start BRD"}
+                          {brd.status === "Approved"
+                            ? "Open BRD"
+                            : brd.hasDraft
+                              ? "Continue BRD"
+                              : "Start BRD"}
                         </button>
                       </td>
                     </tr>

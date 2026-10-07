@@ -5,23 +5,30 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { getMyAssignedInitiatives } from "../../service/InitiativeService";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
 import { getCurrentUserId } from "../../apicalls/authStorage";
-import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
+import {
+  isAwaitingGroupHeadDecision,
+  priorityBadgeClass,
+  priorityLabel,
+} from "../../utils/initiativeStatus";
 
 // "NotStarted" is our own placeholder for "no discovery record exists
-// yet" (the real API has no concept of it). "Submitted" and "Rejected"
-// are confirmed live; "Approved" follows the same pattern but hasn't
-// been directly observed yet.
+// yet" (the real API has no concept of it). "Submitted", "Resubmitted",
+// and "Rejected" are confirmed live; "Approved" follows the same pattern
+// but hasn't been directly observed yet.
 const STATUS_LABEL: Record<string, string> = {
   NotStarted: "Not started",
   Submitted: "Submitted for approval",
+  Resubmitted: "Resubmitted for approval",
   Approved: "Approved",
   Rejected: "Rejected",
 };
 
 function statusBadgeClass(status: string) {
+  if (isAwaitingGroupHeadDecision(status)) {
+    return "status-badge status-badge--awaiting-gh-documentation-approval";
+  }
+
   switch (status) {
-    case "Submitted":
-      return "status-badge status-badge--awaiting-gh-documentation-approval";
     case "Approved":
       return "status-badge status-badge--approved";
     case "Rejected":
