@@ -30,7 +30,7 @@ function LoginLayout({children}: LoginLayoutProps) {
                         Authorised users only. All activity on this platform is
                         recorded and auditable.
                         <br />
-                        Technology Support &middot; ext. 4400
+                        <a href="mailto:digitalbankingteam@premiumtrustbank.com" className="text-white/55 hover:text-white">Technology Support &middot; Digital Banking</a>
                     </p>
                 </div>
             </section>
