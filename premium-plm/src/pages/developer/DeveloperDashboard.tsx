@@ -91,14 +91,14 @@ function DeveloperDashboard() {
                     <tr key={ticket.id}>
                       <td>
                         <div className="initiative-cell">
-                          <strong>{initiative?.projectName ?? "—"}</strong>
+                          <strong title={initiative?.projectName ?? "—"}>{initiative?.projectName ?? "—"}</strong>
                           <span>{ticket.initiativeId.slice(0, 8)}</span>
                         </div>
                       </td>
 
                       <td>
                         <div className="initiative-cell">
-                          <strong>{ticket.title}</strong>
+                          <strong title={ticket.title}>{ticket.title}</strong>
                           <span>{ticket.description}</span>
                         </div>
                       </td>
@@ -111,10 +111,18 @@ function DeveloperDashboard() {
                         </span>
                       </td>
 
-                      <td>
+                      <td className="brd-reviews-actions">
                         <button
                           type="button"
-                          className="table-action"
+                          className="table-action table-action--dark"
+                          onClick={() => navigate(`/dashboard/initiatives/${ticket.initiativeId}`)}
+                        >
+                          View initiative
+                        </button>
+
+                        <button
+                          type="button"
+                          className="table-action table-action--premium"
                           onClick={() =>
                             navigate(`/dashboard/developer/tickets/${ticket.id}`)
                           }

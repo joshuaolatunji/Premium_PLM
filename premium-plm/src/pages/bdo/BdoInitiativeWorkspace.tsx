@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Check, FileText, Link2 } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Check, FileText, Link2, Upload } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getInitiativeById } from "../../service/InitiativeService";
@@ -15,7 +15,7 @@ import {
   resubmitDiscovery,
   submitDiscovery,
   updateDiscovery,
-  uploadDiscoveryAttachments,
+  uploadAttachments,
 } from "../../service/ProductDiscoveryService";
 import { getAllUsers } from "../../service/UserService";
 import { ApiError } from "../../apicalls/apiClient";
@@ -24,6 +24,7 @@ import type { DiscoveryFormFields, ProductDiscovery } from "../../types/discover
 import { capitalize } from "../../utils/text";
 import { isAwaitingGroupHeadDecision } from "../../utils/initiativeStatus";
 import BdoSubmittedPanel from "../../components/bdo/BdoSubmittedPanel";
+import BackLink from "../../components/common/BackLink";
 
 function BdoInitiativeWorkspace() {
   const { initiativeId } = useParams<{ initiativeId: string }>();
@@ -52,10 +53,7 @@ function BdoInitiativeWorkspace() {
   if (initiativeQuery.isError || !initiativeQuery.data || !initiativeId) {
     return (
       <div className="dashboard-page">
-        <Link to="/dashboard/bdo" className="text-button">
-          <ArrowLeft size={15} />
-          Back to BDO workspace
-        </Link>
+        <BackLink fallbackTo="/dashboard/bdo" fallbackLabel="Back to BDO workspace" />
 
         <p className="initiatives-empty initiatives-empty--error initiative-detail-message">
           Couldn't load this initiative. It may not exist, or you may not
@@ -68,10 +66,7 @@ function BdoInitiativeWorkspace() {
   if (discoveryQuery.isError) {
     return (
       <div className="dashboard-page">
-        <Link to="/dashboard/bdo" className="text-button">
-          <ArrowLeft size={15} />
-          Back to BDO workspace
-        </Link>
+        <BackLink fallbackTo="/dashboard/bdo" fallbackLabel="Back to BDO workspace" />
 
         <p className="initiatives-empty initiatives-empty--error initiative-detail-message">
           Couldn't load the discovery document for this initiative. Try
@@ -132,6 +127,10 @@ function BdoInitiativeWorkspaceForm({
 
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  // Upload form: a file name (sent as each file's `label`) + the chosen
+  // file(s). Nothing uploads until both are set and Upload is clicked.
+  const [fileLabel, setFileLabel] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [linkDescription, setLinkDescription] = useState("");
@@ -224,11 +223,20 @@ function BdoInitiativeWorkspaceForm({
   });
 
   const uploadAttachmentsMutation = useMutation({
-    mutationFn: (files: File[]) =>
-      uploadDiscoveryAttachments(discoveryId as string, files, setUploadProgress),
+    // Every file in one upload shares the same file name, so the label is
+    // repeated once per file to keep the two arrays aligned.
+    mutationFn: ({ files, label }: { files: File[]; label: string }) =>
+      uploadAttachments(
+        { type: "ProductDiscovery", id: discoveryId as string },
+        files,
+        files.map(() => label),
+        setUploadProgress,
+      ),
     onSuccess: () => {
       setUploadProgress(null);
       setErrorMessage("");
+      setFileLabel("");
+      setSelectedFiles([]);
       queryClient.invalidateQueries({ queryKey: ["discovery-attachments", discoveryId] });
     },
     onError: (error) => {
@@ -356,10 +364,7 @@ function BdoInitiativeWorkspaceForm({
 
   return (
     <div className="dashboard-page bdo-workspace">
-      <Link to="/dashboard/bdo" className="text-button">
-        <ArrowLeft size={15} />
-        Back to BDO workspace
-      </Link>
+      <BackLink fallbackTo="/dashboard/bdo" fallbackLabel="Back to BDO workspace" />
 
       <header className="bdo-workspace-header">
         <div className="bdo-workspace-header_text">
@@ -404,7 +409,7 @@ function BdoInitiativeWorkspaceForm({
       {submissionStatus === "Approved" && (
         <p className="brd-status-message" role="status">
           Approved by {reviewerName(discoveryStatusQuery.data?.reviewedByUserId ?? null)}. The
-          Project Manager has been notified and can begin BRD preparation.
+          Product Manager has been notified and can begin BRD preparation.
         </p>
       )}
 
@@ -435,58 +440,30 @@ function BdoInitiativeWorkspaceForm({
         </div>
 
         <div className="bdo-fields-grid">
-          <div className="form-field">
-            <label htmlFor="businessLogic">Business logic</label>
+          {/* "Description" saves to the API's businessLogic field. Customer
+              journey, business process and assumptions are no longer asked
+              for; the API still accepts them, so they're simply left blank. */}
+          <div className="form-field bdo-field--wide">
+            <label htmlFor="businessLogic">Description</label>
             <textarea
+              placeholder=" "
               id="businessLogic"
-              rows={5}
+              rows={6}
               disabled={isLocked}
               value={form.businessLogic}
               onChange={(event) => updateField("businessLogic", event.target.value)}
             />
           </div>
 
-          <div className="form-field">
-            <label htmlFor="customerJourney">Customer journey</label>
-            <textarea
-              id="customerJourney"
-              rows={5}
-              disabled={isLocked}
-              value={form.customerJourney}
-              onChange={(event) => updateField("customerJourney", event.target.value)}
-            />
-          </div>
-
-          <div className="form-field">
+          <div className="form-field bdo-field--wide">
             <label htmlFor="userFlow">User flow</label>
             <textarea
+              placeholder=" "
               id="userFlow"
-              rows={5}
+              rows={6}
               disabled={isLocked}
               value={form.userFlow}
               onChange={(event) => updateField("userFlow", event.target.value)}
-            />
-          </div>
-
-          <div className="form-field">
-            <label htmlFor="businessProcess">Business process</label>
-            <textarea
-              id="businessProcess"
-              rows={5}
-              disabled={isLocked}
-              value={form.businessProcess}
-              onChange={(event) => updateField("businessProcess", event.target.value)}
-            />
-          </div>
-
-          <div className="form-field bdo-field--wide">
-            <label htmlFor="assumptions">Assumptions</label>
-            <textarea
-              id="assumptions"
-              rows={4}
-              disabled={isLocked}
-              value={form.assumptions}
-              onChange={(event) => updateField("assumptions", event.target.value)}
             />
           </div>
         </div>
@@ -537,70 +514,126 @@ function BdoInitiativeWorkspaceForm({
           ) : (
             <ul className="bdo-upload-list">
               {attachments.map((attachment) => (
-                <li key={attachment.id} className="bdo-upload-list_item">
-                  <span className="bdo-upload-list_icon">
-                    <FileText size={16} />
-                  </span>
+                // The BDO's own file name (`label`) is the file's name;
+                // the uploaded file's literal name is only a fallback.
+                <li key={attachment.id} className="bdo-upload-group">
+                  <div className="bdo-upload-group_row">
+                    <span className="bdo-upload-list_icon">
+                      <FileText size={16} />
+                    </span>
 
-                  <div className="bdo-upload-list_info">
-                    <span className="bdo-upload-list_name">{attachment.fileName}</span>
-                  </div>
+                    <div className="bdo-upload-list_info">
+                      <span className="bdo-upload-list_name">
+                        {attachment.label ?? attachment.fileName}
+                      </span>
+                    </div>
 
-                  <button
-                    type="button"
-                    className="bdo-upload-list_open"
-                    onClick={() => handleOpenAttachment(attachment.id)}
-                    disabled={openAttachmentMutation.isPending}
-                  >
-                    Open
-                  </button>
-
-                  {!isLocked && (
                     <button
                       type="button"
-                      className="bdo-upload-list_remove"
-                      onClick={() => removeAttachmentMutation.mutate(attachment.id)}
-                      disabled={removeAttachmentMutation.isPending}
-                      aria-label={`Remove ${attachment.fileName}`}
+                      className="bdo-upload-list_open"
+                      onClick={() => handleOpenAttachment(attachment.id)}
+                      disabled={openAttachmentMutation.isPending}
                     >
-                      ×
+                      Open
                     </button>
-                  )}
+
+                    {!isLocked && (
+                      <button
+                        type="button"
+                        className="bdo-upload-list_remove"
+                        onClick={() => removeAttachmentMutation.mutate(attachment.id)}
+                        disabled={removeAttachmentMutation.isPending}
+                        aria-label={`Remove ${attachment.label ?? attachment.fileName}`}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
           )}
         </div>
 
-        <input
-          ref={attachmentInputRef}
-          type="file"
-          multiple
-          className="sr-only"
-          onChange={(event) => {
-            const files = event.target.files ? Array.from(event.target.files) : [];
-            if (files.length > 0) uploadAttachmentsMutation.mutate(files);
-            event.target.value = "";
-          }}
-        />
-
         {!isLocked && (
-          <div className="bdo-card_footer">
-            <p className="bdo-card_hint">
-              {discoveryId
-                ? "Accepted: any file type. Upload as many as you need."
-                : "Save the discovery document first."}
-            </p>
+          <div className="bdo-link-form">
+            <div className="bdo-fields-grid">
+              <div className="form-field">
+                <label htmlFor="attachmentFileLabel">File name</label>
+                <input
+                  id="attachmentFileLabel"
+                  type="text"
+                  value={fileLabel}
+                  onChange={(event) => setFileLabel(event.target.value)}
+                  placeholder="e.g. Logic flow document"
+                  disabled={!discoveryId || uploadAttachmentsMutation.isPending}
+                />
+              </div>
 
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => attachmentInputRef.current?.click()}
-              disabled={uploadAttachmentsMutation.isPending || !discoveryId}
-              title={!discoveryId ? "Save discovery first" : undefined}
-            >
-              {uploadAttachmentsMutation.isPending ? "Uploading…" : "Upload files"}
-            </button>
+              <div className="form-field">
+                <label htmlFor="attachmentFiles">File</label>
+                {/* The native file input is visually hidden (it can't be
+                    styled consistently across browsers); this button opens
+                    it, and the text beside it shows what's been picked. */}
+                <input
+                  id="attachmentFiles"
+                  ref={attachmentInputRef}
+                  type="file"
+                  multiple
+                  className="sr-only"
+                  onChange={(event) => {
+                    setSelectedFiles(event.target.files ? Array.from(event.target.files) : []);
+                    event.target.value = "";
+                  }}
+                />
+                <div className="bdo-file-picker">
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => attachmentInputRef.current?.click()}
+                    disabled={!discoveryId || uploadAttachmentsMutation.isPending}
+                  >
+                    Choose file
+                  </button>
+                  <span className="bdo-file-picker_name">
+                    {selectedFiles.length === 0
+                      ? "No file chosen"
+                      : selectedFiles.length === 1
+                        ? selectedFiles[0].name
+                        : `${selectedFiles.length} files selected`}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bdo-card_footer">
+              <p className="bdo-card_hint">
+                {discoveryId
+                  ? "Name the file, choose it, then upload. Any file type."
+                  : "Save the discovery document first."}
+              </p>
+
+              <button
+                type="button"
+                className="button button--accent"
+                onClick={() =>
+                  uploadAttachmentsMutation.mutate({
+                    files: selectedFiles,
+                    label: fileLabel.trim(),
+                  })
+                }
+                disabled={
+                  uploadAttachmentsMutation.isPending ||
+                  !discoveryId ||
+                  !fileLabel.trim() ||
+                  selectedFiles.length === 0
+                }
+                title={!discoveryId ? "Save discovery first" : undefined}
+              >
+                <Upload size={17} aria-hidden="true" />
+                {uploadAttachmentsMutation.isPending ? "Uploading…" : "Upload"}
+              </button>
+            </div>
           </div>
         )}
       </section>
@@ -689,12 +722,13 @@ function BdoInitiativeWorkspaceForm({
 
               <button
                 type="button"
-                className="button button--secondary"
+                className="button button--accent"
                 onClick={() => addLinkMutation.mutate()}
                 disabled={
                   addLinkMutation.isPending || !linkTitle.trim() || !linkUrl.trim() || !discoveryId
                 }
               >
+                <Link2 size={17} aria-hidden="true" />
                 {addLinkMutation.isPending ? "Submitting…" : "Submit link"}
               </button>
             </div>

@@ -159,6 +159,7 @@ function AdminCategories() {
             <div className="form-field">
               <label htmlFor="categoryName">Name</label>
               <input
+                placeholder=" "
                 id="categoryName"
                 type="text"
                 value={createName}
@@ -169,6 +170,7 @@ function AdminCategories() {
             <div className="form-field">
               <label htmlFor="categoryDescription">Description</label>
               <textarea
+                placeholder=" "
                 id="categoryDescription"
                 rows={2}
                 value={createDescription}
@@ -236,6 +238,7 @@ function AdminCategories() {
                     <tr key={category.id}>
                       <td>
                         <input
+                          placeholder=" "
                           type="text"
                           value={editName}
                           onChange={(event) => setEditName(event.target.value)}
@@ -244,6 +247,7 @@ function AdminCategories() {
 
                       <td>
                         <input
+                          placeholder=" "
                           type="text"
                           value={editDescription}
                           onChange={(event) => setEditDescription(event.target.value)}
@@ -262,7 +266,7 @@ function AdminCategories() {
 
                         <button
                           type="button"
-                          className="table-action"
+                          className="table-action table-action--premium"
                           onClick={handleSaveEdit}
                           disabled={updateMutation.isPending}
                         >
@@ -281,7 +285,7 @@ function AdminCategories() {
                       <td className="brd-reviews-actions">
                         <button
                           type="button"
-                          className="table-action"
+                          className="table-action table-action--dark"
                           onClick={() => startEditing(category)}
                         >
                           Edit
@@ -289,7 +293,7 @@ function AdminCategories() {
 
                         <button
                           type="button"
-                          className="table-action"
+                          className="table-action table-action--premium"
                           onClick={() => deactivateMutation.mutate(category.id)}
                           disabled={
                             deactivateMutation.isPending &&

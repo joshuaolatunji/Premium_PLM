@@ -116,6 +116,7 @@ function Profile() {
           <div className="form-field">
             <label htmlFor="currentPassword">Current password</label>
             <input
+              placeholder=" "
               id="currentPassword"
               type="password"
               value={currentPassword}
@@ -127,6 +128,7 @@ function Profile() {
             <div className="form-field">
               <label htmlFor="newPassword">New password</label>
               <input
+                placeholder=" "
                 id="newPassword"
                 type="password"
                 maxLength={15}
@@ -138,6 +140,7 @@ function Profile() {
             <div className="form-field">
               <label htmlFor="confirmPassword">Confirm new password</label>
               <input
+                placeholder=" "
                 id="confirmPassword"
                 type="password"
                 maxLength={15}

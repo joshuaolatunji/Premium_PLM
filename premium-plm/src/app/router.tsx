@@ -3,18 +3,17 @@ import Login from "../pages/auth/Login";
 import DashboardIndex from "../pages/dashboard/DashboardIndex";
 import Initiatives from "../pages/initiatives/Initiatives";
 import InitiativeDetail from "../pages/initiatives/InitiativeDetail";
+import CreateInitiative from "../pages/initiatives/CreateInitiative";
 import Priorities from "../pages/priorities/Priorities";
 import MyWork from "../pages/pm/MyWork";
-import BrdHub from "../pages/pm/BrdHub";
-import BrdEditor from "../pages/pm/BrdEditor";
 import TicketsPage from "../pages/pm/TicketsPage";
 import MyTickets from "../pages/pm/MyTickets";
-import BrdReviews from "../pages/reviews/BrdReviews";
-import BrdReview from "../pages/reviews/BrdReview";
 import BdoDocReviews from "../pages/reviews/BdoDocReviews";
 import BdoDocReview from "../pages/reviews/BdoDocReview";
-import BdoBrdReviews from "../pages/reviews/BdoBrdReviews";
-import BdoBrdReview from "../pages/reviews/BdoBrdReview";
+import DocumentHub from "../pages/documents/DocumentHub";
+import DocumentEditor from "../pages/documents/DocumentEditor";
+import DocumentReviews from "../pages/documents/DocumentReviews";
+import DocumentReview from "../pages/documents/DocumentReview";
 import Notifications from "../pages/notifications/Notifications";
 import BdoDashboard from "../pages/bdo/BdoDashboard";
 import BdoInitiativeWorkspace from "../pages/bdo/BdoInitiativeWorkspace";
@@ -56,6 +55,11 @@ const router = createBrowserRouter([
                 element: <Initiatives />,
             },
             {
+                // Static "new" segment outranks the ":id" route below.
+                path: "initiatives/new",
+                element: <CreateInitiative />,
+            },
+            {
                 path: "initiatives/:id",
                 element: <InitiativeDetail />,
             },
@@ -68,28 +72,12 @@ const router = createBrowserRouter([
                 element: <MyWork />,
             },
             {
-                path: "brds",
-                element: <BrdHub />,
-            },
-            {
                 path: "my-tickets",
                 element: <MyTickets />,
             },
             {
-                path: "initiatives/:id/brd",
-                element: <BrdEditor />,
-            },
-            {
                 path: "initiatives/:id/tickets",
                 element: <TicketsPage />,
-            },
-            {
-                path: "brd-reviews",
-                element: <BrdReviews />,
-            },
-            {
-                path: "brd-reviews/:id",
-                element: <BrdReview />,
             },
             {
                 path: "bdo-reviews",
@@ -99,13 +87,43 @@ const router = createBrowserRouter([
                 path: "bdo-reviews/:id",
                 element: <BdoDocReview />,
             },
+            // PID / FRD / BRD / SWR — one set of pages for all four.
             {
-                path: "bdo-brd-reviews",
-                element: <BdoBrdReviews />,
+                path: "documents/:docType",
+                element: <DocumentHub />,
             },
             {
-                path: "bdo-brd-reviews/:id",
-                element: <BdoBrdReview />,
+                path: "initiatives/:id/documents/:docType",
+                element: <DocumentEditor />,
+            },
+            {
+                path: "document-reviews/:docType",
+                element: <DocumentReviews reviewer="GroupHead" />,
+            },
+            {
+                path: "document-reviews/:docType/:id",
+                element: <DocumentReview reviewer="GroupHead" />,
+            },
+            {
+                path: "bdo-document-reviews/:docType",
+                element: <DocumentReviews reviewer="BDO" />,
+            },
+            {
+                path: "bdo-document-reviews/:docType/:id",
+                element: <DocumentReview reviewer="BDO" />,
+            },
+            // Old BRD addresses (bookmarks) → the new BRD pages.
+            {
+                path: "brds",
+                element: <Navigate to="/dashboard/documents/brd" replace />,
+            },
+            {
+                path: "brd-reviews",
+                element: <Navigate to="/dashboard/document-reviews/brd" replace />,
+            },
+            {
+                path: "bdo-brd-reviews",
+                element: <Navigate to="/dashboard/bdo-document-reviews/brd" replace />,
             },
             {
                 path: "notifications",

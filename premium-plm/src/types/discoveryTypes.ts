@@ -49,6 +49,11 @@ export interface DiscoverySubmitResult {
 export interface DiscoveryAttachment {
   id: string;
   fileName: string;
+  // The "file name" the BDO gives a file at upload (multipart `labels`).
+  label: string | null;
+  // Who uploaded it — used to tell the PM's BRD documents apart from the
+  // BDO's own files while `label` is missing from get-attachments.
+  uploadedByUserId: string | null;
   url: string | null;
 }
 

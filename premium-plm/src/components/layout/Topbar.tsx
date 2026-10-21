@@ -3,6 +3,7 @@ import {Bell, Menu, Search} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import UserAvatar from "../ui/UserAvatar";
+import ThemeToggle from "../common/ThemeToggle";
 import { getStoredUser } from "../../apicalls/authStorage";
 import { capitalize, formatRoleName } from "../../utils/text";
 import { getUnreadCount } from "../../service/NotificationService";
@@ -73,6 +74,8 @@ function Topbar({ onMenuClick }: TopbarProps) {
                     aria-label="Search initiatives" />
 
                 </form>
+
+                <ThemeToggle className="topbar_theme-toggle" />
 
                 <button
                     className="topbar_notification"

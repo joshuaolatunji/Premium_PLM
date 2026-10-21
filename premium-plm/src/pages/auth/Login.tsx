@@ -76,7 +76,7 @@ function Login() {
                 setErrorMessage(error.message);
             } else {
                 setErrorMessage(
-                    "Unable to connect to the server. Please try again.",
+                    "Unable to connect to sign in. Please try again.",
                 );
             }
         } finally {
@@ -102,19 +102,13 @@ function Login() {
                             value={emailAddress}
                             onChange={(event) => setEmailAddress(event.target.value)}
                             id="email"
-                            placeholder="name@premiumtrustbank.com"
+                            placeholder="firstname.lastname@premiumtrustbank.com"
                             required
                         />
                     </div>
 
                     <div className="form-field">
-                        <div className="form-field_label-row">
-                            <label htmlFor="password">Password</label>
-
-                            <button type="button" className="forgot-password">
-                                Forgot password?
-                            </button>
-                        </div>
+                        <label htmlFor="password">Password</label>
 
                         <div className="password-input">
                             <input
@@ -167,10 +161,10 @@ function Login() {
 
                 </form>
 
-                <p className="login-form_note">
+                {/* <p className="login-form_note">
                     Access is granted by role. If your role or department has
                     changed, contact the Premium PLM administrator.
-                </p>
+                </p> */}
             </div>
         </LoginLayout>
     );

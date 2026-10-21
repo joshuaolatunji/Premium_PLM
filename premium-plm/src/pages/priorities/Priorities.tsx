@@ -4,12 +4,12 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 
 import { getProductInitiatives, updateInitiativePriority } from "../../service/InitiativeService";
 import { getAllUsers } from "../../service/UserService";
-import { getProposalByInitiativeId } from "../../service/ProposalService";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
 import { ApiError } from "../../apicalls/apiClient";
 import { INITIATIVE_PRIORITIES } from "../../types/initiativeTypes";
 import type { ProductInitiative } from "../../types/initiativeTypes";
 import { currentStageFor, deriveStatus, stageBadgeClass } from "../../utils/initiativeStatus";
+import { useInitiativeDocuments } from "../../utils/documentStatus";
 import { capitalize } from "../../utils/text";
 
 interface PendingMove {
@@ -89,17 +89,11 @@ function Priorities() {
     initiativesRef.current = initiatives;
   }, [initiatives]);
 
-  // One proposal + one discovery lookup per initiative, run in parallel —
+  // One documents + one discovery lookup per initiative, run in parallel —
   // same N+1 pattern already used for the full org-wide list on the
   // Dashboard, Audit Trail, and Initiatives pages. Needed so each card's
   // stage badge matches the same "current stage" shown everywhere else.
-  const proposalQueries = useQueries({
-    queries: initiatives.map((initiative) => ({
-      queryKey: ["product-proposal", initiative.id],
-      queryFn: () => getProposalByInitiativeId(initiative.id),
-      enabled: Boolean(initiative.id),
-    })),
-  });
+  const documents = useInitiativeDocuments(initiatives.map((initiative) => initiative.id));
 
   const discoveryQueries = useQueries({
     queries: initiatives.map((initiative) => ({
@@ -114,12 +108,11 @@ function Priorities() {
 
     initiatives.forEach((initiative, index) => {
       const bdoSubmissionStatus = discoveryQueries[index]?.data?.status ?? "NotStarted";
-      const proposal = proposalQueries[index]?.data ?? null;
-      map.set(initiative.id, currentStageFor(bdoSubmissionStatus, proposal));
+      map.set(initiative.id, currentStageFor(bdoSubmissionStatus, documents.documentsFor(index)));
     });
 
     return map;
-  }, [initiatives, proposalQueries, discoveryQueries]);
+  }, [initiatives, documents, discoveryQueries]);
 
   // Grouped by priority tier, most urgent (soonest deadline) first within
   // each tier. There's no separate rank field in the API to persist a
@@ -349,14 +342,14 @@ function Priorities() {
       )}
 
       {(initiativesQuery.isLoading ||
-        proposalQueries.some((query) => query.isLoading) ||
+        documents.isLoading ||
         discoveryQueries.some((query) => query.isLoading)) && (
         <p className="initiatives-empty">Loading initiatives…</p>
       )}
 
       {!initiativesQuery.isLoading &&
         (initiativesQuery.isError ||
-          proposalQueries.some((query) => query.isError) ||
+          documents.isError ||
           discoveryQueries.some((query) => query.isError)) && (
           <p className="initiatives-empty initiatives-empty--error">
             Couldn't load initiatives. Try refreshing the page.
@@ -365,7 +358,8 @@ function Priorities() {
 
       {!initiativesQuery.isLoading &&
         !initiativesQuery.isError &&
-        !proposalQueries.some((query) => query.isLoading || query.isError) &&
+        !documents.isLoading &&
+        !documents.isError &&
         !discoveryQueries.some((query) => query.isLoading || query.isError) && (
         <div className="priorities-board">
           {INITIATIVE_PRIORITIES.map((priority, index) => {

@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { useParams } from "react-router-dom";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getInitiativeById } from "../../service/InitiativeService";
-import { getProposalByInitiativeId } from "../../service/ProposalService";
+import { getInitiativeDocuments } from "../../service/DocumentService";
+import { documentsQueryKey } from "../../utils/documentStatus";
 import { getAllUsers } from "../../service/UserService";
 import {
   allocateTicketTimeline,
@@ -14,7 +15,9 @@ import {
 import { getCurrentUserId, getStoredUser } from "../../apicalls/authStorage";
 import { ticketStatusBadgeClass, ticketStatusLabel } from "../../utils/ticketStatus";
 import { capitalize } from "../../utils/text";
+import { activeUsersWithRole } from "../../utils/userStatus";
 import { resolvePrimaryRole } from "../../utils/roleRouting";
+import BackLink from "../../components/common/BackLink";
 
 function TicketsPage() {
   const { id } = useParams<{ id: string }>();
@@ -45,9 +48,9 @@ function TicketsPage() {
     enabled: Boolean(id),
   });
 
-  const proposalQuery = useQuery({
-    queryKey: ["product-proposal", id],
-    queryFn: () => getProposalByInitiativeId(id as string),
+  const documentsQuery = useQuery({
+    queryKey: documentsQueryKey(id),
+    queryFn: () => getInitiativeDocuments(id as string),
     enabled: Boolean(id),
   });
 
@@ -56,9 +59,8 @@ function TicketsPage() {
     queryFn: getAllUsers,
   });
 
-  const leadEngineers = (usersQuery.data ?? []).filter((user) =>
-    user.role.includes("LeadEngineer"),
-  );
+  // Only active accounts can be assigned — deactivated users are left out.
+  const leadEngineers = activeUsersWithRole(usersQuery.data, "LeadEngineer");
 
   function userName(userId: string) {
     return capitalize(
@@ -135,10 +137,7 @@ function TicketsPage() {
   if (initiativeQuery.isError || !initiativeQuery.data || !id) {
     return (
       <div className="dashboard-page">
-        <Link to="/dashboard/my-work" className="text-button">
-          <ArrowLeft size={15} />
-          Back to my work
-        </Link>
+        <BackLink fallbackTo="/dashboard/my-work" fallbackLabel="Back to my work" />
 
         <p className="initiatives-empty initiatives-empty--error initiative-detail-message">
           Couldn't load this initiative. It may not exist, or you may not
@@ -150,14 +149,11 @@ function TicketsPage() {
 
   const initiative = initiativeQuery.data;
   const tickets = ticketsQuery.data ?? [];
-  const isBrdApproved = proposalQuery.data?.status === "Approved";
+  const isBrdApproved = documentsQuery.data?.BRD?.status === "Approved";
 
   return (
     <div className="dashboard-page">
-      <Link to={`/dashboard/initiatives/${id}`} className="text-button">
-        <ArrowLeft size={15} />
-        Back to {initiative.projectName}
-      </Link>
+      <BackLink fallbackTo={`/dashboard/initiatives/${id}`} fallbackLabel={`Back to ${initiative.projectName}`} />
 
       <header className="dashboard-header initiative-detail-header">
         <div className="dashboard-header__content">
@@ -169,7 +165,7 @@ function TicketsPage() {
 
           <p className="dashboard-subtitle">
             {canManage
-              ? "Create and assign tickets to a Lead Engineer before starting the BRD."
+              ? "Create and assign tickets to a Lead Engineer before starting the documentation."
               : "Tickets for this initiative and their progress."}
           </p>
         </div>
@@ -317,7 +313,7 @@ function TicketsPage() {
                   <tr key={ticket.id}>
                     <td>
                       <div className="initiative-cell">
-                        <strong>{ticket.title}</strong>
+                        <strong title={ticket.title}>{ticket.title}</strong>
                         <span>{ticket.description}</span>
                       </div>
                     </td>
@@ -334,6 +330,7 @@ function TicketsPage() {
                       {isBrdApproved && canManage ? (
                         <div className="ticket-timeline-cell">
                           <input
+                            placeholder=" "
                             type="number" onFocus={(event) => event.target.select()}
                             min={0}
                             className="ticket-timeline-input"
@@ -351,7 +348,7 @@ function TicketsPage() {
 
                           <button
                             type="button"
-                            className="table-action"
+                            className="table-action table-action--premium"
                             onClick={() => saveTimeline(ticket.id)}
                             disabled={
                               timelineMutation.isPending &&

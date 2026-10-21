@@ -5,39 +5,39 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import DashboardHeader from "../../dashboardcomponents/DashboardHeader";
 import DashboardStatCard from "../../dashboardcomponents/DashboardStatCard";
 import PortfolioOverview from "../../dashboardcomponents/PortfolioOverview";
-import BRDApprovalQueue from "../../dashboardcomponents/BRDApprovalQueue";
+import ApprovalQueue from "../../dashboardcomponents/ApprovalQueue";
 import PriorityDistribution from "../../dashboardcomponents/PriorityDistribution";
 import AtRiskInitiatives from "../../dashboardcomponents/AtRiskInitiatives";
 import RecentGovernanceActivity from "../../dashboardcomponents/RecentGovernanceActivity";
-import CreateInitiativeModal from "../../dashboardcomponents/CreateInitiativeModal";
 
 import { getProductInitiatives } from "../../service/InitiativeService";
-import { getProposalByInitiativeId } from "../../service/ProposalService";
 import { getAllUsers } from "../../service/UserService";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
 import {
   currentStageFor,
+  currentStageOwnerId,
   deriveStatus,
   isAwaitingGroupHeadDecision,
-  isBrdAwaitingGroupHeadDecision,
   priorityLabel,
+  timelineElapsedPercent,
 } from "../../utils/initiativeStatus";
-import { capitalize } from "../../utils/text";
+import { capitalize, formatRoleName } from "../../utils/text";
 import { INITIATIVE_PRIORITIES } from "../../types/initiativeTypes";
+import { DOCUMENT_TYPES } from "../../types/documentTypes";
+import type { DocumentType } from "../../types/documentTypes";
+import { daysSince, useInitiativeDocuments } from "../../utils/documentStatus";
+import { documentReviewPath } from "../../utils/documentRoutes";
 
 import type { DerivedStatus } from "../../utils/initiativeStatus";
-import type { ProductProposal } from "../../types/proposalTypes";
 import type {
+  ApprovalQueueItem,
   AtRiskInitiative,
-  BRDQueueItem,
   DashboardStat,
   GovernanceActivity,
   InitiativeStatus,
   PortfolioInitiative,
   PriorityDistributionItem,
 } from "../../types/dashboardTypes";
-
-const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 const DERIVED_TO_LABEL: Record<DerivedStatus, InitiativeStatus> = {
   "not-started": "Not Started",
@@ -62,14 +62,13 @@ function formatShortDate(value: string): string {
 
 type StatFilterKey =
   | "active"
-  | "brds-awaiting"
   | "bdo-docs-awaiting"
+  | `${DocumentType}-awaiting`
   | "on-track"
   | "at-risk"
   | "overdue";
 
 function Dashboard() {
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [statFilter, setStatFilter] = useState<StatFilterKey | null>(null);
   const navigate = useNavigate();
 
@@ -85,13 +84,8 @@ function Dashboard() {
 
   const initiatives = initiativesQuery.data ?? [];
 
-  const proposalQueries = useQueries({
-    queries: initiatives.map((initiative) => ({
-      queryKey: ["product-proposal", initiative.id],
-      queryFn: () => getProposalByInitiativeId(initiative.id),
-      enabled: Boolean(initiative.id),
-    })),
-  });
+  // PID / FRD / BRD / SWR for every initiative (mock — see DocumentService).
+  const documents = useInitiativeDocuments(initiatives.map((initiative) => initiative.id));
 
   // Backs the "BDO Docs Awaiting Review" stat card below.
   const discoveryQueries = useQueries({
@@ -105,13 +99,13 @@ function Dashboard() {
   const isLoading =
     initiativesQuery.isLoading ||
     usersQuery.isLoading ||
-    proposalQueries.some((query) => query.isLoading) ||
+    documents.isLoading ||
     discoveryQueries.some((query) => query.isLoading);
 
   const hasError =
     initiativesQuery.isError ||
     usersQuery.isError ||
-    proposalQueries.some((query) => query.isError) ||
+    documents.isError ||
     discoveryQueries.some((query) => query.isError);
 
   function userName(userId: string | null) {
@@ -125,20 +119,18 @@ function Dashboard() {
   }
 
   function userRole(userId: string) {
-    return usersQuery.data?.find((user) => user.userId === userId)?.role.join(", ") ?? "";
+    return usersQuery.data?.find((user) => user.userId === userId)?.role.map(formatRoleName).join(", ") ?? "";
   }
 
   if (isLoading || hasError) {
     return (
       <div className="dashboard-page">
         <DashboardHeader
-          onOpenCreateInitiative={() => setIsCreateOpen(true)}
-          overSlaBrdCount={0}
+          onOpenCreateInitiative={() =>
+          navigate("/dashboard/initiatives/new", { state: { from: "/dashboard" } })
+        }
+          overSlaApprovalCount={0}
         />
-
-        {isCreateOpen && (
-          <CreateInitiativeModal onClose={() => setIsCreateOpen(false)} />
-        )}
 
         {isLoading && <p className="initiatives-empty">Loading dashboard…</p>}
 
@@ -160,9 +152,8 @@ function Dashboard() {
       initiative,
       status,
       daysLeft,
-      proposal: proposalQueries[index]?.data ?? null,
-      bdoId: initiative.bdoId,
-      pmId: initiative.projectManagerId,
+      documents: documents.documentsFor(index),
+      discovery: discoveryQueries[index]?.data ?? null,
       bdoSubmissionStatus: discoveryQueries[index]?.data?.status ?? "NotStarted",
     };
   });
@@ -177,21 +168,58 @@ function Dashboard() {
     );
   }).length;
 
-  // Excludes "Rejected" (inferred, same convention as "Draft"/"Approved")
-  // — once the Group Head rejects a BRD, it goes back to the PM to revise
-  // and shouldn't still count as awaiting a decision.
-  const awaitingReview = rows.filter(
-    (row): row is typeof row & { proposal: ProductProposal } =>
-      Boolean(row.proposal) && isBrdAwaitingGroupHeadDecision(row.proposal!.status),
-  );
+  // Everything waiting on the Group Head's decision: BDO documentation and
+  // any PID / FRD / BRD / SWR the BDO has forwarded. Appears here as soon as
+  // it reaches the Group Head.
+  const approvalQueue: ApprovalQueueItem[] = rows
+    .flatMap(({ initiative, documents: initiativeDocuments, discovery, bdoSubmissionStatus }) => {
+      const base = {
+        initiativeId: initiative.id,
+        initiative: initiative.projectName,
+        priority: priorityLabel(initiative.priority),
+        priorityValue: initiative.priority,
+      };
+      const items: ApprovalQueueItem[] = [];
 
-  const overSlaCount = awaitingReview.filter(
-    ({ proposal }) => (now - new Date(proposal.creationDate).getTime()) / MS_PER_DAY > 3,
-  ).length;
+      if (isAwaitingGroupHeadDecision(bdoSubmissionStatus)) {
+        items.push({
+          ...base,
+          key: `${initiative.id}-bdo`,
+          documentLabel: "BDO Docs",
+          submittedBy: userName(initiative.bdoId),
+          submittedDate: discovery?.updatedAt ? formatShortDate(discovery.updatedAt) : "—",
+          daysWaiting: daysSince(discovery?.updatedAt, now),
+          reviewPath: `/dashboard/bdo-reviews/${initiative.id}`,
+        });
+      }
 
-  const bdoDocsAwaitingReviewCount = rows.filter(
-    (row) => isAwaitingGroupHeadDecision(row.bdoSubmissionStatus),
-  ).length;
+      DOCUMENT_TYPES.forEach((type) => {
+        const document = initiativeDocuments[type];
+
+        if (document?.status === "PendingGroupHeadReview") {
+          items.push({
+            ...base,
+            key: `${initiative.id}-${type}`,
+            documentLabel: type,
+            submittedBy: userName(initiative.projectManagerId),
+            submittedDate: document.submittedAt ? formatShortDate(document.submittedAt) : "—",
+            daysWaiting: daysSince(document.submittedAt, now),
+            reviewPath: documentReviewPath("GroupHead", type, initiative.id),
+          });
+        }
+      });
+
+      return items;
+    })
+    .sort((a, b) => b.daysWaiting - a.daysWaiting);
+
+  const overSlaCount = approvalQueue.filter((item) => item.daysWaiting > 3).length;
+
+  function awaitingItems(label: string) {
+    return approvalQueue.filter((item) => item.documentLabel === label);
+  }
+
+  const bdoDocsAwaiting = awaitingItems("BDO Docs");
 
   const onTrackCount = rows.filter((row) => row.status === "on-track").length;
   const atRiskCount = rows.filter((row) => row.status === "at-risk").length;
@@ -212,24 +240,31 @@ function Dashboard() {
       },
     },
     {
-      key: "brds-awaiting",
-      stat: {
-        label: "BRDs Awaiting Review",
-        value: awaitingReview.length,
-        description:
-          overSlaCount > 0 ? `${overSlaCount} over 3 days waiting` : "None over 3 days",
-        descriptionType: overSlaCount > 0 ? "danger" : "neutral",
-      },
-    },
-    {
       key: "bdo-docs-awaiting",
       stat: {
         label: "BDO Docs Awaiting Review",
-        value: bdoDocsAwaitingReviewCount,
-        description: bdoDocsAwaitingReviewCount > 0 ? "Needs your decision" : "All caught up",
-        descriptionType: bdoDocsAwaitingReviewCount > 0 ? "warning" : "neutral",
+        value: bdoDocsAwaiting.length,
+        description: bdoDocsAwaiting.length > 0 ? "Needs your decision" : "All caught up",
+        descriptionType: bdoDocsAwaiting.length > 0 ? "warning" : "neutral",
       },
     },
+    ...DOCUMENT_TYPES.map((type) => {
+      const waiting = awaitingItems(type);
+      const overSla = waiting.filter((item) => item.daysWaiting > 3).length;
+      const stat: DashboardStat = {
+        label: `${type}s Awaiting Review`,
+        value: waiting.length,
+        description:
+          overSla > 0
+            ? `${overSla} over 3 days waiting`
+            : waiting.length > 0
+              ? "Needs your decision"
+              : "All caught up",
+        descriptionType: overSla > 0 ? "danger" : waiting.length > 0 ? "warning" : "neutral",
+      };
+
+      return { key: `${type}-awaiting` as StatFilterKey, stat };
+    }),
     {
       key: "on-track",
       stat: {
@@ -261,10 +296,13 @@ function Dashboard() {
 
   function matchesStatFilter(row: (typeof rows)[number]): boolean {
     switch (statFilter) {
-      case "brds-awaiting":
-        return Boolean(row.proposal) && awaitingReview.some((r) => r.initiative.id === row.initiative.id);
       case "bdo-docs-awaiting":
         return isAwaitingGroupHeadDecision(row.bdoSubmissionStatus);
+      case "PID-awaiting":
+      case "FRD-awaiting":
+      case "BRD-awaiting":
+      case "SWR-awaiting":
+        return row.documents[statFilter.split("-")[0] as DocumentType]?.status === "PendingGroupHeadReview";
       case "on-track":
         return row.status === "on-track";
       case "at-risk":
@@ -289,24 +327,10 @@ function Dashboard() {
   // behind that cap.
   const portfolioInitiatives: PortfolioInitiative[] = (
     statFilter ? sortedFilteredRows : sortedFilteredRows.slice(0, 8)
-  ).map(({ initiative, status, daysLeft, proposal, bdoId, bdoSubmissionStatus }) => {
-      const elapsedPct =
-        initiative.timelineStartedAt && initiative.currentDeadline
-          ? Math.min(
-              100,
-              Math.max(
-                0,
-                Math.round(
-                  ((now - new Date(initiative.timelineStartedAt).getTime()) /
-                    (new Date(initiative.currentDeadline).getTime() -
-                      new Date(initiative.timelineStartedAt).getTime())) *
-                    100,
-                ),
-              ),
-            )
-          : null;
+  ).map(({ initiative, status, daysLeft, documents: initiativeDocuments, bdoSubmissionStatus }) => {
+      const elapsedPct = timelineElapsedPercent(initiative);
 
-      const needsReview = isBrdAwaitingGroupHeadDecision(proposal?.status);
+      const needsReview = approvalQueue.some((item) => item.initiativeId === initiative.id);
 
       return {
         id: initiative.id,
@@ -315,30 +339,14 @@ function Dashboard() {
         createdOn: formatShortDate(initiative.createdAt),
         priority: priorityLabel(initiative.priority),
         priorityValue: initiative.priority,
-        currentStage: currentStageFor(bdoSubmissionStatus, proposal),
-        owner: userName(bdoId),
+        currentStage: currentStageFor(bdoSubmissionStatus, initiativeDocuments),
+        owner: userName(currentStageOwnerId(bdoSubmissionStatus, initiativeDocuments, initiative)),
         progress: elapsedPct,
         daysLeft,
         status: DERIVED_TO_LABEL[status],
         action: needsReview ? "Review" : "Open",
       };
     });
-
-  const brdApprovalQueue: BRDQueueItem[] = awaitingReview
-    .map(({ initiative, proposal, pmId }) => ({
-      id: initiative.id,
-      initiative: initiative.projectName,
-      priority: priorityLabel(initiative.priority),
-      priorityValue: initiative.priority,
-      owner: userName(pmId),
-      submittedDate: formatShortDate(proposal.creationDate),
-      daysWaiting: Math.max(
-        0,
-        Math.floor((now - new Date(proposal.creationDate).getTime()) / MS_PER_DAY),
-      ),
-    }))
-    .sort((a, b) => b.daysWaiting - a.daysWaiting)
-    .slice(0, 5);
 
   const priorityDistribution: PriorityDistributionItem[] = INITIATIVE_PRIORITIES.map((entry) => ({
     priority: `#${entry.value}`,
@@ -378,8 +386,11 @@ function Dashboard() {
     });
 
   function handlePortfolioAction(item: PortfolioInitiative) {
-    if (item.action === "Review") {
-      navigate(`/dashboard/brd-reviews/${item.id}`);
+    // "Review" opens the longest-waiting approval for that initiative.
+    const pending = approvalQueue.find((queued) => queued.initiativeId === item.id);
+
+    if (item.action === "Review" && pending) {
+      navigate(pending.reviewPath);
     } else {
       navigate(`/dashboard/initiatives/${item.id}`);
     }
@@ -388,13 +399,11 @@ function Dashboard() {
   return (
     <div className="dashboard-page">
       <DashboardHeader
-        onOpenCreateInitiative={() => setIsCreateOpen(true)}
-        overSlaBrdCount={overSlaCount}
+        onOpenCreateInitiative={() =>
+          navigate("/dashboard/initiatives/new", { state: { from: "/dashboard" } })
+        }
+        overSlaApprovalCount={overSlaCount}
       />
-
-      {isCreateOpen && (
-        <CreateInitiativeModal onClose={() => setIsCreateOpen(false)} />
-      )}
 
       {/* <p className="mock-data-notice">
         The "BDO Docs Awaiting Review" count reflects temporary, local-only
@@ -418,30 +427,33 @@ function Dashboard() {
         ))}
       </section>
 
+      {/* Full width so all nine columns fit without sideways scrolling; the
+          other panels sit in the two-column grid below it. */}
+      <div className="dashboard-portfolio">
+        <PortfolioOverview
+          initiatives={portfolioInitiatives}
+          onAction={handlePortfolioAction}
+          onViewAll={() => navigate("/dashboard/initiatives")}
+          filterLabel={
+            statFilter
+              ? statCards.find((card) => card.key === statFilter)?.stat.label ?? null
+              : null
+          }
+          onClearFilter={() => setStatFilter(null)}
+        />
+      </div>
+
       <div className="dashboard-grid">
         <div className="dashboard-grid__main">
-          <PortfolioOverview
-            initiatives={portfolioInitiatives}
-            onAction={handlePortfolioAction}
-            onViewAll={() => navigate("/dashboard/initiatives")}
-            filterLabel={
-              statFilter
-                ? statCards.find((card) => card.key === statFilter)?.stat.label ?? null
-                : null
-            }
-            onClearFilter={() => setStatFilter(null)}
-          />
-
           <AtRiskInitiatives
             initiatives={atRiskInitiatives}
           />
         </div>
 
         <div className="dashboard-grid__sidebar">
-          <BRDApprovalQueue
-            items={brdApprovalQueue}
-            onReview={(id) => navigate(`/dashboard/brd-reviews/${id}`)}
-            onViewAll={() => navigate("/dashboard/brd-reviews")}
+          <ApprovalQueue
+            items={approvalQueue}
+            onReview={(item) => navigate(item.reviewPath)}
           />
 
           <PriorityDistribution

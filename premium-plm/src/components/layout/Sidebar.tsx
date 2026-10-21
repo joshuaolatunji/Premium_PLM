@@ -2,8 +2,12 @@ import { NavLink, useNavigate } from "react-router-dom";
 import {
   Bell,
   Briefcase,
+  ClipboardList,
   Code2,
+  FileCheck,
   FileText,
+  FileCog,
+  Flag,
   Gauge,
   HardHat,
   History,
@@ -19,6 +23,35 @@ import UserAvatar from "../ui/UserAvatar"
 import { getStoredUser } from "../../apicalls/authStorage";
 import { resolvePrimaryRole } from "../../utils/roleRouting";
 import { capitalize, formatRoleName } from "../../utils/text";
+import { documentHubPath, documentReviewsPath } from "../../utils/documentRoutes";
+import type { DocumentReviewer, DocumentType } from "../../types/documentTypes";
+
+// One icon per document so the four links are easy to tell apart.
+const DOCUMENT_ICONS: Record<DocumentType, typeof FileText> = {
+  PID: Flag,
+  FRD: FileCog,
+  BRD: FileText,
+  SWR: ClipboardList,
+};
+
+const NAV_DOCUMENTS: DocumentType[] = ["PID", "FRD", "BRD", "SWR"];
+
+function DocumentReviewLinks({ reviewer }: { reviewer: DocumentReviewer }) {
+  return (
+    <>
+      {NAV_DOCUMENTS.map((type) => {
+        const Icon = DOCUMENT_ICONS[type];
+
+        return (
+          <NavLink key={type} to={documentReviewsPath(reviewer, type)} className={navLinkClass}>
+            <Icon size={16} />
+            <span>{type} Reviews</span>
+          </NavLink>
+        );
+      })}
+    </>
+  );
+}
 
 function navLinkClass({ isActive }: { isActive: boolean }) {
   return isActive ? "sidebar_link sidebar_link--active" : "sidebar_link";
@@ -41,16 +74,6 @@ function GroupHeadNav() {
                 <span>Initiatives</span>
             </NavLink>
 
-            <NavLink to="/dashboard/bdo-reviews" className={navLinkClass}>
-                <Briefcase size={16} />
-                <span>BDO Reviews</span>
-            </NavLink>
-
-            <NavLink to="/dashboard/brd-reviews" className={navLinkClass}>
-                <FileText size={16} />
-                <span>BRD Reviews</span>
-            </NavLink>
-
             <NavLink to="/dashboard/priorities" className={navLinkClass}>
                 <ListOrdered size={16} />
                 <span>Priorities</span>
@@ -65,6 +88,17 @@ function GroupHeadNav() {
                 <History size={16} />
                 <span>Audit Trail</span>
             </NavLink>
+
+            <p className="sidebar_section-title">
+                Reviews
+            </p>
+
+            <NavLink to="/dashboard/bdo-reviews" className={navLinkClass}>
+                <FileCheck size={16} />
+                <span>BDO Reviews</span>
+            </NavLink>
+
+            <DocumentReviewLinks reviewer="GroupHead" />
         </>
     );
 }
@@ -101,10 +135,7 @@ function BdoNav() {
                 <span>Dashboard</span>
             </NavLink>
 
-            <NavLink to="/dashboard/bdo-brd-reviews" className={navLinkClass}>
-                <FileText size={16} />
-                <span>BRD Reviews</span>
-            </NavLink>
+            <DocumentReviewLinks reviewer="BDO" />
 
             <NavLink to="/dashboard/notifications" className={navLinkClass}>
                 <Bell size={16} />
@@ -126,10 +157,16 @@ function ProjectManagerNav() {
                 <span>Dashboard</span>
             </NavLink>
 
-            <NavLink to="/dashboard/brds" className={navLinkClass}>
-                <FileText size={16} />
-                <span>BRDs</span>
-            </NavLink>
+            {NAV_DOCUMENTS.map((type) => {
+                const Icon = DOCUMENT_ICONS[type];
+
+                return (
+                    <NavLink key={type} to={documentHubPath(type)} className={navLinkClass}>
+                        <Icon size={16} />
+                        <span>{type}s</span>
+                    </NavLink>
+                );
+            })}
 
             <NavLink to="/dashboard/my-tickets" className={navLinkClass}>
                 <Ticket size={16} />

@@ -34,8 +34,8 @@ export interface ProductInitiative {
   status: number;
 
   createdByUserId: string;
-  // Real and populated at creation now — the Group Head picks both a BDO
-  // and a PM in the same form (see CreateInitiativeModal.tsx).
+  // The Group Head picks both a BDO
+  // and a PM in the same form (see pages/initiatives/CreateInitiative.tsx).
   projectManagerId: string | null;
   // Confirmed on both the write side (CreateProductInitiativeDto.bdoId)
   // and the read side (seen directly in a live GET response).
@@ -45,9 +45,14 @@ export interface ProductInitiative {
 
   timelineDays: number;
   timelineStartedAt: string | null;
+  // Not shown yet: with no extension workflow it always equals
+  // currentDeadline. Show it again alongside the extension fields below.
   originalDeadline: string | null;
   currentDeadline: string | null;
 
+  // Returned by the API, but not shown anywhere yet: there are no endpoints
+  // to request or approve an extension, so these never change from their
+  // defaults. Bring them back into the UI once that workflow exists.
   timelineExtensionCount: number;
   extensionsRemaining: number;
 
@@ -68,10 +73,12 @@ export interface CreateInitiativeRequest {
   priority: number,
   timelineDays: number,
   categoryId: string,
-  // Real — the Group Head selects both the Project Manager and the BDO in
+  // Real — the Group Head selects both the Product Manager and the BDO in
   // the same form, sent directly to the API now (see
-  // CreateInitiativeModal.tsx).
+  // pages/initiatives/CreateInitiative.tsx).
   projectManagerId: string | null,
   bdoId: string | null,
 }
+
+
 

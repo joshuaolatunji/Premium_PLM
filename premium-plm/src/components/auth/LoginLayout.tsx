@@ -1,43 +1,37 @@
+import ThemeToggle from "../common/ThemeToggle";
+
 interface LoginLayoutProps {
     children: React.ReactNode;
 }
 
+// Both logos are rendered and CSS shows the one that suits the theme: the
+// white logo in dark mode, the colour logo in light mode.
 function LoginLayout({children}: LoginLayoutProps) {
     return (
         <div className="login-layout">
-            <section className="login-layout_brand">
-                <div className="login-layout_brand-content">
-                    <div className="login-layout_brand-logo">
-                        <img src="/premium-logo.png" alt="Premium Trust Bank" />
-                    </div>
+            <header className="login-layout_logo">
+                <img
+                    className="login-layout_logo-dark"
+                    src="/premium-logo-white.png"
+                    alt="Premium Trust Bank"
+                />
+                <img
+                    className="login-layout_logo-light"
+                    src="/premium-logo.png"
+                    alt="Premium Trust Bank"
+                />
+            </header>
 
-                    <div className="login-layout_intro">
-                        <span className="login-layout_accent" />
+            <ThemeToggle className="login-layout_theme-toggle" />
 
-                        <h1>
-                            Product Lifecycle
-                            <br />
-                            Management
-                        </h1>
-
-                        <p>
-                            Governance, approval and audit for every business
-                            product initiative across the Bank.
-                        </p>
-                    </div>
-
-                    <p className="login-layout_legal">
-                        Authorised users only. All activity on this platform is
-                        recorded and auditable.
-                        <br />
-                        <a href="mailto:digitalbankingteam@premiumtrustbank.com" className="text-white/55 hover:text-white">Technology Support &middot; Digital Banking</a>
-                    </p>
-                </div>
-            </section>
-
-            <section className="login-layout_form">
+            <main className="login-layout_form">
                 {children}
-            </section>
+            </main>
+
+            {/* <p className="login-layout_legal">
+                &copy; {new Date().getFullYear()} PremiumTrust Bank &middot; Authorised users only.
+                All activity on this platform is recorded and auditable.
+            </p> */}
         </div>
     );
 }

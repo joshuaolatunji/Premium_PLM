@@ -1,10 +1,14 @@
+
+
+
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { useParams } from "react-router-dom";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getInitiativeById } from "../../service/InitiativeService";
-import { getProposalByInitiativeId } from "../../service/ProposalService";
+import { getInitiativeDocuments } from "../../service/DocumentService";
+import { documentsQueryKey } from "../../utils/documentStatus";
 import {
   getDiscoveryAttachments,
   getDiscoveryByInitiativeId,
@@ -17,9 +21,10 @@ import {
   submitTicketForReview,
 } from "../../mocks/ticketsMock";
 import { ApiError } from "../../apicalls/apiClient";
-import BrdReadOnlyView from "../../components/brd/BrdReadOnlyView";
+import DocumentsViewer from "../../components/documents/DocumentsViewer";
 import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
 import { ticketStatusBadgeClass, ticketStatusLabel } from "../../utils/ticketStatus";
+import BackLink from "../../components/common/BackLink";
 
 // Mocked — tickets have no real endpoint yet (see mocks/ticketsMock.ts).
 // The BRD/discovery/attachments/links lookups below are all real.
@@ -43,9 +48,10 @@ function DeveloperTicketWorkspace() {
     enabled: Boolean(initiativeId),
   });
 
-  const proposalQuery = useQuery({
-    queryKey: ["product-proposal", initiativeId],
-    queryFn: () => getProposalByInitiativeId(initiativeId as string),
+  // PID / FRD / BRD / SWR (mock — see DocumentService).
+  const documentsQuery = useQuery({
+    queryKey: documentsQueryKey(initiativeId),
+    queryFn: () => getInitiativeDocuments(initiativeId as string),
     enabled: Boolean(initiativeId),
   });
 
@@ -110,7 +116,7 @@ function DeveloperTicketWorkspace() {
     ticketQuery.isLoading ||
     (Boolean(initiativeId) &&
       (initiativeQuery.isLoading ||
-        proposalQuery.isLoading ||
+        documentsQuery.isLoading ||
         discoveryQuery.isLoading ||
         attachmentsQuery.isLoading ||
         workflowLinksQuery.isLoading));
@@ -132,10 +138,7 @@ function DeveloperTicketWorkspace() {
   if (hasError) {
     return (
       <div className="dashboard-page">
-        <Link to="/dashboard/developer" className="text-button">
-          <ArrowLeft size={15} />
-          Back to your tickets
-        </Link>
+        <BackLink fallbackTo="/dashboard/developer" fallbackLabel="Back to your tickets" />
 
         <p className="initiatives-empty initiatives-empty--error initiative-detail-message">
           Couldn't load this ticket. It may not exist, or you may not have
@@ -147,7 +150,6 @@ function DeveloperTicketWorkspace() {
 
   const ticket = ticketQuery.data!;
   const initiative = initiativeQuery.data!;
-  const proposal = proposalQuery.data;
   const discovery = discoveryQuery.data;
   const attachments = attachmentsQuery.data ?? [];
   const workflowLinks = workflowLinksQuery.data ?? [];
@@ -155,10 +157,7 @@ function DeveloperTicketWorkspace() {
 
   return (
     <div className="dashboard-page">
-      <Link to="/dashboard/developer" className="text-button">
-        <ArrowLeft size={15} />
-        Back to your tickets
-      </Link>
+      <BackLink fallbackTo="/dashboard/developer" fallbackLabel="Back to your tickets" />
 
       <header className="dashboard-header initiative-detail-header">
         <div className="dashboard-header__content">
@@ -233,19 +232,9 @@ function DeveloperTicketWorkspace() {
         </div>
       </section>
 
-      <section className="dashboard-panel initiative-detail-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <h2>Business Requirements Document</h2>
-          </div>
-        </div>
-
-        {proposal ? (
-          <BrdReadOnlyView proposal={proposal} />
-        ) : (
-          <p className="initiatives-empty">No BRD has been created yet.</p>
-        )}
-      </section>
+      {documentsQuery.data && (
+        <DocumentsViewer documents={documentsQuery.data} initiativeName={initiative.projectName} />
+      )}
 
       <section className="dashboard-panel initiative-detail-panel">
         <div className="dashboard-panel__header">
@@ -257,16 +246,9 @@ function DeveloperTicketWorkspace() {
         {discovery ? (
           <div className="initiative-detail-grid">
             <div>
-              <span className="initiative-detail-grid_label">Business logic</span>
+              <span className="initiative-detail-grid_label">Description</span>
               <span className="initiative-detail-grid_value brd-readonly-value">
                 {discovery.businessLogic || "—"}
-              </span>
-            </div>
-
-            <div>
-              <span className="initiative-detail-grid_label">Customer journey</span>
-              <span className="initiative-detail-grid_value brd-readonly-value">
-                {discovery.customerJourney || "—"}
               </span>
             </div>
 
@@ -274,20 +256,6 @@ function DeveloperTicketWorkspace() {
               <span className="initiative-detail-grid_label">User flow</span>
               <span className="initiative-detail-grid_value brd-readonly-value">
                 {discovery.userFlow || "—"}
-              </span>
-            </div>
-
-            <div>
-              <span className="initiative-detail-grid_label">Business process</span>
-              <span className="initiative-detail-grid_value brd-readonly-value">
-                {discovery.businessProcess || "—"}
-              </span>
-            </div>
-
-            <div>
-              <span className="initiative-detail-grid_label">Assumptions</span>
-              <span className="initiative-detail-grid_value brd-readonly-value">
-                {discovery.assumptions || "—"}
               </span>
             </div>
           </div>
@@ -311,7 +279,7 @@ function DeveloperTicketWorkspace() {
               {attachments.map((attachment) => (
                 <li key={attachment.id} className="bdo-upload-list_item">
                   <div className="bdo-upload-list_info">
-                    <span className="bdo-upload-list_name">{attachment.fileName}</span>
+                    <span className="bdo-upload-list_name">{attachment.label ?? attachment.fileName}</span>
                   </div>
 
                   <button

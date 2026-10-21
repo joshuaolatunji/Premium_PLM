@@ -7,6 +7,7 @@ import { getAllUsers } from "../../service/UserService";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
 import { isAwaitingGroupHeadDecision, priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
 import { capitalize } from "../../utils/text";
+import { backState } from "../../utils/navigation";
 import type { ProductInitiative } from "../../types/initiativeTypes";
 
 function BdoDocReviews() {
@@ -52,6 +53,9 @@ function BdoDocReviews() {
   }
 
   const awaitingReview: { initiative: ProductInitiative; bdoId: string | null }[] = [];
+  // Documentation the Group Head has already approved — listed below the
+  // queue so it can still be opened and read.
+  const approved: { initiative: ProductInitiative; bdoId: string | null }[] = [];
 
   if (!isLoading && !hasError) {
     initiatives.forEach((initiative, index) => {
@@ -59,6 +63,8 @@ function BdoDocReviews() {
 
       if (discovery && isAwaitingGroupHeadDecision(discovery.status)) {
         awaitingReview.push({ initiative, bdoId: initiative.bdoId });
+      } else if (discovery?.status === "Approved") {
+        approved.push({ initiative, bdoId: initiative.bdoId });
       }
     });
   }
@@ -121,7 +127,7 @@ function BdoDocReviews() {
                   <tr key={initiative.id}>
                     <td>
                       <div className="initiative-cell">
-                        <strong>{initiative.projectName}</strong>
+                        <strong title={initiative.projectName}>{initiative.projectName}</strong>
                         <span>{initiative.id.slice(0, 8)}</span>
                       </div>
                     </td>
@@ -139,7 +145,9 @@ function BdoDocReviews() {
                         type="button"
                         className="table-action table-action--premium"
                         onClick={() =>
-                          navigate(`/dashboard/bdo-reviews/${initiative.id}`)
+                          navigate(`/dashboard/bdo-reviews/${initiative.id}`, {
+                            state: backState("Back to BDO Reviews"),
+                          })
                         }
                       >
                         Review
@@ -152,6 +160,75 @@ function BdoDocReviews() {
                 <tr>
                   <td colSpan={4} className="initiatives-empty">
                     No documentation is currently awaiting your review.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="dashboard-panel initiative-detail-panel">
+        <div className="dashboard-panel__header">
+          <div>
+            <h2>Approved documentation</h2>
+            <p>BDO documentation you've already approved. Open one to view it.</p>
+          </div>
+        </div>
+
+        <div className="portfolio-table-wrapper">
+          <table className="portfolio-table">
+            <thead>
+              <tr>
+                <th>Initiative</th>
+                <th>Priority</th>
+                <th>Business Development Officer</th>
+                <th>
+                  <span className="sr-only">Action</span>
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {!isLoading &&
+                !hasError &&
+                approved.map(({ initiative, bdoId }) => (
+                  <tr key={initiative.id}>
+                    <td>
+                      <div className="initiative-cell">
+                        <strong title={initiative.projectName}>{initiative.projectName}</strong>
+                        <span>{initiative.id.slice(0, 8)}</span>
+                      </div>
+                    </td>
+
+                    <td>
+                      <span className={priorityBadgeClass(initiative.priority)}>
+                        {priorityLabel(initiative.priority)}
+                      </span>
+                    </td>
+
+                    <td>{userName(bdoId)}</td>
+
+                    <td>
+                      <button
+                        type="button"
+                        className="table-action table-action--premium table-action--wide"
+                        onClick={() =>
+                          navigate(`/dashboard/bdo-reviews/${initiative.id}`, {
+                            state: backState("Back to BDO Reviews"),
+                          })
+                        }
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+
+              {!isLoading && !hasError && approved.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="initiatives-empty">
+                    No documentation has been approved yet.
                   </td>
                 </tr>
               )}

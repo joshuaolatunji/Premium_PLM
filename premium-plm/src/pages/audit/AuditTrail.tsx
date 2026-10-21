@@ -3,7 +3,8 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { Check, Info, X } from "lucide-react";
 
 import { getProductInitiatives } from "../../service/InitiativeService";
-import { getProposalByInitiativeId } from "../../service/ProposalService";
+import { DOCUMENT_TYPES } from "../../types/documentTypes";
+import { useInitiativeDocuments } from "../../utils/documentStatus";
 import { getAllUsers } from "../../service/UserService";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
 import { getTicketsForInitiative } from "../../mocks/ticketsMock";
@@ -30,11 +31,10 @@ function formatDateTime(value: string): string {
 }
 
 // There's no real audit-log endpoint — every event here is derived from
-// state other screens already fetch. Initiative creation, BRD dates, and
-// BDO documentation submit/approve/reject events are all real now; only
-// the BRD's BDO-leg rejection and ticket creation are still backed by
-// session-only mocks (see mocks/*.ts), resetting on reload same as
-// everywhere else that uses them.
+// state other screens already fetch. Initiative creation and BDO
+// documentation submit/approve/reject events are real; PID / FRD / BRD /
+// SWR events come from the mock document store (DocumentService.ts) and
+// ticket creation from the ticket mock, so those are marked as mocked.
 function AuditTrail() {
   const initiativesQuery = useQuery({
     queryKey: ["product-initiatives"],
@@ -51,13 +51,7 @@ function AuditTrail() {
     [initiativesQuery.data],
   );
 
-  const proposalQueries = useQueries({
-    queries: initiatives.map((initiative) => ({
-      queryKey: ["product-proposal", initiative.id],
-      queryFn: () => getProposalByInitiativeId(initiative.id),
-      enabled: Boolean(initiative.id),
-    })),
-  });
+  const documents = useInitiativeDocuments(initiatives.map((initiative) => initiative.id));
 
   const discoveryQueries = useQueries({
     queries: initiatives.map((initiative) => ({
@@ -78,14 +72,14 @@ function AuditTrail() {
   const isLoading =
     initiativesQuery.isLoading ||
     usersQuery.isLoading ||
-    proposalQueries.some((q) => q.isLoading) ||
+    documents.isLoading ||
     discoveryQueries.some((q) => q.isLoading) ||
     ticketQueries.some((q) => q.isLoading);
 
   const hasError =
     initiativesQuery.isError ||
     usersQuery.isError ||
-    proposalQueries.some((q) => q.isError) ||
+    documents.isError ||
     discoveryQueries.some((q) => q.isError) ||
     ticketQueries.some((q) => q.isError);
 
@@ -112,29 +106,53 @@ function AuditTrail() {
         isMocked: false,
       });
 
-      const proposal = proposalQueries[index]?.data;
+      const initiativeDocuments = documents.documentsFor(index);
 
-      if (proposal) {
+      DOCUMENT_TYPES.forEach((type) => {
+        const document = initiativeDocuments[type];
+
+        if (!document) {
+          return;
+        }
+
         events.push({
-          id: `brd-drafted-${initiative.id}`,
-          timestamp: proposal.creationDate,
-          description: `BRD drafted (v${proposal.version})`,
+          id: `${type}-drafted-${initiative.id}`,
+          timestamp: document.createdAt,
+          description: `${type} drafted by ${userName(document.createdByUserId)}`,
           initiativeName: initiative.projectName,
           type: "info",
-          isMocked: false,
+          isMocked: true,
         });
 
-        if (proposal.status === "Approved" && proposal.updatedAt) {
+        if (document.submittedAt && document.version > 0) {
           events.push({
-            id: `brd-approved-${initiative.id}`,
-            timestamp: proposal.updatedAt,
-            description: "BRD approved by the Group Head",
+            id: `${type}-submitted-${initiative.id}`,
+            timestamp: document.submittedAt,
+            description:
+              document.status === "PendingGroupHeadReview" || document.status === "Approved"
+                ? `${type} forwarded to the Group Head (v${document.version})`
+                : `${type} submitted for review (v${document.version})`,
             initiativeName: initiative.projectName,
-            type: "success",
-            isMocked: false,
+            type: "info",
+            isMocked: true,
           });
         }
-      }
+
+        const decision = document.lastDecision;
+
+        if (decision) {
+          const by = decision.reviewer === "BDO" ? "the BDO" : "the Group Head";
+
+          events.push({
+            id: `${type}-decision-${initiative.id}`,
+            timestamp: decision.decidedAt,
+            description: decision.approved ? `${type} approved by ${by}` : `${type} returned by ${by}`,
+            initiativeName: initiative.projectName,
+            type: decision.approved ? "success" : "danger",
+            isMocked: true,
+          });
+        }
+      });
 
       const discovery = discoveryQueries[index]?.data;
 

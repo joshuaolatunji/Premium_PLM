@@ -5,10 +5,11 @@ import { capitalize } from "../utils/text";
 
 interface DashboardHeaderProps {
   onOpenCreateInitiative: () => void;
-  overSlaBrdCount: number;
+  // Approvals (of any kind) waiting on the Group Head for over 3 days.
+  overSlaApprovalCount: number;
 }
 
-function DashboardHeader({ onOpenCreateInitiative, overSlaBrdCount }: DashboardHeaderProps) {
+function DashboardHeader({ onOpenCreateInitiative, overSlaApprovalCount }: DashboardHeaderProps) {
   const navigate = useNavigate();
   const user = getStoredUser();
 
@@ -32,12 +33,12 @@ function DashboardHeader({ onOpenCreateInitiative, overSlaBrdCount }: DashboardH
 
         <p className="dashboard-subtitle">
           {today}
-          {overSlaBrdCount > 0 && (
+          {overSlaApprovalCount > 0 && (
             <>
               <span aria-hidden="true"> · </span>
               <strong>
-                {overSlaBrdCount} BRD{overSlaBrdCount === 1 ? "" : "s"}{" "}
-                {overSlaBrdCount === 1 ? "has" : "have"} been waiting more than 3 days.
+                {overSlaApprovalCount} approval{overSlaApprovalCount === 1 ? "" : "s"}{" "}
+                {overSlaApprovalCount === 1 ? "has" : "have"} been waiting more than 3 days.
               </strong>
             </>
           )}

@@ -15,20 +15,31 @@ export interface ProductProposalUserGroup {
   roleFunction: string;
 }
 
-// RequirementCategory (1-6) and RequirementPriority (1-3) are undocumented
-// integer enums in the live Swagger spec — no labels exist anywhere in the
-// API docs or the design catalog, so we present them as plain numbered
-// options rather than guess at semantic names.
+// RequirementCategory / RequirementPriority are string enums in the live
+// Swagger spec (sent and received by name). Order matches the API's
+// declaration order, which is also how legacy numeric values (1-based)
+// map onto names — see normalizeRequirement in ProposalService.ts.
+export const REQUIREMENT_CATEGORY_VALUES = [
+  "Functional",
+  "Security",
+  "Availability",
+  "Performance",
+  "Reporting",
+  "Other",
+] as const;
+
+export const REQUIREMENT_PRIORITY_VALUES = ["Mandatory", "Desired", "Optional"] as const;
+
+export type RequirementCategory = (typeof REQUIREMENT_CATEGORY_VALUES)[number];
+export type RequirementPriority = (typeof REQUIREMENT_PRIORITY_VALUES)[number];
+
 export interface ProductRequirement {
   sequence: number;
-  category: number;
+  category: RequirementCategory;
   requirement: string;
-  priority: number;
+  priority: RequirementPriority;
   comments: string;
 }
-
-export const REQUIREMENT_CATEGORY_VALUES = [1, 2, 3, 4, 5, 6];
-export const REQUIREMENT_PRIORITY_VALUES = [1, 2, 3];
 
 // Fields common to both creating and updating a proposal.
 export interface ProposalFormFields {
@@ -78,8 +89,7 @@ export interface UpdateProposalRequest extends ProposalFormFields {
 // read-only fields exist alongside the editable ones above. `status` is a
 // plain string ("Draft" confirmed live; other values are real but
 // unobserved, so we display it verbatim rather than mapping it to our own
-// labels) and `version` is a real string ("1.0" confirmed) — genuinely
-// useful, unlike the numeric enums elsewhere in this API.
+// labels) and `version` is a real string ("1.0" confirmed)
 export interface ProductProposal extends ProposalFormFields {
   id: string;
   productInitiativeId: string;

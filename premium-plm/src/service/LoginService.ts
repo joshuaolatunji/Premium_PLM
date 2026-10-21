@@ -9,10 +9,18 @@ import type {
     LoginResponse,
 } from "../types/loginTypes";
 
+// The login endpoint now requires an `ipAddress` query param (it 400s
+// without one). The browser can't reliably know its own public IP, and the
+// backend is expected to capture the real one itself eventually — until
+// then, every login sends this fixed placeholder for testing.
+const LOGIN_IP_ADDRESS = "127.0.0.1";
+
 export function loginUser(
     credentials: LoginRequest,
 ): Promise<LoginResponse> {
-    return apiClient<LoginResponse>("api/PLMAuth/login", {
+    const query = new URLSearchParams({ ipAddress: LOGIN_IP_ADDRESS });
+
+    return apiClient<LoginResponse>(`api/PLMAuth/login?${query}`, {
     method: "POST",
     body: JSON.stringify(credentials),
 });

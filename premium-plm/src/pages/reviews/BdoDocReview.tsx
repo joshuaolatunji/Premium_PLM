@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, FileText, Link2 } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import { FileText, Link2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getInitiativeById } from "../../service/InitiativeService";
@@ -15,6 +15,8 @@ import {
 } from "../../service/ProductDiscoveryService";
 import { capitalize } from "../../utils/text";
 import DecisionModal, { type Decision } from "../../components/review/DecisionModal";
+import ReviewDecisionBar from "../../components/review/ReviewDecisionBar";
+import BackLink from "../../components/common/BackLink";
 
 function BdoDocReview() {
   const { id } = useParams<{ id: string }>();
@@ -128,10 +130,7 @@ function BdoDocReview() {
   if (hasError) {
     return (
       <div className="dashboard-page">
-        <Link to="/dashboard/bdo-reviews" className="text-button">
-          <ArrowLeft size={15} />
-          Back to BDO Reviews
-        </Link>
+        <BackLink fallbackTo="/dashboard/bdo-reviews" fallbackLabel="Back to BDO Reviews" />
 
         <p className="initiatives-empty initiatives-empty--error initiative-detail-message">
           Couldn't load this documentation. It may not exist, or you may not
@@ -151,10 +150,7 @@ function BdoDocReview() {
   if (discovery?.status === "Rejected") {
     return (
       <div className="dashboard-page">
-        <Link to="/dashboard/bdo-reviews" className="text-button">
-          <ArrowLeft size={15} />
-          Back to BDO Reviews
-        </Link>
+        <BackLink fallbackTo="/dashboard/bdo-reviews" fallbackLabel="Back to BDO Reviews" />
 
         <p className="initiatives-empty initiative-detail-message">
           You rejected {initiative.projectName}'s documentation
@@ -172,10 +168,7 @@ function BdoDocReview() {
 
   return (
     <div className="dashboard-page">
-      <Link to="/dashboard/bdo-reviews" className="text-button">
-        <ArrowLeft size={15} />
-        Back to BDO Reviews
-      </Link>
+      <BackLink fallbackTo="/dashboard/bdo-reviews" fallbackLabel="Back to BDO Reviews" />
 
       <header className="dashboard-header initiative-detail-header">
         <div className="dashboard-header__content">
@@ -229,15 +222,13 @@ function BdoDocReview() {
         {discovery ? (
           <div className="proposal-section">
             {[
-              { id: "businessLogic", label: "Business logic", value: discovery.businessLogic },
-              { id: "customerJourney", label: "Customer journey", value: discovery.customerJourney },
+              { id: "businessLogic", label: "Description", value: discovery.businessLogic },
               { id: "userFlow", label: "User flow", value: discovery.userFlow },
-              { id: "businessProcess", label: "Business process", value: discovery.businessProcess },
-              { id: "assumptions", label: "Assumptions", value: discovery.assumptions },
             ].map((field) => (
               <div className="form-field" key={field.id}>
                 <label htmlFor={`review-${field.id}`}>{field.label}</label>
                 <textarea
+                  placeholder=" "
                   id={`review-${field.id}`}
                   rows={3}
                   readOnly
@@ -274,7 +265,7 @@ function BdoDocReview() {
                   </span>
 
                   <div className="bdo-upload-list_info">
-                    <span className="bdo-upload-list_name">{attachment.fileName}</span>
+                    <span className="bdo-upload-list_name">{attachment.label ?? attachment.fileName}</span>
                   </div>
 
                   <button
@@ -335,6 +326,15 @@ function BdoDocReview() {
           )}
         </div>
       </section>
+
+      {!isDecided && (
+        <ReviewDecisionBar
+          hint="Reviewed everything? Approve to send it on, or reject it with a reason."
+          onReject={() => openDecision("reject")}
+          onApprove={() => openDecision("approve")}
+          disabled={decisionMutation.isPending}
+        />
+      )}
 
       {pendingDecision && (
         <DecisionModal

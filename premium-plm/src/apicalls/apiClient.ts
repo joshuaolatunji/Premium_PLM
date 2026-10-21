@@ -1,4 +1,4 @@
-import { clearAuthSession } from "./authStorage";
+import { clearAuthSession, hasValidSession } from "./authStorage";
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -30,11 +30,61 @@ export class ApiError extends Error {
 // read a status from), so it's handled as its own distinct failure mode.
 const REQUEST_TIMEOUT_MS = 20_000;
 
+// The most useful explanation available for a failed request. Prefers the
+// server's own text — the API envelope's `message`, or the `detail` /
+// `title` of an ASP.NET problem-details body — and otherwise says what the
+// status code means, rather than a bare "Something went wrong" that hides
+// whether it was a permissions problem, a missing record, or a server bug.
+function errorMessageFor(status: number, data: unknown): string {
+    if (typeof data === "string" && data.trim() && !data.trim().startsWith("<")) {
+        return data.trim();
+    }
+
+    if (data && typeof data === "object") {
+        const record = data as Record<string, unknown>;
+
+        for (const key of ["message", "detail", "title", "error"]) {
+            const value = record[key];
+
+            if (typeof value === "string" && value.trim()) {
+                return value;
+            }
+        }
+    }
+
+    switch (status) {
+        case 400:
+            return "The server couldn't accept this request (400). Check the details and try again.";
+        case 403:
+            return "You don't have permission to do this (403).";
+        case 404:
+            return "The server couldn't find this item or action (404).";
+        case 409:
+            return "This conflicts with the item's current state (409). Refresh and try again.";
+        case 413:
+            return "This file is too large for the server to accept (413).";
+        default:
+            return status >= 500
+                ? `The server ran into an error (${status}). Try again, or contact support if it keeps happening.`
+                : `Something went wrong (${status}).`;
+    }
+}
+
 export async function apiClient<T>(
     endpoint: string,
     options: ApiRequestOptions = {},
 ): Promise<T> {
     const { token, headers, ...requestOptions } = options;
+
+    // An authenticated call made after the token has expired is never sent:
+    // the user is signed out and sent to login straight away. Without this,
+    // the outcome depended on the server replying with a 401 — and if the
+    // request failed outright instead, pages just showed "couldn't load".
+    if (token && !hasValidSession()) {
+        clearAuthSession();
+        window.location.replace("/login");
+        throw new ApiError("Your session has expired. Please sign in again.", 401, null);
+    }
 
     // FormData bodies (file uploads) need the browser to set its own
     // Content-Type with the multipart boundary — setting "application/json"
@@ -103,12 +153,7 @@ export async function apiClient<T>(
             window.location.href = "/login";
         }
 
-        const message =
-            data && typeof data === "object" && "message" in data
-                ? String((data as { message?: unknown }).message)
-                : "Something went wrong";
-
-        throw new ApiError(message, response.status, data);
+        throw new ApiError(errorMessageFor(response.status, data), response.status, data);
     }
 
     return data as T;

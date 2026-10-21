@@ -50,7 +50,7 @@ function PortfolioOverview({
               <th>Created</th>
               <th>Priority</th>
               <th>Current stage</th>
-              <th>Owner</th>
+              <th>Resource</th>
               <th>Timeline elapsed</th>
               <th>Days left</th>
               <th>Status</th>
@@ -65,7 +65,7 @@ function PortfolioOverview({
               <tr key={initiative.id}>
                 <td>
                   <div className="initiative-cell">
-                    <strong>{initiative.name}</strong>
+                    <strong title={initiative.name}>{initiative.name}</strong>
                     <span>{initiative.reference}</span>
                   </div>
                 </td>

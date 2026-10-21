@@ -21,6 +21,28 @@
   --color-surface-alt: #f8f8f8;
   --color-surface: #ffffff;
 
+  /* Form field background — a shade darker than the page surface for
+     contrast; fields switch to --color-surface while focused. */
+  --color-field: #f1f3f6;
+
+  /* Table header / row hover, and the hairline between list rows. */
+  --color-surface-hover: #fafafa;
+  --color-divider: #f0f0f1;
+
+  /* The dark navigation sidebar, which stays dark in both themes. */
+  --color-sidebar: #16181c;
+
+  /* "Inverse" blocks — e.g. the dark button — flip with the theme. */
+  --color-inverse: #16181c;
+  --color-inverse-text: #ffffff;
+
+  /* Slate buttons (View initiative, Download…). */
+  --color-slate: #4a5058;
+  --color-slate-hover: #33373d;
+
+  /* Dimmed backdrop behind modals and the mobile sidebar. */
+  --color-overlay: rgb(15 17 21 / 55%);
+
 
   /*SEMANTIC COLORS*/
 
@@ -29,6 +51,11 @@
   --color-danger: #c62828;
   --color-info: #2f5fa7;
 
+  /* Solid fills behind white text (accent button, confirm-reject). Not
+     overridden in dark mode, so the white text keeps its contrast. */
+  --color-accent: #2f5fa7;
+  --color-danger-solid: #c62828;
+
 
   /*SEMANTIC SURFACES*/
 
@@ -36,6 +63,12 @@
   --color-warning-tint: #fff1e2;
   --color-danger-tint: #fbe9e8;
   --color-info-tint: #eaf0f9;
+
+  /* Neutral grey chip (Not started, Blocked, role chips…). */
+  --color-neutral-tint: #f2f4f7;
+  --color-neutral-text: #475467;
+
+  --color-success-border: #b7e2d1;
 
 
   /* SPACING 4PX BASE SYSTEM*/
@@ -67,4 +100,57 @@
   --shadow-card: 0 1px 2px rgb(0 0 0 / 4%);
   --shadow-dropdown: 0 4px 12px rgb(0 0 0 / 8%);
   --shadow-modal: 0 8px 24px rgb(0 0 0 / 12%);
+}
+
+/* DARK THEME
+   Set by <html data-theme="dark"> (see utils/theme.ts). Only colours change;
+   spacing, radii and brand red stay the same. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --premium-tint: rgb(221 32 37 / 18%);
+
+  --color-ink: #e8eaed;
+  --color-ink-secondary: #b8bec6;
+  --color-ink-muted: #8d949e;
+  --color-ink-disabled: #5c636d;
+
+  --color-border-strong: #3a4049;
+  --color-border: #2a2f37;
+
+  --color-surface-alt: #0f1216;
+  --color-surface: #171b21;
+  --color-field: #1f242b;
+
+  --color-surface-hover: #1d2229;
+  --color-divider: #232830;
+
+  --color-sidebar: #0b0d10;
+
+  --color-inverse: #e8eaed;
+  --color-inverse-text: #16181c;
+
+  --color-slate: #4a515b;
+  --color-slate-hover: #5b636e;
+
+  --color-overlay: rgb(0 0 0 / 65%);
+
+  --color-success: #4cc69a;
+  --color-warning: #f0a64a;
+  --color-danger: #f2706b;
+  --color-info: #7fa8e8;
+
+  --color-success-tint: rgb(76 198 154 / 14%);
+  --color-warning-tint: rgb(240 166 74 / 14%);
+  --color-danger-tint: rgb(242 112 107 / 14%);
+  --color-info-tint: rgb(127 168 232 / 14%);
+
+  --color-neutral-tint: #262b33;
+  --color-neutral-text: #aab1bb;
+
+  --color-success-border: rgb(76 198 154 / 35%);
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-dropdown: 0 4px 12px rgb(0 0 0 / 45%);
+  --shadow-modal: 0 8px 24px rgb(0 0 0 / 55%);
 }

@@ -124,24 +124,45 @@ export async function resubmitDiscovery(discoveryId: string): Promise<void> {
   });
 }
 
-// Handles both the logic flow document and any other supporting files —
-// the real API has one generic attachments endpoint, no separate category
-// per file. Uses XMLHttpRequest instead of apiClient/fetch specifically
-// because fetch has no way to report upload progress; onProgress mirrors
-// the same error semantics as apiClient (throws ApiError) so callers can
-// handle it the same way.
-export function uploadDiscoveryAttachments(
-  discoveryId: string,
+// What an attachment belongs to — the API's AttachmentTargetType enum
+// (confirmed in Swagger). Each role uploads against its own record:
+//   BDO        → ProductDiscovery,  id = the discovery's id
+//   PM         → ProductProposal,   id = the BRD (proposal)'s id
+//   Group Head → ProductInitiative, id = the initiative's id
+export type AttachmentTargetType = "ProductDiscovery" | "ProductProposal" | "ProductInitiative";
+
+export interface AttachmentTarget {
+  type: AttachmentTargetType;
+  id: string;
+}
+
+// Attachments live under one shared "general-attachments" API for every
+// role, keyed by target (upload / list), or by attachment id (open /
+// delete). One generic upload endpoint for every role's documents:
+// POST api/general-attachments/upload-attachments/{targetType}/{targetId}. Uses
+// XMLHttpRequest instead of apiClient/fetch specifically because fetch has
+// no way to report upload progress; it mirrors apiClient's error semantics
+// (throws ApiError) so callers handle it the same way.
+//
+// `labels` is a parallel array to `files` (labels[i] names files[i]) —
+// confirmed in the current Swagger multipart schema.
+export function uploadAttachments(
+  target: AttachmentTarget,
   files: File[],
+  labels: string[],
   onProgress?: (percent: number) => void,
 ): Promise<void> {
   const token = getToken();
   const formData = new FormData();
   files.forEach((file) => formData.append("files", file));
+  labels.forEach((label) => formData.append("labels", label));
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${API_BASE_URL}api/product-discovery/${discoveryId}/upload-attachments`);
+    xhr.open(
+      "POST",
+      `${API_BASE_URL}api/general-attachments/upload-attachments/${target.type}/${target.id}`,
+    );
 
     if (token) {
       xhr.setRequestHeader("Authorization", `Bearer ${token}`);
@@ -183,7 +204,7 @@ export function uploadDiscoveryAttachments(
 
 // Confirmed live: { id, productDiscoveryId, fileName, contentType, fileSize,
 // uploadedAt, uploadedByUserId, fileUrl }. fileUrl is a path relative to the
-// API host (e.g. "/api/product-discovery/attachments/{id}/open"), not an
+// API host (e.g. "/api/general-attachments/{id}/open-attachments"), not an
 // absolute URL, so it's resolved against API_BASE_URL here rather than left
 // for the browser to resolve against the frontend's own origin.
 function toDiscoveryAttachment(raw: unknown): DiscoveryAttachment | null {
@@ -195,6 +216,11 @@ function toDiscoveryAttachment(raw: unknown): DiscoveryAttachment | null {
   const id = record.id;
   const fileName = record.fileName;
   const fileUrl = record.fileUrl;
+  // The BDO's own name for the file — confirmed live as `label` on the
+  // attachment record (e.g. "label": "Muiz's Head"). Files uploaded before
+  // labels existed have none, and fall back to `fileName` in the UI.
+  const label = record.label;
+  const uploadedByUserId = record.uploadedByUserId;
 
   if (typeof id !== "string") {
     return null;
@@ -203,17 +229,18 @@ function toDiscoveryAttachment(raw: unknown): DiscoveryAttachment | null {
   return {
     id,
     fileName: typeof fileName === "string" ? fileName : "Attachment",
+    label: typeof label === "string" && label.trim() ? label : null,
+    uploadedByUserId: typeof uploadedByUserId === "string" ? uploadedByUserId : null,
     url: typeof fileUrl === "string" ? `${API_BASE_URL}${fileUrl}` : null,
   };
 }
 
-export async function getDiscoveryAttachments(
-  discoveryId: string,
-): Promise<DiscoveryAttachment[]> {
+// Lists one record's attachments — e.g. a discovery's BDO documents.
+export async function getAttachments(target: AttachmentTarget): Promise<DiscoveryAttachment[]> {
   const token = getToken();
 
   const response = await apiClient<ApiResponse<unknown[]> | null>(
-    `api/product-discovery/${discoveryId}/get-attachments`,
+    `api/general-attachments/${target.type}/${target.id}/get-attachments`,
     {
       method: "GET",
       token: token ?? undefined,
@@ -223,6 +250,12 @@ export async function getDiscoveryAttachments(
   return (response?.data ?? [])
     .map(toDiscoveryAttachment)
     .filter((attachment): attachment is DiscoveryAttachment => attachment !== null);
+}
+
+// The BDO's documentation files for a discovery — what the BDO workspace,
+// the Group Head's BDO review, and the engineers' ticket views list.
+export function getDiscoveryAttachments(discoveryId: string): Promise<DiscoveryAttachment[]> {
+  return getAttachments({ type: "ProductDiscovery", id: discoveryId });
 }
 
 // The "open" endpoint returns the raw file body (not JSON), and it's
@@ -246,7 +279,7 @@ export async function openDiscoveryAttachment(
 
   try {
     response = await fetch(
-      `${API_BASE_URL}api/product-discovery/attachments/${attachmentId}/open`,
+      `${API_BASE_URL}api/general-attachments/${attachmentId}/open-attachments`,
       {
         method: "GET",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -283,12 +316,21 @@ export async function deleteDiscoveryAttachment(attachmentId: string): Promise<v
   const token = getToken();
 
   await apiClient<unknown>(
-    `api/product-discovery/attachments/${attachmentId}/delete-attachments`,
+    `api/general-attachments/${attachmentId}/delete-attachments`,
     {
       method: "DELETE",
       token: token ?? undefined,
     },
   );
+}
+
+// The API rejects a URL without a scheme ("A valid HTTP or HTTPS URL is
+// required."), but people naturally type "www.figma.com". Anything that
+// doesn't already start with http:// or https:// gets https:// prepended.
+function withHttpScheme(url: string): string {
+  const trimmed = url.trim();
+
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed.replace(/^\/+/, "")}`;
 }
 
 // The "design screens" step is now a link (Figma, hosted screens, etc.)
@@ -302,7 +344,7 @@ export async function addDiscoveryWorkflowLink(
   await apiClient<unknown>(`api/product-discovery/${discoveryId}/add-workflow-links`, {
     method: "POST",
     token: token ?? undefined,
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, url: withHttpScheme(payload.url) }),
   });
 }
 

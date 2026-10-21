@@ -32,7 +32,7 @@ export async function getProductInitiatives(): Promise<ProductInitiative[]> {
   return response.data.map(normalizeInitiative);
 }
 
-// Initiatives where the current user is the assigned project manager.
+// Initiatives where the current user is the assigned product manager.
 export async function getMyAssignedInitiatives(): Promise<ProductInitiative[]> {
   const token = getToken();
 
@@ -86,7 +86,7 @@ export async function getInitiativeById(
 
 // The API only supports changing priority through this endpoint (a
 // `newPriority` query param, no request body) — there's no endpoint for
-// reassigning a project manager, which is why that isn't offered as a bulk
+// reassigning a product manager, which is why that isn't offered as a bulk
 // action in the UI.
 export async function updateInitiativePriority(
   initiativeId: string,

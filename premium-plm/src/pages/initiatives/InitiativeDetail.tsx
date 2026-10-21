@@ -1,20 +1,16 @@
-import { useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useParams, useNavigate } from "react-router-dom";
+
+import { useQuery } from "@tanstack/react-query";
 
 import { getInitiativeById } from "../../service/InitiativeService";
 import { getAllUsers } from "../../service/UserService";
-import { getProposalByInitiativeId } from "../../service/ProposalService";
-import { downloadBrdPdf } from "../../service/PdfService";
+import { getInitiativeDocuments } from "../../service/DocumentService";
 import { getTicketsForInitiative } from "../../mocks/ticketsMock";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
 import {
   currentStageFor,
   deriveStatus,
   isAwaitingGroupHeadDecision,
-  isBrdAwaitingBdoDecision,
-  isBrdAwaitingGroupHeadDecision,
   priorityBadgeClass,
   priorityLabel,
   stageBadgeClass,
@@ -22,6 +18,10 @@ import {
 import { capitalize } from "../../utils/text";
 import { getStoredUser } from "../../apicalls/authStorage";
 import { resolvePrimaryRole } from "../../utils/roleRouting";
+import BackLink from "../../components/common/BackLink";
+import { backState } from "../../utils/navigation";
+import { documentsQueryKey } from "../../utils/documentStatus";
+import InitiativeDocumentsPanel from "../../components/documents/InitiativeDocumentsPanel";
 
 function formatDate(value: string | null) {
   if (!value) {
@@ -50,9 +50,10 @@ function InitiativeDetail() {
     queryFn: getAllUsers,
   });
 
-  const proposalQuery = useQuery({
-    queryKey: ["product-proposal", id],
-    queryFn: () => getProposalByInitiativeId(id as string),
+  // PID / FRD / BRD / SWR (mock — see DocumentService).
+  const documentsQuery = useQuery({
+    queryKey: documentsQueryKey(id),
+    queryFn: () => getInitiativeDocuments(id as string),
     enabled: Boolean(id),
   });
 
@@ -62,41 +63,35 @@ function InitiativeDetail() {
     enabled: Boolean(id),
   });
 
-  const downloadBrdMutation = useMutation({
-    mutationFn: () =>
-      downloadBrdPdf(id as string, initiativeQuery.data?.projectName ?? "BRD"),
-    onError: () => setDownloadError("Unable to download the BRD PDF. Try again."),
-    onSuccess: () => setDownloadError(""),
-  });
-
-  const [downloadError, setDownloadError] = useState("");
-
   const ticketsQuery = useQuery({
     queryKey: ["tickets", id],
     queryFn: () => getTicketsForInitiative(id as string),
     enabled: Boolean(id),
   });
 
-  // Group Head (and Super Admin, who shares the same governance view) can
-  // only review a BRD that's actually been submitted — they never get the
-  // PM's editable form. The BDO gets the same treatment for their own leg.
-  // Everyone else keeps the existing "Open BRD" -> editor behavior.
+  // Group Head (and Super Admin, who shares the same governance view) and
+  // the BDO review documents; the PM edits them (see the Documents panel).
   const primaryRole = resolvePrimaryRole(getStoredUser()?.roles ?? []);
   const isReviewerRole = primaryRole === "GroupHead" || primaryRole === "SuperAdmin";
   const isBdoReviewerRole = primaryRole === "BusinessDevelopmentOfficer";
-  // Project Managers create tickets, so their Tickets tab is always open.
+
+  // Everyone assigned to an initiative can open this page, so "back" goes
+  // to the viewer's own workspace — the Initiatives list is Group Head /
+  // Super Admin only.
+  const backTo =
+    primaryRole === "BusinessDevelopmentOfficer"
+      ? { path: "/dashboard/bdo", label: "Back to BDO workspace", crumb: "BDO workspace" }
+      : primaryRole === "ProjectManager"
+        ? { path: "/dashboard/my-work", label: "Back to my work", crumb: "My work" }
+        : primaryRole === "LeadEngineer"
+          ? { path: "/dashboard/lead-engineer", label: "Back to my tickets", crumb: "My tickets" }
+          : primaryRole === "SoftwareEngineer"
+            ? { path: "/dashboard/developer", label: "Back to my tickets", crumb: "My tickets" }
+            : { path: "/dashboard/initiatives", label: "Back to initiatives", crumb: "Initiatives" };
+  // Product Managers create tickets, so their Tickets tab is always open.
   // Everyone else only gets it once a ticket exists for this initiative.
   const ticketsAvailable =
     primaryRole === "ProjectManager" || (ticketsQuery.data?.length ?? 0) > 0;
-  // Excludes the BDO stage and "Rejected": a BRD still with the BDO, or
-  // rejected back to the PM, isn't the Group Head's to review yet.
-  // ("Rejected" is inferred to match the capitalized-word convention of
-  // "Draft"/"Approved" — correct this if a real rejection reads differently.)
-  const proposalSubmitted =
-    isBrdAwaitingGroupHeadDecision(proposalQuery.data?.status) ||
-    proposalQuery.data?.status === "Approved";
-  const bdoReviewReady = isBrdAwaitingBdoDecision(proposalQuery.data?.status);
-
   // "Submitted" and "Rejected" are confirmed live on the discovery record;
   // "Approved" follows the same pattern but hasn't been directly observed.
   // Active while awaiting a decision, and after approval (viewing the
@@ -107,9 +102,6 @@ function InitiativeDetail() {
     isAwaitingGroupHeadDecision(discoveryQuery.data?.status) ||
     discoveryQuery.data?.status === "Approved";
   const bdoDocsApproved = discoveryQuery.data?.status === "Approved";
-  // The BRD can't meaningfully be reviewed until the BDO's documentation is
-  // approved — the PM's whole BRD workflow only starts at that point.
-  const brdReviewReady = bdoDocsApproved && proposalSubmitted;
 
   function userName(userId: string | null) {
     if (!userId) {
@@ -132,10 +124,7 @@ function InitiativeDetail() {
   if (initiativeQuery.isError || !initiativeQuery.data) {
     return (
       <div className="dashboard-page">
-        <Link to="/dashboard/initiatives" className="text-button">
-          <ArrowLeft size={15} />
-          Back to initiatives
-        </Link>
+        <BackLink fallbackTo={backTo.path} fallbackLabel={backTo.label} />
 
         <p className="initiatives-empty initiatives-empty--error initiative-detail-message">
           Couldn't load this initiative. It may not exist, or you may not have
@@ -147,24 +136,16 @@ function InitiativeDetail() {
 
   const initiative = initiativeQuery.data;
   const { daysLeft } = deriveStatus(initiative);
-  const totalExtensions =
-    initiative.timelineExtensionCount + initiative.extensionsRemaining;
-  const stage = currentStageFor(
-    discoveryQuery.data?.status ?? "NotStarted",
-    proposalQuery.data ?? null,
-  );
+  const stage = currentStageFor(discoveryQuery.data?.status ?? "NotStarted", documentsQuery.data ?? null);
 
   return (
     <div className="dashboard-page">
-      <Link to="/dashboard/initiatives" className="text-button">
-        <ArrowLeft size={15} />
-        Back to initiatives
-      </Link>
+      <BackLink fallbackTo={backTo.path} fallbackLabel={backTo.label} />
 
       <header className="dashboard-header initiative-detail-header">
         <div className="dashboard-header__content">
           <p className="dashboard-breadcrumb">
-            PremiumPLM / Initiatives / {initiative.projectName}
+            PremiumPLM / {backTo.crumb} / {initiative.projectName}
           </p>
 
           <h1 className="dashboard-title">{initiative.projectName}</h1>
@@ -181,19 +162,21 @@ function InitiativeDetail() {
           <button
             type="button"
             className="button button--secondary"
-            onClick={() => navigate(`/dashboard/initiatives/${initiative.id}/tickets`)}
+            onClick={() => navigate(`/dashboard/initiatives/${initiative.id}/tickets`, { state: backState(`Back to ${initiative.projectName}`) })}
             disabled={!ticketsAvailable}
-            title={ticketsAvailable ? undefined : "Available once the Project Manager has created a ticket"}
+            title={ticketsAvailable ? undefined : "Available once the Product Manager has created a ticket"}
           >
             Tickets
           </button>
 
           {isReviewerRole ? (
             <>
+              {/* Once approved there's nothing left to decide — the same page
+                  is then just for viewing the approved documentation. */}
               <button
                 type="button"
-                className="button button--secondary"
-                onClick={() => navigate(`/dashboard/bdo-reviews/${initiative.id}`)}
+                className={bdoDocsApproved ? "button button--dark" : "button button--secondary"}
+                onClick={() => navigate(`/dashboard/bdo-reviews/${initiative.id}`, { state: backState(`Back to ${initiative.projectName}`) })}
                 disabled={!bdoDocsReviewReady}
                 title={
                   bdoDocsReviewReady
@@ -203,66 +186,39 @@ function InitiativeDetail() {
                       : "Not yet submitted to you by the BDO"
                 }
               >
-                Review BDO Docs
+                {bdoDocsApproved ? "View BDO Docs" : "Review BDO Docs"}
               </button>
-
-              {proposalQuery.data?.status === "Approved" ? (
-                <button
-                  type="button"
-                  className="button button--primary"
-                  onClick={() => downloadBrdMutation.mutate()}
-                  disabled={downloadBrdMutation.isPending}
-                >
-                  {downloadBrdMutation.isPending ? "Preparing PDF…" : "Download BRD"}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="button button--secondary"
-                  onClick={() => navigate(`/dashboard/brd-reviews/${initiative.id}`)}
-                  disabled={!brdReviewReady}
-                  title={
-                    !bdoDocsApproved
-                      ? "Available once the BDO's documentation is approved"
-                      : !proposalSubmitted
-                        ? proposalQuery.data?.status === "Rejected"
-                          ? "Back with the PM to revise — available again once resubmitted"
-                          : "Not yet submitted for review"
-                        : undefined
-                  }
-                >
-                  Review BRD
-                </button>
-              )}
             </>
           ) : isBdoReviewerRole ? (
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => navigate(`/dashboard/bdo-brd-reviews/${initiative.id}`)}
-              disabled={!bdoReviewReady}
-              title={!bdoReviewReady ? "Not yet submitted to you for review" : undefined}
-            >
-              Review BRD
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => navigate(`/dashboard/initiatives/${initiative.id}/brd`)}
-              disabled={!bdoDocsApproved}
-              title={!bdoDocsApproved ? "Available once the BDO's documentation is approved" : undefined}
-            >
-              Open BRD
-            </button>
-          )}
+            <>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => navigate(`/dashboard/bdo/${initiative.id}`, { state: backState(`Back to ${initiative.projectName}`) })}
+              >
+                Open documentation
+              </button>
+            </>
+          ) : null}
         </div>
       </header>
 
-      {downloadError && (
-        <p className="form-error" role="alert">
-          {downloadError}
-        </p>
+      {documentsQuery.data && (
+        <InitiativeDocumentsPanel
+          initiativeId={initiative.id}
+          initiativeName={initiative.projectName}
+          documents={documentsQuery.data}
+          bdoDocsApproved={bdoDocsApproved}
+          viewer={
+            isReviewerRole
+              ? "GroupHead"
+              : isBdoReviewerRole
+                ? "BDO"
+                : primaryRole === "ProjectManager"
+                  ? "ProductManager"
+                  : "Other"
+          }
+        />
       )}
 
       <section className="dashboard-panel">
@@ -300,7 +256,7 @@ function InitiativeDetail() {
           </div>
 
           <div>
-            <span className="initiative-detail-grid_label">Project manager</span>
+            <span className="initiative-detail-grid_label">Product manager</span>
             <span className="initiative-detail-grid_value">
               {userName(initiative.projectManagerId)}
             </span>
@@ -334,15 +290,10 @@ function InitiativeDetail() {
             </span>
           </div>
 
+          {/* "Original deadline" is hidden until timeline extensions exist —
+              without them it always equals the current deadline. */}
           <div>
-            <span className="initiative-detail-grid_label">Original deadline</span>
-            <span className="initiative-detail-grid_value">
-              {formatDate(initiative.originalDeadline)}
-            </span>
-          </div>
-
-          <div>
-            <span className="initiative-detail-grid_label">Current deadline</span>
+            <span className="initiative-detail-grid_label">Deadline</span>
             <span className="initiative-detail-grid_value">
               {formatDate(initiative.currentDeadline)}
             </span>
@@ -352,13 +303,6 @@ function InitiativeDetail() {
             <span className="initiative-detail-grid_label">Days remaining</span>
             <span className="initiative-detail-grid_value">
               {daysLeft === null ? "—" : `${daysLeft}d`}
-            </span>
-          </div>
-
-          <div>
-            <span className="initiative-detail-grid_label">Extensions used</span>
-            <span className="initiative-detail-grid_value">
-              {initiative.timelineExtensionCount} of {totalExtensions}
             </span>
           </div>
         </div>

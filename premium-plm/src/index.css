@@ -32,6 +32,19 @@ body {
   color: var(--color-ink);
   background-color: var(--color-surface);
   line-height: 1.5;
+
+  /* Long unbroken strings (emails, URLs, file names, IDs) wrap inside
+     their box instead of running past its edge — app-wide. Inherited, so
+     it covers labels, table cells, cards, chips and dropdown text alike. */
+  overflow-wrap: anywhere;
+}
+
+/* In tables, "anywhere" would let columns squeeze until short words break
+   mid-word; break-word keeps words whole while still wrapping a long
+   email/URL. Tables already scroll sideways inside their own wrapper. */
+th,
+td {
+  overflow-wrap: break-word;
 }
 
   /*BUTTONS & FORM ELEMENTS*/
@@ -87,7 +100,7 @@ a {
   flex-direction: column;
   overflow-y: auto;
 
-  background: var(--color-ink);
+  background: var(--color-sidebar);
   color: white;
 }
 
@@ -110,7 +123,7 @@ a {
 }
 
 .sidebar_brand-name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -118,7 +131,7 @@ a {
   margin-top: var(--space-2);
 
   font-family: "IBM Plex Mono", monospace;
-  font-size: 11px;
+  font-size: 13px;
 
   color: rgb(255 255 255 / 65%);
 }
@@ -130,7 +143,7 @@ a {
   border: 1px solid rgb(255 255 255 / 20%);
   border-radius: var(--radius-1);
 
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .sidebar_navigation {
@@ -143,7 +156,7 @@ a {
   margin-bottom: var(--space-2);
 
   font-family: "IBM Plex Mono", monospace;
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 
@@ -165,7 +178,7 @@ a {
   border-radius: var(--radius-1);
 
   color: rgb(255 255 255 / 60%);
-  font-size: 13px;
+  font-size: 14px;
 
   transition:
     background-color 150ms ease,
@@ -205,25 +218,17 @@ a {
   background: rgb(255 255 255 / 5%);
 }
 
+/* Plain wrappers around <UserAvatar>: they size to the avatar inside them
+   and never shrink, so the circle can't spill over the name/role text
+   beside it. No background of their own — the avatar draws the circle. */
 .sidebar_avatar,
 .topbar_avatar {
-  display: grid;
-  place-items: center;
-
-  width: 32px;
-  height: 32px;
-
-  border-radius: 50%;
-
-  background: var(--color-ink-secondary);
-  color: white;
-
-  font-size: 10px;
-  font-weight: 600;
+  display: flex;
+  flex-shrink: 0;
 }
 
 .sidebar_user-name {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: white;
 }
@@ -231,7 +236,7 @@ a {
 .sidebar_user-role {
   margin-top: 2px;
 
-  font-size: 10px;
+  font-size: 12px;
   color: rgb(255 255 255 / 45%);
 }
 
@@ -257,7 +262,7 @@ a {
   align-items: center;
   gap: var(--space-2);
 
-  font-size: 12px;
+  font-size: 13.5px;
   color: var(--color-ink-muted);
 }
 
@@ -292,7 +297,7 @@ a {
   border: none;
   outline: none;
 
-  font-size: 12px;
+  font-size: 13.5px;
   color: var(--color-ink);
 }
 
@@ -309,7 +314,7 @@ a {
   border-radius: var(--radius-1);
 
   font-family: "IBM Plex Mono", monospace;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .topbar_notification {
@@ -327,6 +332,16 @@ a {
   color: var(--color-ink-secondary);
 
   cursor: pointer;
+}
+
+/* Light / dark switch — the shared .theme-toggle, sized to sit with the
+   bell and avatar. */
+.topbar_theme-toggle {
+  width: 34px;
+  height: 34px;
+
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .topbar_notification-badge {
@@ -347,14 +362,14 @@ a {
   background: var(--premium-red);
   color: white;
 
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 600;
 }
 
 .topbar_user {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
 
   border: none;
   background: none;
@@ -364,236 +379,270 @@ a {
   cursor: pointer;
 }
 
-.topbar_avatar {
-  width: 30px;
-  height: 30px;
-}
-
 .topbar_user-name {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .topbar_user-role {
   margin-top: 1px;
 
-  font-size: 9px;
+  font-size: 11px;
   color: var(--color-ink-muted);
 }
 
 /*AUTHENTICATION*/
 
+/* Full-screen head-office photo under a dark wash, white logo top-left, glass sign-in card centred, legal line
+   at the bottom. The photo is public/login-background.png — without it the
+   dark wash alone shows. */
+/* Login colours live in --login-* variables: dark values here, light values
+   under [data-theme="light"] below. The theme is set on <html> by
+   utils/theme.ts (and by index.html before the app loads). */
 .login-layout {
+  --login-wash: linear-gradient(rgb(10 14 20 / 62%), rgb(10 14 20 / 72%));
+  --login-page-bg: #12161d;
+  --login-text: #ffffff;
+  --login-text-soft: rgb(255 255 255 / 85%);
+  --login-text-muted: rgb(255 255 255 / 70%);
+  --login-text-faint: rgb(255 255 255 / 55%);
+  --login-card-bg: linear-gradient(160deg, rgb(40 46 56 / 72%), rgb(16 19 25 / 78%));
+  --login-card-border: rgb(255 255 255 / 16%);
+  --login-card-shadow: 0 30px 60px rgb(0 0 0 / 45%);
+  --login-input-bg: rgb(255 255 255 / 9%);
+  --login-input-bg-focus: rgb(255 255 255 / 12%);
+  --login-input-border: rgb(255 255 255 / 22%);
+  --login-placeholder: rgb(255 255 255 / 45%);
+  --login-autofill-bg: #2a3039;
+  --login-divider: rgb(255 255 255 / 14%);
+  --login-toggle-bg: rgb(255 255 255 / 10%);
+  --login-toggle-border: rgb(255 255 255 / 22%);
+
+  color-scheme: dark;
+
+  position: relative;
   min-height: 100vh;
-
-  display: grid;
-  grid-template-columns: 43% 57%;
-
-  background: var(--color-surface);
-}
-
-/*LOGIN BRAND PANEL*/
-
-.login-layout_brand {
-  min-height: 100vh;
-
-  background: var(--color-ink);
-  color: white;
-}
-
-.login-layout_brand-content {
-  min-height: 100vh;
+  min-height: 100dvh;
 
   display: flex;
   flex-direction: column;
 
-  padding: 48px;
+  color: var(--login-text);
+  background-color: var(--login-page-bg);
+  background-image:
+    var(--login-wash),
+    url("/login-background.png");
+  background-size: cover;
+  background-position: center;
 }
 
-.login-layout_brand-logo {
-  align-self: flex-start;
-
-  padding: 12px 16px;
-
-  background: white;
-  border-radius: var(--radius-2);
+.login-layout_logo {
+  position: absolute;
+  top: 32px;
+  left: 40px;
+  z-index: 1;
 }
 
-.login-layout_brand-logo img {
+.login-layout_logo img {
   display: block;
-  height: 32px;
+  height: 36px;
 }
 
-.login-layout_intro {
-  max-width: 420px;
-
-  /* pushes the intro into the vertical centre, legal note to the bottom */
-  margin-top: auto;
-  margin-bottom: auto;
+.login-layout_logo-light {
+  display: none !important;
 }
 
-.login-layout_accent {
-  display: block;
-
-  width: 64px;
-  height: 3px;
-
-  margin-bottom: 24px;
-
-  background: var(--premium-red);
+:root[data-theme="light"] .login-layout_logo-light {
+  display: block !important;
 }
 
-.login-layout_intro h1 {
-  font-size: 44px;
-  line-height: 1.12;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+:root[data-theme="light"] .login-layout_logo-dark {
+  display: none !important;
 }
 
-.login-layout_intro p {
-  max-width: 340px;
-
-  margin-top: 20px;
-
-  color: rgb(255 255 255 / 55%);
-
-  font-size: 14px;
-  line-height: 1.6;
+/* Light / dark switch, top-right, mirroring the logo top-left. */
+.login-layout_theme-toggle {
+  position: absolute;
+  top: 28px;
+  right: 40px;
+  z-index: 1;
 }
 
-.login-layout_legal {
-  color: rgb(255 255 255 / 35%);
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 
-  font-size: 11px;
-  line-height: 1.7;
+  width: 42px;
+  height: 42px;
+
+  border: 1px solid var(--login-toggle-border, var(--color-border-strong));
+  border-radius: 999px;
+
+  color: var(--login-text, var(--color-ink));
+  background: var(--login-toggle-bg, var(--color-surface));
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+
+  cursor: pointer;
+
+  transition:
+    background-color 150ms ease,
+    transform 100ms ease;
 }
 
+.theme-toggle:hover {
+  transform: translateY(-1px);
+}
 
-/*LOGIN FORM PANEL*/
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--premium-red);
+  outline-offset: 2px;
+}
+
+/* LIGHT MODE — a pale wash over the photo, a frosted white card, dark text. */
+:root[data-theme="light"] .login-layout {
+  --login-wash: linear-gradient(rgb(236 239 243 / 48%), rgb(236 239 243 / 60%));
+  --login-page-bg: #f4f6f9;
+  --login-text: #16181c;
+  --login-text-soft: #33373d;
+  --login-text-muted: #4a5058;
+  --login-text-faint: #5d636c;
+  --login-card-bg: linear-gradient(160deg, rgb(255 255 255 / 86%), rgb(250 251 253 / 80%));
+  --login-card-border: rgb(255 255 255 / 90%);
+  --login-card-shadow: 0 30px 60px rgb(22 24 28 / 18%);
+  --login-input-bg: rgb(255 255 255 / 90%);
+  --login-input-bg-focus: #ffffff;
+  --login-input-border: #ccd0d6;
+  --login-placeholder: #8a9099;
+  --login-autofill-bg: #ffffff;
+  --login-divider: #e1e5ea;
+  --login-toggle-bg: rgb(255 255 255 / 80%);
+  --login-toggle-border: #d5d9df;
+
+  color-scheme: light;
+}
 
 .login-layout_form {
+  flex: 1;
+
   display: flex;
   align-items: center;
   justify-content: center;
 
-  padding: 38px;
+  padding: 96px 16px 24px;
 }
+
+.login-layout_legal {
+  padding: 0 16px 20px;
+
+  text-align: center;
+  color: var(--login-text-faint);
+
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/*LOGIN CARD*/
 
 .login-form {
   width: 100%;
   max-width: 500px;
+
+  padding: 52px 48px 44px;
+
+  border: 1px solid var(--login-card-border);
+  border-radius: 22px;
+
+  background: var(--login-card-bg);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+  backdrop-filter: blur(14px) saturate(120%);
+
+  box-shadow: var(--login-card-shadow);
+}
+
+.login-form_header {
+  text-align: center;
 }
 
 .login-form_header h2 {
-  font-size: 24px;
+  color: var(--login-text);
+
+  font-size: 32px;
   line-height: 1.25;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: -0.02em;
 }
 
 .login-form_header p {
   margin-top: 8px;
 
-  color: var(--color-ink-muted);
+  color: var(--login-text-muted);
 
-  font-size: 12px;
+  font-size: 15px;
 }
-
-
-/*LOGIN FORM FIELD*/
 
 .login-form form {
-  margin-top: 32px;
+  margin-top: 34px;
 }
 
-.form-field + .form-field {
-  margin-top: 20px;
+.login-form .form-field + .form-field {
+  margin-top: 22px;
 }
 
-.form-field label {
-  display: block;
+.login-form .form-field label {
+  color: var(--login-text);
 
-  margin-bottom: 7px;
-
-  color: var(--color-ink-secondary);
-
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 600;
 }
 
-.form-field input {
-  width: 100%;
-  height: 40px;
+.login-form .form-field input {
+  height: 52px;
 
-  padding: 0 12px;
+  padding: 0 16px;
 
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-1);
+  border: 1px solid var(--login-input-border);
+  border-radius: 10px;
 
-  outline: none;
+  color: var(--login-text);
+  background: var(--login-input-bg);
 
-  color: var(--color-ink);
-  background: var(--color-surface);
-
-  font-size: 12px;
-
-  transition:
-    border-color 150ms ease,
-    box-shadow 150ms ease;
+  font-size: 15px;
 }
 
-.form-field input::placeholder {
-  color: var(--color-ink-disabled);
+.login-form .form-field input::placeholder {
+  color: var(--login-placeholder);
 }
 
-.form-field input:focus {
+.login-form .form-field input:focus {
   border-color: var(--premium-red);
+  background: var(--login-input-bg-focus);
 
-  box-shadow:
-    0 0 0 2px var(--premium-tint);
+  box-shadow: 0 0 0 3px rgb(218 30 40 / 25%);
+}
+
+/* Keep Chrome's autofill from painting the dark inputs pale yellow. */
+.login-form .form-field input:-webkit-autofill {
+  -webkit-text-fill-color: var(--login-text);
+  -webkit-box-shadow: 0 0 0 1000px var(--login-autofill-bg) inset;
+  caret-color: var(--login-text);
 }
 
 /*PASSWORD FIELD*/
-
-
-.form-field_label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.form-field_label-row label {
-  margin-bottom: 7px;
-}
-
-.forgot-password {
-  margin-bottom: 7px;
-
-  padding: 0;
-
-  border: none;
-  background: transparent;
-
-  color: var(--premium-red);
-
-  font-size: 10px;
-  font-weight: 600;
-
-  cursor: pointer;
-}
 
 .password-input {
   position: relative;
 }
 
-.password-input input {
-  padding-right: 65px;
+.login-form .password-input input {
+  padding-right: 76px;
 }
 
 .password-input_toggle {
   position: absolute;
   top: 50%;
-  right: 10px;
+  right: 12px;
 
   display: flex;
   align-items: center;
@@ -606,34 +655,75 @@ a {
   border: none;
   background: transparent;
 
-  color: var(--color-ink-muted);
+  color: var(--login-text-muted);
 
-  font-size: 9px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 
   cursor: pointer;
 }
 
 .password-input_toggle:hover {
-  color: var(--color-ink);
+  color: var(--login-text);
+}
+
+/*REMEMBER ME*/
+
+.login-form_options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  margin-top: 16px;
+}
+
+.login-form_remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  color: var(--login-text-soft);
+
+  font-size: 13px;
+
+  cursor: pointer;
+}
+
+.login-form_remember input {
+  width: 16px;
+  height: 16px;
+
+  margin: 0;
+
+  accent-color: var(--premium-red);
+  cursor: pointer;
+}
+
+.login-form .form-error {
+  margin-top: 16px;
 }
 
 /*LOGIN BUTTON */
 
 .login-form_submit {
   width: 100%;
-  height: 40px;
+  height: 52px;
 
-  margin-top: 28px;
+  margin-top: 30px;
 
   border: none;
-  border-radius: var(--radius-1);
+  border-radius: 10px;
 
   background: var(--premium-red);
   color: white;
 
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
+
+  box-shadow: 0 10px 24px rgb(218 30 40 / 35%);
 
   cursor: pointer;
 
@@ -650,18 +740,127 @@ a {
   transform: translateY(1px);
 }
 
+.login-form_submit:disabled {
+  opacity: 0.75;
+  cursor: progress;
+}
 
-/*LOGIN NOTE*/
-.login-form_note {
+/*LOGIN FOOTER*/
+
+.login-form_footer {
   margin-top: 24px;
-  padding-top: 20px;
+  padding-top: 18px;
 
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--login-divider);
 
-  color: var(--color-ink-muted);
+  text-align: center;
+}
 
-  font-size: 10px;
+.login-form_note {
+  color: var(--login-text-muted);
+
+  font-size: 12px;
   line-height: 1.6;
+}
+
+.login-form_support {
+  margin-top: 10px;
+
+  color: var(--login-text-muted);
+
+  font-size: 13px;
+}
+
+.login-form_support a {
+  color: var(--login-text);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.login-form_support a:hover {
+  text-decoration: underline;
+}
+
+/*LOGIN — RESPONSIVE*/
+
+@media (max-width: 480px) {
+  .login-layout_logo {
+    top: 20px;
+    left: 16px;
+  }
+
+  .login-layout_logo img {
+    height: 28px;
+  }
+
+  .login-layout_theme-toggle {
+    top: 16px;
+    right: 16px;
+  }
+
+  .login-layout_form {
+    padding-top: 80px;
+  }
+
+  .login-form {
+    padding: 32px 20px 24px;
+    border-radius: 18px;
+  }
+
+  .login-form_header h2 {
+    font-size: 22px;
+  }
+}
+
+/*LOGIN FORM FIELD*/
+
+.form-field + .form-field {
+  margin-top: 20px;
+}
+
+.form-field label {
+  display: block;
+
+  margin-bottom: 8px;
+
+  color: var(--color-ink);
+
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.form-field input {
+  width: 100%;
+  height: 44px;
+
+  padding: 0 12px;
+
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-1);
+
+  outline: none;
+
+  color: var(--color-ink);
+  background: var(--color-surface);
+
+  font-size: 15px;
+
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.form-field input::placeholder,
+.form-field textarea::placeholder {
+  color: var(--color-ink-muted);
+}
+
+.form-field input:focus {
+  border-color: var(--premium-red);
+  background: var(--color-surface);
+
+  box-shadow:
+    0 0 0 2px var(--premium-tint);
 }
 
 /*FORM ERROR*/
@@ -669,10 +868,10 @@ a {
   margin: 0;
   padding: 10px 12px;
   border-radius: 6px;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   line-height: 1.4;
-  background: #fef2f2;
-  color: #b42318;
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
 }
 
 
@@ -690,10 +889,10 @@ a {
   outline: none;
 
   color: var(--color-ink);
-  background: var(--color-surface);
+  background-color: var(--color-surface);
 
   font: inherit;
-  font-size: 12px;
+  font-size: 15px;
 
   transition:
     border-color 150ms ease,
@@ -701,24 +900,53 @@ a {
 }
 
 .form-field select {
-  height: 40px;
+  height: 44px;
 }
 
+/* Grows to fit its content, so filled-in text is always fully visible
+   with no inner scrolling (field-sizing is supported in Chromium-based
+   browsers — Chrome, Edge; elsewhere it falls back to the old fixed
+   height + scroll). The min-height keeps empty boxes about 3 lines tall,
+   since field-sizing makes the rows attribute stop setting the height. */
 .form-field textarea {
+  field-sizing: content;
+  min-height: calc(3lh + 22px);
+
+  line-height: 1.6;
+
   resize: vertical;
+}
+
+/* A short-answer textarea: starts the same height as a regular input, then
+   grows line by line as the text wraps (e.g. the BRD's Affects / Impact). */
+.form-field textarea.form-field_textarea--single-line {
+  min-height: 44px;
 }
 
 .form-field select:focus,
 .form-field textarea:focus {
   border-color: var(--premium-red);
+  background-color: var(--color-surface);
 
   box-shadow:
     0 0 0 2px var(--premium-tint);
 }
 
 .form-field select:disabled {
-  background: var(--color-surface-alt);
+  background-color: var(--color-surface-alt);
   color: var(--color-ink-disabled);
+}
+
+/* Filled fields get a slightly darker background for contrast; empty ones
+   stay white. An input/textarea is "filled" once its placeholder is no
+   longer shown — every form field carries a placeholder (an invisible
+   " " where no visible hint is needed) so this works everywhere. A select
+   is filled once a real option, not the empty "Select…" one, is chosen.
+   Excludes :focus so the field being typed in stays white. */
+.form-field input:not(:placeholder-shown):not(:focus),
+.form-field textarea:not(:placeholder-shown):not(:focus),
+.form-field select:has(option:checked:not([value=""])):not(:focus):not(:disabled) {
+  background-color: var(--color-field);
 }
 
 .form-field_hint {
@@ -726,11 +954,11 @@ a {
 
   color: var(--color-ink-muted);
 
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .form-field_hint--error {
-  color: #b42318;
+  color: var(--color-danger);
 }
 
 .form-field-row {
@@ -774,7 +1002,7 @@ a {
 .category-add-form_actions .button {
   min-height: 34px;
   padding: 0 14px;
-  font-size: 12px;
+  font-size: 13.5px;
 }
 
 
@@ -792,7 +1020,7 @@ a {
   padding: var(--space-8) var(--space-4);
   overflow-y: auto;
 
-  background: rgb(15 17 21 / 55%);
+  background: var(--color-overlay);
 }
 
 .modal-panel {
@@ -865,7 +1093,7 @@ a {
 .modal-panel_footer .button {
   min-height: 38px;
   padding: 0 16px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 
@@ -910,7 +1138,7 @@ a {
 
   color: var(--color-ink-secondary);
 
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -925,7 +1153,7 @@ a {
 
   color: var(--color-ink-muted);
 
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -988,7 +1216,7 @@ a {
   margin-top: var(--space-3);
 
   color: var(--color-ink-secondary);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .workspace-placeholder_list {
@@ -998,134 +1226,9 @@ a {
 
   color: var(--color-ink-secondary);
 
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.8;
   text-align: left;
-}
-
-
-/*LOGIN — RESPONSIVE*/
-
-/* Small laptops / Tablets landscape: narrower panel split, less padding */
-@media (max-width: 1024px) {
-  .login-layout {
-    grid-template-columns: 45% 55%;
-  }
-
-  .login-layout_brand-content,
-  .login-layout_form {
-    padding: 36px;
-  }
-
-  .login-layout_intro h1 {
-    font-size: 36px;
-  }
-}
-
-/* Tablets Portrait and Phones: stack the brand panel above the form */
-@media (max-width: 1100px) {
-  .login-layout {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100dvh;
-    min-height: 100vh;
-    background: var(--color-ink);
-  }
-
-  .login-layout_brand {
-    display: none;
-  }
-
-  /* .login-layout_brand-content {
-    min-height: 0;
-    padding: 28px 24px;
-  } 
-
-   .login-layout_intro {
-    max-width: none;
-
-    margin-top: 28px;
-    margin-bottom: 28px;
-  }
-
-  .login-layout_intro h1 {
-    font-size: 30px;
-  }
-
-  .login-layout_intro p {
-    max-width: 420px;
-  } */
-
-  .login-layout_form {
-    min-height: 100dvh;
-    min-height: 100vh;
-    width: 100%;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    padding: clamp(20px, 4vw, 48px);
-  }
-
-
-  .login-form {
-    width: clamp(320px, 60vw, 560px);
-    max-width: calc(100% - 32px);
-    padding: clamp(24px, 3vw, 36px);
-    border-radius: 12px;
-    background: var(--color-surface);
-
-    box-shadow: 0 20px 50px rgb(0 0 0 / 18%);
-  }
-}
-
-/* Phones */
-@media (max-width: 480px) {
-  /* .login-layout_brand-content {
-    padding: 24px 20px;
-  }
-
-  .login-layout_brand-logo img {
-    height: 26px;
-  }
-
-  .login-layout_intro {
-    margin-top: 20px;
-    margin-bottom: 20px;
-  }
-
-  .login-layout_intro h1 {
-    font-size: 26px;
-  }
-
-  .login-layout_legal {
-    font-size: 10px;
-  } */
-
-  .login-layout_form {
-    padding: 16px;
-  }
-
-  .login-form_header h2 {
-    font-size: 20px;
-  }
-
-  .password-input input {
-    padding-right: 58px;
-  }
-
-  .login-form_header p {
-    font-size: 12px;
-  }
-
-
-  .login-form {
-    max-width: calc(100% - 8px);
-    padding: 24px 20px;
-    border-radius: 10px;
-  }
 }
 
 
@@ -1152,13 +1255,13 @@ a {
 .user-avatar-sm {
   width: 32px;
   height: 32px;
-  font-size: 0.75rem;
+  font-size: 0.84375rem;
 }
 
 .user-avatar-md {
   width: 40px;
   height: 40px;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
 }
 
 .user-avatar-lg {
@@ -1212,14 +1315,14 @@ a {
 
 .dashboard-breadcrumb {
   margin: 0 0 8px;
-  color: #8b8f97;
-  font-size: 0.875rem;
+  color: var(--color-ink-muted);
+  font-size: 0.9375rem;
   font-weight: 500;
 }
 
 .dashboard-title {
   margin: 0;
-  color: #18191c;
+  color: var(--color-ink);
   font-size: 1.75rem;
   font-weight: 700;
   line-height: 1.25;
@@ -1227,13 +1330,13 @@ a {
 
 .dashboard-subtitle {
   margin: 8px 0 0;
-  color: #737780;
+  color: var(--color-ink-muted);
   font-size: 0.9375rem;
   line-height: 1.6;
 }
 
 .dashboard-subtitle strong {
-  color: #b42318;
+  color: var(--color-danger);
   font-weight: 600;
 }
 
@@ -1282,22 +1385,64 @@ a {
 }
 
 .button--secondary {
-  border-color: #d8dadd;
-  background-color: #ffffff;
-  color: #33363b;
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface);
+  color: var(--color-ink-secondary);
 }
 
 .button--secondary:not(:disabled):hover {
-  background-color: #f8f8f8;
+  background-color: var(--color-surface-hover);
 }
 
 .button--dark {
-  background-color: var(--color-ink);
-  color: #ffffff;
+  background-color: var(--color-inverse);
+  color: var(--color-inverse-text);
 }
 
 .button--dark:not(:disabled):hover {
   filter: brightness(1.3);
+}
+
+/* Accent: for "add something" actions (Upload, Submit link) — a confident
+   blue that stands out without competing with the red primary action
+   (e.g. "Submit for approval") on the same page. Disabled keeps the blue
+   identity as a soft tint, so the button stays easy to spot even before
+   it's ready to click. */
+.button--accent {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent);
+  color: #ffffff;
+  font-weight: 600;
+
+  box-shadow: 0 2px 8px rgba(47, 95, 167, 0.28);
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.button--accent:not(:disabled):hover {
+  background-color: #244b85;
+  box-shadow: 0 4px 14px rgba(47, 95, 167, 0.36);
+  transform: translateY(-1px);
+}
+
+.button--accent:not(:disabled):active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(47, 95, 167, 0.28);
+}
+
+.button--accent:focus-visible {
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+}
+
+.button--accent:disabled {
+  border-color: #c9d6ec;
+  background-color: var(--color-info-tint);
+  color: #6f8bb8;
+  box-shadow: none;
+  opacity: 1;
 }
 
 /* Prevents stretching full-width inside a flex-column parent (e.g.
@@ -1328,9 +1473,9 @@ a {
   width: 100%;
   padding: 22px 20px;
 
-  border: 1px solid #e6e7e9;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background-color: #ffffff;
+  background-color: var(--color-surface);
 
   text-align: left;
   font: inherit;
@@ -1342,7 +1487,7 @@ a {
 }
 
 .dashboard-stat-card--clickable:hover {
-  border-color: #c7cad1;
+  border-color: var(--color-ink-disabled);
 }
 
 .dashboard-stat-card--active {
@@ -1352,14 +1497,14 @@ a {
 
 .dashboard-stat-card__label {
   margin: 0;
-  color: #676b73;
-  font-size: 0.875rem;
+  color: var(--color-ink-muted);
+  font-size: 0.9375rem;
   font-weight: 500;
 }
 
 .dashboard-stat-card__value {
   margin: 12px 0 8px;
-  color: #17181b;
+  color: var(--color-ink);
   font-size: 2rem;
   font-weight: 700;
   line-height: 1;
@@ -1367,25 +1512,25 @@ a {
 
 .dashboard-stat-card__description {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.4;
 }
 
 .dashboard-stat-card__description--neutral {
-  color: #737780;
+  color: var(--color-ink-muted);
 }
 
 .dashboard-stat-card__description--success {
-  color: #16803c;
+  color: var(--color-success);
 }
 
 .dashboard-stat-card__description--warning {
-  color: #b54708;
+  color: var(--color-warning);
 }
 
 .dashboard-stat-card__description--danger {
-  color: #b42318;
+  color: var(--color-danger);
 }
 
 @media (min-width: 480px) {
@@ -1433,6 +1578,11 @@ a {
    Dashboard Grid
    ========================= */
 
+.dashboard-portfolio {
+  min-width: 0;
+  margin-bottom: 28px;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1451,6 +1601,10 @@ a {
 }
 
 @media (min-width: 1100px) {
+  .dashboard-portfolio {
+    margin-bottom: 32px;
+  }
+
   .dashboard-grid {
     grid-template-columns: minmax(0, 1fr) 360px;
     gap: 32px;
@@ -1470,9 +1624,9 @@ a {
   min-width: 0;
   overflow: hidden;
 
-  border: 1px solid #e6e7e9;
+  border: 1px solid var(--color-border);
   border-radius: 10px;
-  background-color: #ffffff;
+  background-color: var(--color-surface);
 }
 
 .dashboard-panel__header {
@@ -1482,20 +1636,20 @@ a {
   gap: 16px;
 
   padding: 20px 24px;
-  border-bottom: 1px solid #ececee;
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .dashboard-panel__header h2 {
   margin: 0;
-  color: #1c1d20;
+  color: var(--color-ink);
   font-size: 1.0625rem;
   font-weight: 700;
 }
 
 .dashboard-panel__header p {
   margin: 6px 0 0;
-  color: #858890;
-  font-size: 0.8125rem;
+  color: var(--color-ink-muted);
+  font-size: 0.875rem;
 }
 
 .text-button {
@@ -1509,7 +1663,7 @@ a {
   gap: 3px;
 
   font: inherit;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -1532,7 +1686,7 @@ a {
 .portfolio-table th,
 .portfolio-table td {
   padding: 16px 12px;
-  border-bottom: 1px solid #f0f0f1;
+  border-bottom: 1px solid var(--color-divider);
   text-align: left;
   vertical-align: middle;
 }
@@ -1548,24 +1702,45 @@ a {
 }
 
 .portfolio-table th {
-  background-color: #fafafa;
-  color: #858890;
-  font-size: 0.75rem;
+  background-color: var(--color-surface-hover);
+  color: var(--color-ink-muted);
+  font-size: 0.84375rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
   line-height: 1.3;
 }
 
+/* Badges in tables: short labels on one line, long ones (e.g. "Awaiting GH
+   Documentation Approval") wrap onto at most two. The badge is as wide as
+   its text up to a 13.5em cap, and that width is also the column's minimum
+   — so the table can't squeeze it into three lines; it scrolls sideways
+   inside its wrapper instead. `text-wrap: balance` evens the two lines. */
 .portfolio-table .status-badge {
+  justify-content: center;
+
+  width: max-content;
+  min-width: 7.5em;
+  max-width: 13.5em;
+
   white-space: normal;
-  line-height: 1.3;
+  text-wrap: balance;
   text-align: center;
+  line-height: 1.3;
+}
+
+/* Stage pills share one fixed width, so the "Current stage" column reads
+   as a tidy, aligned column whatever the stage — a one-word stage no longer
+   sits as a small pill next to wide two-line ones. Long stage names wrap
+   onto at most two balanced lines inside that width. */
+.portfolio-table .status-badge--stage {
+  width: 15em;
+  max-width: none;
 }
 
 .portfolio-table td {
-  color: #4f535a;
-  font-size: 0.8125rem;
+  color: var(--color-ink-secondary);
+  font-size: 0.875rem;
 }
 
 .portfolio-table tbody tr:last-child td {
@@ -1577,25 +1752,34 @@ a {
 }
 
 .portfolio-table tbody tr:hover {
-  background-color: #fcfcfc;
+  background-color: var(--color-surface-hover);
 }
 
 .initiative-cell {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  min-width: 120px;
+  min-width: 190px;
 }
 
+/* Names and titles in tables never run past two lines: the column is wide
+   enough for most names on one or two lines, and anything longer is cut
+   at two lines with "…" (the full text shows on hover via `title`). */
 .initiative-cell strong {
-  color: #25272b;
-  font-size: 0.875rem;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+
+  color: var(--color-ink);
+  font-size: 0.9375rem;
   font-weight: 600;
 }
 
 .initiative-cell span {
-  color: #9699a0;
-  font-size: 0.75rem;
+  color: var(--color-ink-muted);
+  font-size: 0.84375rem;
 }
 
 .priority-badge {
@@ -1605,7 +1789,7 @@ a {
   padding: 5px 10px;
   border-radius: 5px;
 
-  font-size: 0.75rem;
+  font-size: 0.84375rem;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -1615,8 +1799,8 @@ a {
 .priority-badge--1 { background-color: var(--color-danger-tint); color: var(--color-danger); }
 .priority-badge--2 { background-color: var(--color-warning-tint); color: var(--color-warning); }
 .priority-badge--3 { background-color: var(--color-info-tint); color: var(--color-info); }
-.priority-badge--4 { background-color: #eceef0; color: var(--color-ink-disabled); }
-.priority-badge--5 { background-color: #f4f5f6; color: var(--color-ink-muted); }
+.priority-badge--4 { background-color: var(--color-neutral-tint); color: var(--color-ink-disabled); }
+.priority-badge--5 { background-color: var(--color-neutral-tint); color: var(--color-ink-muted); }
 
 .progress-cell {
   display: flex;
@@ -1631,7 +1815,7 @@ a {
   overflow: hidden;
 
   border-radius: 999px;
-  background-color: #ececee;
+  background-color: var(--color-neutral-tint);
 }
 
 .progress-fill {
@@ -1643,8 +1827,8 @@ a {
 }
 
 .progress-cell > span {
-  color: #74777e;
-  font-size: 0.75rem;
+  color: var(--color-ink-muted);
+  font-size: 0.84375rem;
 }
 
 .status-badge {
@@ -1654,61 +1838,62 @@ a {
   padding: 5px 11px;
   border-radius: 999px;
 
-  font-size: 0.75rem;
+  font-size: 0.84375rem;
   font-weight: 600;
   white-space: nowrap;
 }
 
 .status-badge--on-track {
-  background-color: #ecfdf3;
-  color: #027a48;
+  background-color: var(--color-success-tint);
+  color: var(--color-success);
 }
 
 .status-badge--at-risk {
-  background-color: #fffaeb;
-  color: #b54708;
+  background-color: var(--color-warning-tint);
+  color: var(--color-warning);
 }
 
 .status-badge--overdue {
-  background-color: #fef3f2;
-  color: #b42318;
+  background-color: var(--color-danger-tint);
+  color: var(--color-danger);
 }
 
 .status-badge--blocked {
-  background-color: #f2f4f7;
-  color: #475467;
+  background-color: var(--color-neutral-tint);
+  color: var(--color-neutral-text);
 }
 
 .days-left {
-  color: #555960;
+  color: var(--color-ink-secondary);
   font-weight: 500;
   white-space: nowrap;
 }
 
 .days-left--overdue {
-  color: #b42318;
+  color: var(--color-danger);
   font-weight: 600;
 }
 
 .table-action {
-  padding: 8px 14px;
+  padding: 7px 11px;
 
-  border: 1px solid #dedfe2;
+  border: 1px solid var(--color-border-strong);
   border-radius: 5px;
 
-  background-color: #ffffff;
-  color: #3e4147;
+  background-color: var(--color-surface);
+  color: var(--color-ink-secondary);
 
   font: inherit;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 600;
+  white-space: nowrap;
 
   cursor: pointer;
 }
 
 .table-action:not(:disabled):hover {
-  border-color: #c6c8cc;
-  background-color: #fafafa;
+  border-color: var(--color-ink-disabled);
+  background-color: var(--color-surface-hover);
 }
 
 .table-action:disabled {
@@ -1725,6 +1910,26 @@ a {
 .table-action--premium:not(:disabled):hover {
   border-color: var(--premium-red-dark);
   background-color: var(--premium-red-dark);
+}
+
+/* Dark table action for secondary/"view" actions (View initiative,
+   Download, Manage…). A soft slate rather than near-black ink, so it reads
+   clearly as secondary beside the red primary action instead of a heavy
+   black block. Deepens on hover. */
+.table-action--dark {
+  border-color: var(--color-slate);
+  background-color: var(--color-slate);
+  color: #ffffff;
+}
+
+.table-action--dark:not(:disabled):hover {
+  border-color: var(--color-slate-hover);
+  background-color: var(--color-slate-hover);
+}
+
+/* A little extra width for a short label that would otherwise look cramped. */
+.table-action--wide {
+  min-width: 88px;
 }
 
 .brd-reviews-actions {
@@ -1777,7 +1982,7 @@ a {
   border: none;
   outline: none;
 
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-ink);
 }
 
@@ -1793,9 +1998,9 @@ a {
   border-radius: var(--radius-1);
 
   color: var(--color-ink);
-  background: var(--color-surface);
+  background-color: var(--color-surface);
 
-  font-size: 13px;
+  font-size: 14px;
 }
 
 /* =========================
@@ -1818,7 +2023,7 @@ a {
   background: var(--premium-tint);
   box-shadow: var(--shadow-card);
 
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-ink);
 }
@@ -1842,13 +2047,13 @@ a {
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-1);
 
-  font-size: 12px;
+  font-size: 13.5px;
 }
 
 .initiatives-bulk-bar_actions .button {
   min-height: 34px;
   padding: 0 14px;
-  font-size: 12px;
+  font-size: 13.5px;
 }
 
 /* =========================
@@ -1862,7 +2067,7 @@ a {
 }
 
 .initiatives-empty--error {
-  color: #b42318;
+  color: var(--color-danger);
 }
 
 /* Standalone (non-table-cell) use of the same empty/error message, e.g. on
@@ -1927,7 +2132,7 @@ p.initiatives-empty {
 
   color: var(--color-ink-muted);
 
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1938,7 +2143,7 @@ p.initiatives-empty {
 
   color: var(--color-ink);
 
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -1947,8 +2152,47 @@ p.initiatives-empty {
   text-transform: uppercase;
 }
 
-.brd-readonly-value {
-  font-weight: 400;
+/* Read-only BRD fields: bold label over the value in a filled box — the
+   same look as a filled form field (BDO documentation review). */
+.brd-readonly-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.brd-readonly-field_label {
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* Same box for each value cell in the read-only BRD tables
+   (Functionalities, User groups, Requirements). */
+.brd-readonly-cell {
+  min-height: 40px;
+  padding: 8px 10px;
+
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-1);
+  background-color: var(--color-field);
+
+  color: var(--color-ink);
+  font-size: 15px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.brd-readonly-field_value {
+  min-height: 44px;
+  padding: 10px 12px;
+
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-1);
+  background-color: var(--color-field);
+
+  color: var(--color-ink);
+  font-size: 15px;
   line-height: 1.6;
   white-space: pre-wrap;
 }
@@ -1999,7 +2243,7 @@ p.initiatives-empty {
   padding: 2px 8px;
   border-radius: var(--radius-pill);
 
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -2020,21 +2264,21 @@ p.initiatives-empty {
 
 .priorities-column_rank--4,
 .priorities-column_rank--5 {
-  background: #f2f4f7;
-  color: #667085;
+  background: var(--color-neutral-tint);
+  color: var(--color-neutral-text);
 }
 
 .priorities-column_title {
   flex: 1;
 
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-ink);
 }
 
 .priorities-column_count {
   color: var(--color-ink-muted);
-  font-size: 12px;
+  font-size: 13.5px;
   font-weight: 600;
 }
 
@@ -2055,7 +2299,7 @@ p.initiatives-empty {
   border-radius: var(--radius-2);
 
   color: var(--color-ink-disabled);
-  font-size: 12px;
+  font-size: 13.5px;
   text-align: center;
 }
 
@@ -2085,14 +2329,14 @@ p.initiatives-empty {
 }
 
 .priorities-card strong {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-ink);
 }
 
 .priorities-card_manager {
   color: var(--color-ink-muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .priorities-card_footer {
@@ -2116,7 +2360,7 @@ p.initiatives-empty {
   background: var(--color-success-tint);
 
   color: var(--color-success);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -2124,11 +2368,11 @@ p.initiatives-empty {
   margin-bottom: var(--space-4);
 
   color: var(--color-ink-muted);
-  font-size: 12px;
+  font-size: 13.5px;
 }
 
 .brd-resubmit-hint .text-button {
-  font-size: 12px;
+  font-size: 13.5px;
 }
 
 .proposal-section {
@@ -2154,7 +2398,7 @@ p.initiatives-empty {
   align-items: center;
   gap: var(--space-2);
 
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-ink-secondary);
 
   cursor: pointer;
@@ -2178,33 +2422,81 @@ p.initiatives-empty {
   text-align: left;
 
   color: var(--color-ink-muted);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
 
+/* Top-aligned so the row number and remove button stay level with the
+   first line once a cell's textarea grows taller. */
 .proposal-subtable td {
   padding: 6px;
   border-bottom: 1px solid var(--color-border);
-  vertical-align: middle;
+  vertical-align: top;
 }
 
-.proposal-subtable input,
+/* Text cells are textareas (not inputs) so long entries wrap and the box
+   grows to show every word — same look and filled/empty rules as the
+   main .form-field controls. */
+.proposal-subtable textarea,
 .proposal-subtable select {
   width: 100%;
-  height: 32px;
+  min-height: 40px;
 
-  padding: 0 8px;
+  padding: 8px 10px;
 
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-1);
 
-  font-size: 12px;
+  outline: none;
+
   color: var(--color-ink);
+  background-color: var(--color-surface);
+
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.proposal-subtable textarea {
+  display: block;
+  field-sizing: content;
+
+  resize: vertical;
+}
+
+.proposal-subtable select {
+  height: 40px;
+}
+
+/* Row number: nudged down to sit level with the first line of text. */
+.proposal-subtable td:first-child {
+  padding-top: 15px;
+
+  font-size: 15px;
+}
+
+.proposal-subtable textarea:focus,
+.proposal-subtable select:focus {
+  border-color: var(--premium-red);
+  background-color: var(--color-surface);
+
+  box-shadow: 0 0 0 2px var(--premium-tint);
+}
+
+.proposal-subtable textarea:not(:placeholder-shown):not(:focus),
+.proposal-subtable select:not(:focus) {
+  background-color: var(--color-field);
 }
 
 .proposal-subtable-remove {
+  margin-top: 8px;
+
   display: grid;
   place-items: center;
 
@@ -2231,18 +2523,9 @@ p.initiatives-empty {
   margin: var(--space-3) var(--space-6) var(--space-5);
 }
 
-.proposal-bottom-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-3);
-
-  margin-top: var(--space-2);
-  margin-bottom: var(--space-8);
-}
-
 .brd-confirm-copy {
   color: var(--color-ink-secondary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -2250,7 +2533,7 @@ p.initiatives-empty {
   color: var(--color-ink-muted);
 
   font-family: "IBM Plex Mono", monospace;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .brd-reject-button {
@@ -2259,7 +2542,7 @@ p.initiatives-empty {
 }
 
 .brd-reject-confirm {
-  background-color: var(--color-danger);
+  background-color: var(--color-danger-solid);
 }
 
 /* =========================
@@ -2322,7 +2605,7 @@ p.initiatives-empty {
 
 .notifications-item_message {
   color: var(--color-ink);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -2332,7 +2615,7 @@ p.initiatives-empty {
 
 .notifications-item_time {
   color: var(--color-ink-muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 /* =========================
@@ -2348,7 +2631,7 @@ p.initiatives-empty {
   background: var(--color-warning-tint);
 
   color: var(--color-warning);
-  font-size: 12px;
+  font-size: 13.5px;
   line-height: 1.5;
 }
 
@@ -2362,7 +2645,7 @@ p.initiatives-empty {
 
 .bdo-upload-empty {
   color: var(--color-ink-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .bdo-upload-progress {
@@ -2391,7 +2674,7 @@ p.initiatives-empty {
 }
 
 .bdo-upload-progress_label {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--color-ink-muted);
 }
 
@@ -2412,6 +2695,20 @@ p.initiatives-empty {
 
   border: 1px solid var(--color-border);
   border-radius: var(--radius-1);
+}
+
+/* BDO workspace document entry: one bordered box per uploaded file. */
+.bdo-upload-group {
+  padding: var(--space-3);
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+}
+
+.bdo-upload-group_row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 .bdo-upload-list_icon {
@@ -2438,7 +2735,7 @@ p.initiatives-empty {
 
 .bdo-upload-list_name {
   color: var(--color-ink);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
 
   overflow: hidden;
@@ -2450,7 +2747,7 @@ p.initiatives-empty {
   flex-shrink: 0;
 
   color: var(--color-ink-muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .bdo-upload-list_open {
@@ -2467,7 +2764,7 @@ p.initiatives-empty {
   background: var(--premium-red);
   color: #ffffff;
 
-  font-size: 12px;
+  font-size: 13.5px;
   font-weight: 600;
 }
 
@@ -2506,7 +2803,7 @@ p.initiatives-empty {
   background: var(--color-danger-tint);
 
   color: var(--color-danger);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -2521,7 +2818,7 @@ p.initiatives-empty {
 
 .brd-queue__item {
   padding: 20px 24px;
-  border-bottom: 1px solid #f0f0f1;
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .brd-queue__item:last-child {
@@ -2541,8 +2838,8 @@ p.initiatives-empty {
 
 .brd-queue__initiative h3 {
   margin: 0;
-  color: #292b2f;
-  font-size: 0.875rem;
+  color: var(--color-ink);
+  font-size: 0.9375rem;
   font-weight: 600;
   line-height: 1.4;
 }
@@ -2551,8 +2848,8 @@ p.initiatives-empty {
   display: block;
   margin-top: 3px;
 
-  color: #90939a;
-  font-size: 0.75rem;
+  color: var(--color-ink-muted);
+  font-size: 0.84375rem;
 }
 
 .brd-queue__meta {
@@ -2563,8 +2860,8 @@ p.initiatives-empty {
 
   margin-top: 12px;
 
-  color: #858890;
-  font-size: 0.75rem;
+  color: var(--color-ink-muted);
+  font-size: 0.84375rem;
 }
 
 .brd-wait {
@@ -2572,7 +2869,7 @@ p.initiatives-empty {
 }
 
 .brd-wait--overdue {
-  color: #b42318;
+  color: var(--color-danger);
   font-weight: 600;
 }
 
@@ -2590,7 +2887,7 @@ p.initiatives-empty {
   color: var(--premium-red);
 
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 600;
 
   cursor: pointer;
@@ -2625,12 +2922,12 @@ p.initiatives-empty {
   gap: 8px;
 
   color: var(--color-ink);
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 600;
 }
 
 .priority-distribution__rank {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 
@@ -2642,7 +2939,7 @@ p.initiatives-empty {
 
 .priority-distribution__count {
   color: var(--color-info);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 
@@ -2650,7 +2947,7 @@ p.initiatives-empty {
   height: 8px;
   overflow: hidden;
 
-  background-color: #efeff4;
+  background-color: var(--color-neutral-tint);
 }
 
 .priority-distribution__fill {
@@ -2678,10 +2975,10 @@ p.initiatives-empty {
   justify-content: center;
 
   border-radius: 999px;
-  background-color: #fef3f2;
-  color: #b42318;
+  background-color: var(--color-danger-tint);
+  color: var(--color-danger);
 
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 700;
 }
 
@@ -2696,7 +2993,7 @@ p.initiatives-empty {
   gap: 14px;
 
   padding: 20px 24px;
-  border-bottom: 1px solid #f0f0f1;
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .risk-panel__item:last-child {
@@ -2716,18 +3013,18 @@ p.initiatives-empty {
 }
 
 .risk-panel__icon--at-risk {
-  background-color: #fffaeb;
-  color: #b54708;
+  background-color: var(--color-warning-tint);
+  color: var(--color-warning);
 }
 
 .risk-panel__icon--overdue {
-  background-color: #fef3f2;
-  color: #b42318;
+  background-color: var(--color-danger-tint);
+  color: var(--color-danger);
 }
 
 .risk-panel__icon--blocked {
-  background-color: #f2f4f7;
-  color: #475467;
+  background-color: var(--color-neutral-tint);
+  color: var(--color-neutral-text);
 }
 
 .risk-panel__content {
@@ -2745,8 +3042,8 @@ p.initiatives-empty {
 .risk-panel__title-row h3 {
   margin: 0;
 
-  color: #292b2f;
-  font-size: 0.875rem;
+  color: var(--color-ink);
+  font-size: 0.9375rem;
   font-weight: 600;
   line-height: 1.4;
 }
@@ -2754,8 +3051,8 @@ p.initiatives-empty {
 .risk-panel__content p {
   margin: 5px 0 0;
 
-  color: #858890;
-  font-size: 0.75rem;
+  color: var(--color-ink-muted);
+  font-size: 0.84375rem;
   line-height: 1.5;
 }
 
@@ -2774,7 +3071,7 @@ p.initiatives-empty {
   gap: 14px;
 
   padding: 18px 24px;
-  border-bottom: 1px solid #f0f0f1;
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .governance-activity__item:last-child {
@@ -2794,23 +3091,23 @@ p.initiatives-empty {
 }
 
 .governance-activity__icon--success {
-  background-color: #ecfdf3;
-  color: #027a48;
+  background-color: var(--color-success-tint);
+  color: var(--color-success);
 }
 
 .governance-activity__icon--info {
-  background-color: #eff8ff;
-  color: #175cd3;
+  background-color: var(--color-info-tint);
+  color: var(--color-info);
 }
 
 .governance-activity__icon--warning {
-  background-color: #fffaeb;
-  color: #b54708;
+  background-color: var(--color-warning-tint);
+  color: var(--color-warning);
 }
 
 .governance-activity__icon--danger {
-  background-color: #fef3f2;
-  color: #b42318;
+  background-color: var(--color-danger-tint);
+  color: var(--color-danger);
 }
 
 .governance-activity__content {
@@ -2821,8 +3118,8 @@ p.initiatives-empty {
 .governance-activity__action {
   margin: 0;
 
-  color: #35373b;
-  font-size: 0.8125rem;
+  color: var(--color-ink);
+  font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.45;
 }
@@ -2834,8 +3131,8 @@ p.initiatives-empty {
 .governance-activity__initiative {
   margin: 3px 0 0;
 
-  color: #666a71;
-  font-size: 0.75rem;
+  color: var(--color-ink-muted);
+  font-size: 0.84375rem;
   font-weight: 600;
 }
 
@@ -2847,8 +3144,8 @@ p.initiatives-empty {
 
   margin-top: 5px;
 
-  color: #9699a0;
-  font-size: 0.6875rem;
+  color: var(--color-ink-muted);
+  font-size: 0.8125rem;
 }
 
 /* =========================
@@ -2911,12 +3208,12 @@ p.initiatives-empty {
 }
 
 .portfolio-empty-value {
-  color: #9699a0;
+  color: var(--color-ink-muted);
 }
 
 .status-badge--not-started {
-  background-color: #f2f4f7;
-  color: #667085;
+  background-color: var(--color-neutral-tint);
+  color: var(--color-neutral-text);
 }
 
 .ticket-timeline-cell {
@@ -2929,10 +3226,10 @@ p.initiatives-empty {
   width: 64px;
   padding: 6px 8px;
 
-  border: 1px solid #d0d5dd;
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-2);
 
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .status-badge--approved {
@@ -2965,6 +3262,12 @@ p.initiatives-empty {
   color: var(--color-danger);
 }
 
+/* BRD approved → the initiative is now in product development. */
+.status-badge--product-development {
+  background-color: var(--color-success-tint);
+  color: var(--color-success);
+}
+
 .role-chip-list {
   display: flex;
   flex-wrap: wrap;
@@ -2981,10 +3284,10 @@ p.initiatives-empty {
   padding: 4px 6px 4px 10px;
   border-radius: 999px;
 
-  background-color: #f2f4f7;
-  color: #344054;
+  background-color: var(--color-neutral-tint);
+  color: var(--color-neutral-text);
 
-  font-size: 0.75rem;
+  font-size: 0.84375rem;
   font-weight: 600;
 }
 
@@ -3015,7 +3318,86 @@ p.initiatives-empty {
 
 .admin-users-empty-roles {
   color: var(--color-ink-muted);
-  font-size: 0.75rem;
+  font-size: 0.84375rem;
+}
+
+/* Reset + Manage side by side in each user row. */
+.admin-users-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Toast: a short-lived confirmation ("User created successfully.") pinned
+   to the top of the screen, above everything (modals included), and
+   dismissed automatically by the page after a few seconds. */
+.app-toast {
+  position: fixed;
+  top: var(--space-6);
+  left: 50%;
+  z-index: 300;
+
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+
+  max-width: min(480px, calc(100vw - 32px));
+  padding: 12px 14px 12px 16px;
+
+  border: 1px solid var(--color-success-border);
+  border-radius: var(--radius-2);
+  background: var(--color-success-tint);
+  box-shadow: 0 8px 24px rgba(22, 24, 28, 0.12);
+
+  color: var(--color-success);
+  font-size: 15px;
+  font-weight: 600;
+
+  transform: translateX(-50%);
+  animation: app-toast-in 200ms ease-out;
+}
+
+.app-toast_close {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+
+  margin-left: var(--space-2);
+  padding: 4px;
+
+  border: none;
+  border-radius: var(--radius-1);
+  background: transparent;
+
+  color: inherit;
+  cursor: pointer;
+}
+
+.app-toast_close:hover {
+  background: rgba(16, 122, 95, 0.12);
+}
+
+@keyframes app-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-toast {
+    animation: none;
+  }
+}
+
+/* Separates the inline "Create user" panel from the users table below it. */
+.admin-users-create-panel {
+  margin-bottom: var(--space-6);
 }
 /* =========================
    BDO workspace
@@ -3057,7 +3439,7 @@ p.initiatives-empty {
   border-radius: var(--radius-2);
 
   color: var(--color-ink-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -3073,7 +3455,7 @@ p.initiatives-empty {
 
   background: var(--color-surface-alt);
   color: var(--color-ink-muted);
-  font-size: 12px;
+  font-size: 13.5px;
 }
 
 .bdo-step_label {
@@ -3089,7 +3471,7 @@ p.initiatives-empty {
 
 .bdo-step--current .bdo-step_marker {
   background: var(--color-info);
-  color: #ffffff;
+  color: var(--color-surface);
 }
 
 .bdo-step--done {
@@ -3099,7 +3481,7 @@ p.initiatives-empty {
 
 .bdo-step--done .bdo-step_marker {
   background: var(--color-success);
-  color: #ffffff;
+  color: var(--color-surface);
 }
 
 .bdo-card {
@@ -3119,7 +3501,7 @@ p.initiatives-empty {
 .bdo-card_header p {
   margin: var(--space-1) 0 0;
   color: var(--color-ink-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .bdo-fields-grid {
@@ -3143,6 +3525,125 @@ p.initiatives-empty {
   border-top: 1px solid var(--color-border);
 }
 
+/* New initiative page: the form's action bar, and the success panel. */
+.create-initiative-actions {
+  margin-bottom: var(--space-8);
+}
+
+.create-initiative-success {
+  max-width: 560px;
+  margin: 0 auto var(--space-8);
+  padding: var(--space-6);
+}
+
+/* BRD editor's closing steps: Save BRD bar → supporting documents →
+   Submit for review bar, spaced evenly down the end of the page. */
+.brd-documents-step {
+  margin-top: var(--space-6);
+}
+
+.brd-documents-step .brd-documents {
+  margin-bottom: 0;
+}
+
+.brd-submit-bar {
+  margin-bottom: var(--space-8);
+}
+
+/* BRD supporting documents (PID / FID / SWR). */
+.brd-documents {
+  margin-bottom: var(--space-6);
+}
+
+.brd-documents_slots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+
+  padding: var(--space-5) var(--space-6) var(--space-6);
+}
+
+.brd-documents_slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+
+  padding: var(--space-4);
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+}
+
+/* File name | File | Upload, on one row; stacks on narrow screens. */
+.brd-documents_form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-4);
+}
+
+.brd-documents_form .form-field + .form-field {
+  margin-top: 0;
+}
+
+.brd-documents_message {
+  margin: 0;
+  padding: var(--space-5) var(--space-6);
+
+  color: var(--color-ink-muted);
+  font-size: 14px;
+}
+
+.brd-documents_slot .brd-documents_message {
+  padding: 0;
+}
+
+/* Shown above the PID/FID/SWR slots until the BRD has been saved. */
+.brd-documents_locked-note {
+  margin: 0;
+  padding: 10px 14px;
+
+  border-radius: var(--radius-2);
+  background-color: var(--color-info-tint);
+
+  color: var(--color-info);
+  font-size: 14px;
+}
+
+.brd-documents_slot-title {
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .brd-documents_form {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* "Choose file" button + the chosen file's name, in the Documents upload form. */
+.bdo-file-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.bdo-file-picker .button {
+  flex-shrink: 0;
+}
+
+.bdo-file-picker_name {
+  overflow: hidden;
+  min-width: 0;
+
+  color: var(--color-ink-muted);
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .bdo-card_footer {
   display: flex;
   align-items: center;
@@ -3157,7 +3658,15 @@ p.initiatives-empty {
 .bdo-card_hint {
   margin: 0;
   color: var(--color-ink-muted);
-  font-size: 13px;
+  font-size: 14px;
+}
+
+/* A non-sticky variant: sits at the end of the page content instead of
+   following the scroll (used where the same actions are already at the
+   top of the page, e.g. the Group Head's BDO docs review). */
+.bdo-action-bar.bdo-action-bar--static {
+  position: static;
+  box-shadow: none;
 }
 
 .bdo-action-bar {
@@ -3181,7 +3690,7 @@ p.initiatives-empty {
 .bdo-action-bar_hint {
   margin: 0;
   color: var(--color-ink-muted);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 @media (min-width: 900px) {
@@ -3289,7 +3798,7 @@ p.initiatives-empty {
   inset: 0;
   z-index: 200;
 
-  background: rgb(15 17 21 / 55%);
+  background: var(--color-overlay);
 }
 
 .topbar_left {
@@ -3403,4 +3912,591 @@ body {
 .sidebar,
 .modal-panel_body {
   overscroll-behavior: contain;
+}
+
+/* =========================
+   Dropdowns (select) — app-wide
+   ========================= */
+
+/* Every <select> in the app: no browser-default arrow, replaced by a clean
+   chevron, with room on the right so text never runs under it. Size,
+   border and colour still come from each select's own rule above. */
+select {
+  appearance: none;
+
+  padding-right: 40px;
+
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23767c86' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+
+  cursor: pointer;
+
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease;
+}
+
+/* Each select's own rule sets a padding shorthand with a higher
+   specificity than plain `select`, which would put the text under the
+   chevron — so the right-hand room is re-applied at matching specificity. */
+.form-field select,
+.proposal-subtable select,
+.initiatives-toolbar select,
+.initiatives-bulk-bar_actions select {
+  padding-right: 40px;
+}
+
+select:hover:not(:disabled) {
+  border-color: var(--color-ink-muted);
+}
+
+select:disabled {
+  cursor: not-allowed;
+}
+
+/* The open option list. Browsers that support customizable selects
+   (Chrome / Edge 135+) let the list itself be styled: a floating card with
+   rounded corners, a soft shadow, roomy rows, a hover highlight, and the
+   chosen option marked in brand red. Other browsers keep their native list
+   (with the cleaned-up closed state above). */
+@supports (appearance: base-select) {
+  select,
+  ::picker(select) {
+    appearance: base-select;
+  }
+
+  /* A styleable select wraps a long choice (e.g. "Name (email@…)") onto
+     more lines, so a fixed height would let the text spill out below the
+     box. Each one keeps its usual height as a minimum and grows to fit. */
+  select {
+    line-height: 1.4;
+  }
+
+  .form-field select {
+    height: auto;
+    min-height: 44px;
+  }
+
+  .proposal-subtable select {
+    height: auto;
+    min-height: 40px;
+  }
+
+  .initiatives-toolbar select {
+    height: auto;
+    min-height: 38px;
+    padding-block: 7px;
+  }
+
+  .initiatives-bulk-bar_actions select {
+    height: auto;
+    min-height: 34px;
+    padding-block: 5px;
+  }
+
+  /* The chevron is the background image above; hide the built-in one. */
+  select::picker-icon {
+    display: none;
+  }
+
+  ::picker(select) {
+    max-height: 320px;
+    margin-block: 6px;
+    padding: 6px;
+
+    overflow-y: auto;
+
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-3);
+    background-color: var(--color-surface);
+    box-shadow:
+      0 12px 32px rgba(22, 24, 28, 0.14),
+      0 2px 6px rgba(22, 24, 28, 0.06);
+
+  }
+
+  select option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    padding: 10px 12px;
+
+    border-radius: var(--radius-2);
+
+    color: var(--color-ink);
+    font-size: 15px;
+    line-height: 1.4;
+
+    cursor: pointer;
+  }
+
+  select option:hover,
+  select option:focus-visible {
+    outline: none;
+    background-color: var(--color-surface-alt);
+  }
+
+  select option:checked {
+    background-color: var(--premium-tint);
+    color: var(--premium-red-dark);
+    font-weight: 600;
+  }
+
+  select option::checkmark {
+    order: 1;
+    margin-left: auto;
+
+    color: var(--premium-red);
+  }
+
+  select option:disabled {
+    color: var(--color-ink-disabled);
+    cursor: default;
+  }
+}
+
+/* =========================
+   Rich text editor (Tiptap)
+   ========================= */
+
+/* The box: typing area on top, toolbar along the bottom — same border,
+   radius and focus ring as the other form fields. */
+.rte {
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-1);
+  background-color: var(--color-surface);
+
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.rte:focus-within {
+  border-color: var(--premium-red);
+  box-shadow: 0 0 0 2px var(--premium-tint);
+}
+
+.rte--disabled {
+  background-color: var(--color-field);
+}
+
+.rte--loading {
+  min-height: 260px;
+}
+
+.rte-content {
+  min-height: 240px;
+  padding: 14px 16px;
+
+  outline: none;
+}
+
+/* Placeholder (Tiptap marks the empty first paragraph). */
+.rte-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+
+  color: var(--color-ink-muted);
+  font-style: italic;
+
+  pointer-events: none;
+}
+
+.rte-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+
+  padding: 6px 8px;
+
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-surface-hover);
+  border-radius: 0 0 var(--radius-1) var(--radius-1);
+}
+
+.rte-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+
+  padding-right: 6px;
+  border-right: 1px solid var(--color-border);
+}
+
+.rte-group:last-child {
+  border-right: none;
+}
+
+.rte-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+
+  min-width: 34px;
+  height: 34px;
+  padding: 0 7px;
+
+  border: 1px solid transparent;
+  border-radius: var(--radius-2);
+  background: transparent;
+
+  color: var(--color-ink-secondary);
+
+  cursor: pointer;
+
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.rte-tool:not(:disabled):hover {
+  background-color: var(--color-neutral-tint);
+  color: var(--color-ink);
+}
+
+.rte-tool--active {
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface);
+  color: var(--premium-red);
+}
+
+.rte-tool:disabled {
+  color: var(--color-ink-disabled);
+  cursor: default;
+}
+
+.rte-tool:focus-visible {
+  outline: 2px solid var(--premium-red);
+  outline-offset: 1px;
+}
+
+/* Dropdowns (highlight, text colour, text style) open upwards, since the
+   toolbar sits at the bottom of the box. */
+.rte-menu {
+  position: relative;
+}
+
+.rte-menu_panel {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  min-width: 170px;
+  padding: 6px;
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-dropdown);
+}
+
+.rte-swatches {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  width: 186px;
+}
+
+.rte-swatch {
+  width: 26px;
+  height: 26px;
+
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+
+  cursor: pointer;
+}
+
+.rte-swatch:hover {
+  transform: scale(1.1);
+}
+
+.rte-menu_item {
+  width: 100%;
+  padding: 7px 10px;
+
+  border: none;
+  border-radius: var(--radius-2);
+  background: transparent;
+
+  color: var(--color-ink);
+  font-size: 14px;
+  text-align: left;
+
+  cursor: pointer;
+}
+
+.rte-swatches .rte-menu_item {
+  margin-top: 2px;
+  color: var(--color-ink-secondary);
+  font-size: 13px;
+}
+
+.rte-menu_item:hover,
+.rte-menu_item--active {
+  background-color: var(--color-neutral-tint);
+}
+
+.rte-menu_item--h1 { font-size: 20px; font-weight: 700; }
+.rte-menu_item--h2 { font-size: 17px; font-weight: 700; }
+.rte-menu_item--h3 { font-size: 15px; font-weight: 700; }
+
+/* Formatted text — shared by the editor and the read-only views. */
+.rich-text-content {
+  color: var(--color-ink);
+  font-size: 15px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.rich-text-content > * + * {
+  margin-top: 0.6em;
+}
+
+.rich-text-content h1 { font-size: 1.5em; line-height: 1.3; font-weight: 700; }
+.rich-text-content h2 { font-size: 1.3em; line-height: 1.3; font-weight: 700; }
+.rich-text-content h3 { font-size: 1.12em; line-height: 1.35; font-weight: 700; }
+
+.rich-text-content ul,
+.rich-text-content ol {
+  padding-left: 1.5em;
+}
+
+.rich-text-content ul { list-style: disc; }
+.rich-text-content ol { list-style: decimal; }
+.rich-text-content ul ul { list-style: circle; }
+.rich-text-content li + li,
+.rich-text-content li > ul,
+.rich-text-content li > ol { margin-top: 0.25em; }
+
+.rich-text-content blockquote {
+  padding-left: 12px;
+  border-left: 3px solid var(--color-border-strong);
+  color: var(--color-ink-secondary);
+}
+
+.rich-text-content code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background-color: var(--color-neutral-tint);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.9em;
+}
+
+.rich-text-content a {
+  color: var(--color-info);
+  text-decoration: underline;
+}
+
+/* Highlights are light colours — keep the text on them dark in both themes. */
+.rich-text-content mark {
+  padding: 0 2px;
+  border-radius: 2px;
+  color: #16181c;
+}
+
+.rich-text-content--empty {
+  color: var(--color-ink-muted);
+}
+
+/* The Description in a read-only document — the same filled box as the
+   Overview fields above it. */
+.document-description-view {
+  padding: 14px 16px;
+
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-1);
+  background-color: var(--color-field);
+}
+
+/* =========================
+   Product documents (PID / FRD / BRD / SWR)
+   ========================= */
+
+.document-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+
+  margin-bottom: 20px;
+}
+
+.document-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+
+  padding: 10px 14px;
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  background-color: var(--color-surface);
+
+  color: var(--color-ink);
+  text-align: left;
+  text-decoration: none;
+
+  cursor: pointer;
+
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.document-tab:hover {
+  border-color: var(--color-border-strong);
+}
+
+.document-tab--active {
+  border-color: var(--premium-red);
+  box-shadow: 0 0 0 1px var(--premium-red);
+}
+
+.document-tab strong {
+  font-size: 15px;
+}
+
+.document-tab_status {
+  color: var(--color-ink-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.document-tab_status--Approved { color: var(--color-success); }
+.document-tab_status--PendingBDOReview { color: var(--color-info); }
+.document-tab_status--PendingGroupHeadReview { color: var(--color-warning); }
+.document-tab_status--Rejected { color: var(--color-danger); }
+
+@media (max-width: 640px) {
+  .document-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* The reviewer's reason, shown above a returned document. */
+.document-returned-note {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+
+  border: 1px solid var(--color-danger);
+  border-left-width: 4px;
+  border-radius: var(--radius-2);
+  background-color: var(--color-danger-tint);
+
+  color: var(--color-ink);
+}
+
+.document-returned-note strong {
+  color: var(--color-danger);
+}
+
+.document-returned-note p {
+  margin-top: 4px;
+  white-space: pre-wrap;
+}
+
+/* PID · FRD · BRD · SWR status chips in the PM's "My initiatives" table;
+   hover one for its full name and status. */
+.document-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 190px;
+}
+
+.document-chip {
+  padding: 3px 7px;
+
+  border-radius: 5px;
+  background-color: var(--color-neutral-tint);
+
+  color: var(--color-ink-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.document-chip--Draft { background-color: var(--color-info-tint); color: var(--color-info); }
+.document-chip--PendingBDOReview,
+.document-chip--PendingGroupHeadReview { background-color: var(--color-warning-tint); color: var(--color-warning); }
+.document-chip--Approved { background-color: var(--color-success-tint); color: var(--color-success); }
+.document-chip--Rejected { background-color: var(--color-danger-tint); color: var(--color-danger); }
+
+/* Stage badges for the document phase. */
+.status-badge--product-documentation,
+.status-badge--documents-awaiting-bdo-review {
+  background-color: var(--color-info-tint);
+  color: var(--color-info);
+}
+
+.status-badge--documents-under-gh-review {
+  background-color: var(--color-warning-tint);
+  color: var(--color-warning);
+}
+
+/* =========================
+   Approval queue
+   ========================= */
+
+.approval-queue h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.approval-queue_count {
+  min-width: 22px;
+  padding: 1px 7px;
+
+  border-radius: 999px;
+  background-color: var(--premium-red);
+
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Every pending approval is listed; a long queue scrolls inside the panel. */
+.approval-queue_list {
+  max-height: 560px;
+  overflow-y: auto;
+}
+
+/* The document-type label. Scoped under .brd-queue__initiative so it beats
+   that block's muted "span" style (which also made it full width). */
+.brd-queue__initiative .approval-queue_type {
+  display: inline-block;
+  width: auto;
+  margin: 0 0 6px;
+  padding: 3px 8px;
+
+  border-radius: 4px;
+  background-color: var(--color-inverse);
+
+  color: var(--color-inverse-text);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+}
+
+.approval-queue_empty {
+  padding: 20px;
+  color: var(--color-ink-muted);
+  font-size: 14px;
 }

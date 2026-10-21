@@ -30,8 +30,8 @@ function InitiativeCreatedPanel({
           ? ` ${bdoName} has been assigned and can begin preparing the discovery documentation.`
           : " The assigned Business Development Officer can begin preparing the discovery documentation."}
         {pmName
-          ? ` ${pmName} has also been assigned as Project Manager and will be notified once the documentation is approved.`
-          : " A Project Manager has also been assigned and will be notified once the documentation is approved."}
+          ? ` ${pmName} has also been assigned as Product Manager and will be notified once the documentation is approved.`
+          : " A Product Manager has also been assigned and will be notified once the documentation is approved."}
       </p>
 
       <div className="success-panel_note">

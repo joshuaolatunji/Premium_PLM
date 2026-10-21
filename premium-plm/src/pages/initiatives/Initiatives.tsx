@@ -8,20 +8,20 @@ import {
   updateInitiativePriority,
 } from "../../service/InitiativeService";
 import { getAllUsers } from "../../service/UserService";
-import { getProposalByInitiativeId } from "../../service/ProposalService";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
 import { ApiError } from "../../apicalls/apiClient";
 import { INITIATIVE_PRIORITIES } from "../../types/initiativeTypes";
 import type { ProductInitiative } from "../../types/initiativeTypes";
-import CreateInitiativeModal from "../../dashboardcomponents/CreateInitiativeModal";
 import {
   currentStageFor,
   deriveStatus,
   priorityBadgeClass,
   priorityLabel,
   stageBadgeClass,
+  timelineElapsedPercent,
 } from "../../utils/initiativeStatus";
 import { capitalize } from "../../utils/text";
+import { useInitiativeDocuments } from "../../utils/documentStatus";
 
 // Every value currentStageFor() can return, in pipeline order — backs both
 // the status filter dropdown and the CSV export.
@@ -29,9 +29,10 @@ const ALL_STAGES = [
   "BDO Documentation Drafting",
   "Awaiting GH Documentation Approval",
   "BDO Documentation Rejected",
-  "BRD Drafting",
-  "BRD Under Review",
-  "Approved",
+  "Product Documentation",
+  "Documents Awaiting BDO Review",
+  "Documents Under GH Review",
+  "Product Development",
 ];
 
 function formatCreatedDate(value: string) {
@@ -54,11 +55,9 @@ function downloadInitiativesCsv(
   const header = [
     "Initiative",
     "Priority",
-    "Project manager",
+    "Product manager",
     "Current stage",
     "Days left",
-    "Extensions used",
-    "Extensions remaining",
   ];
 
   const lines = rows.map((initiative) => {
@@ -70,8 +69,6 @@ function downloadInitiativesCsv(
       managerName(initiative.projectManagerId),
       stageFor(initiative.id),
       daysLeft === null ? "" : String(daysLeft),
-      String(initiative.timelineExtensionCount),
-      String(initiative.extensionsRemaining),
     ]
       .map(toCsvValue)
       .join(",");
@@ -93,7 +90,6 @@ function Initiatives() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const urlQuery = searchParams.get("q") ?? "";
   const [search, setSearch] = useState(urlQuery);
@@ -126,17 +122,11 @@ function Initiatives() {
     [initiativesQuery.data],
   );
 
-  // One proposal + one discovery lookup per initiative, run in parallel —
+  // One documents + one discovery lookup per initiative, run in parallel —
   // same N+1 pattern already used for the full org-wide list on the
   // Dashboard and Audit Trail pages. Needed so "current stage" can be
   // computed and filtered on consistently with every other page.
-  const proposalQueries = useQueries({
-    queries: initiatives.map((initiative) => ({
-      queryKey: ["product-proposal", initiative.id],
-      queryFn: () => getProposalByInitiativeId(initiative.id),
-      enabled: Boolean(initiative.id),
-    })),
-  });
+  const documents = useInitiativeDocuments(initiatives.map((initiative) => initiative.id));
 
   const discoveryQueries = useQueries({
     queries: initiatives.map((initiative) => ({
@@ -147,10 +137,10 @@ function Initiatives() {
   });
 
   const stagesLoading =
-    proposalQueries.some((query) => query.isLoading) ||
+    documents.isLoading ||
     discoveryQueries.some((query) => query.isLoading);
   const stagesError =
-    proposalQueries.some((query) => query.isError) ||
+    documents.isError ||
     discoveryQueries.some((query) => query.isError);
 
   const stageById = useMemo(() => {
@@ -158,12 +148,11 @@ function Initiatives() {
 
     initiatives.forEach((initiative, index) => {
       const bdoSubmissionStatus = discoveryQueries[index]?.data?.status ?? "NotStarted";
-      const proposal = proposalQueries[index]?.data ?? null;
-      map.set(initiative.id, currentStageFor(bdoSubmissionStatus, proposal));
+      map.set(initiative.id, currentStageFor(bdoSubmissionStatus, documents.documentsFor(index)));
     });
 
     return map;
-  }, [initiatives, proposalQueries, discoveryQueries]);
+  }, [initiatives, documents, discoveryQueries]);
 
   function stageFor(initiativeId: string) {
     return stageById.get(initiativeId) ?? "BDO Documentation Drafting";
@@ -329,7 +318,9 @@ function Initiatives() {
           <button
             type="button"
             className="button button--primary"
-            onClick={() => setIsCreateOpen(true)}
+            onClick={() =>
+              navigate("/dashboard/initiatives/new", { state: { from: "/dashboard/initiatives" } })
+            }
           >
             <Plus size={17} strokeWidth={2} />
             <span>New initiative</span>
@@ -366,9 +357,9 @@ function Initiatives() {
         <select
           value={managerFilter}
           onChange={(event) => setManagerFilter(event.target.value)}
-          aria-label="Filter by project manager"
+          aria-label="Filter by product manager"
         >
-          <option value="all">All project managers</option>
+          <option value="all">All product managers</option>
 
           {managerOptions.map((manager) => (
             <option key={manager.id} value={manager.id}>
@@ -484,9 +475,9 @@ function Initiatives() {
                 <th>Initiative</th>
                 <th>Created</th>
                 <th>Priority</th>
-                <th>Project manager</th>
+                <th>Product manager</th>
+                <th>Timeline elapsed</th>
                 <th>Days left</th>
-                <th>Extensions</th>
                 <th>Current stage</th>
                 <th>
                   <span className="sr-only">Action</span>
@@ -517,10 +508,8 @@ function Initiatives() {
                 !stagesError &&
                 filtered.map((initiative) => {
                   const { daysLeft } = deriveStatus(initiative);
+                  const elapsedPct = timelineElapsedPercent(initiative);
                   const stage = stageFor(initiative.id);
-                  const totalExtensions =
-                    initiative.timelineExtensionCount +
-                    initiative.extensionsRemaining;
 
                   return (
                     <tr key={initiative.id}>
@@ -535,7 +524,7 @@ function Initiatives() {
 
                       <td>
                         <div className="initiative-cell">
-                          <strong>{initiative.projectName}</strong>
+                          <strong title={initiative.projectName}>{initiative.projectName}</strong>
                           <span>{initiative.id.slice(0, 8)}</span>
                         </div>
                       </td>
@@ -549,6 +538,27 @@ function Initiatives() {
                       </td>
 
                       <td>{managerName(initiative.projectManagerId)}</td>
+
+                      <td>
+                        {elapsedPct !== null ? (
+                          <div className="progress-cell">
+                            <div
+                              className="progress-track"
+                              role="progressbar"
+                              aria-label={`${initiative.projectName} timeline elapsed`}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-valuenow={elapsedPct}
+                            >
+                              <span className="progress-fill" style={{ width: `${elapsedPct}%` }} />
+                            </div>
+
+                            <span>{elapsedPct}%</span>
+                          </div>
+                        ) : (
+                          <span className="portfolio-empty-value">—</span>
+                        )}
+                      </td>
 
                       <td>
                         {daysLeft === null ? (
@@ -566,10 +576,6 @@ function Initiatives() {
                               : `${daysLeft}d`}
                           </span>
                         )}
-                      </td>
-
-                      <td>
-                        {initiative.timelineExtensionCount} of {totalExtensions}
                       </td>
 
                       <td>
@@ -608,10 +614,6 @@ function Initiatives() {
           </table>
         </div>
       </section>
-
-      {isCreateOpen && (
-        <CreateInitiativeModal onClose={() => setIsCreateOpen(false)} />
-      )}
     </div>
   );
 }

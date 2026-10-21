@@ -114,14 +114,14 @@ function MyTickets() {
                   <tr key={ticket.id}>
                     <td>
                       <div className="initiative-cell">
-                        <strong>{initiative.projectName}</strong>
+                        <strong title={initiative.projectName}>{initiative.projectName}</strong>
                         <span>{initiative.id.slice(0, 8)}</span>
                       </div>
                     </td>
 
                     <td>
                       <div className="initiative-cell">
-                        <strong>{ticket.title}</strong>
+                        <strong title={ticket.title}>{ticket.title}</strong>
                         <span>{ticket.description}</span>
                       </div>
                     </td>
@@ -139,7 +139,7 @@ function MyTickets() {
                     <td>
                       <button
                         type="button"
-                        className="table-action"
+                        className="table-action table-action--premium"
                         onClick={() =>
                           navigate(`/dashboard/initiatives/${initiative.id}/tickets`)
                         }

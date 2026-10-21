@@ -27,14 +27,19 @@ export interface PortfolioInitiative {
   action: string;
 }
 
-export interface BRDQueueItem {
-  id: string;
+// One pending approval in a reviewer's Approval queue.
+export interface ApprovalQueueItem {
+  key: string;
+  initiativeId: string;
   initiative: string;
+  // "BDO Docs", "PID", "FRD", "BRD" or "SWR".
+  documentLabel: string;
   priority: string;
   priorityValue: number;
-  owner: string;
+  submittedBy: string;
   submittedDate: string;
   daysWaiting: number;
+  reviewPath: string;
 }
 
 export interface PriorityDistributionItem {

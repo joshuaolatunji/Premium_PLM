@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { X } from "lucide-react";
+import { useEffect, useId, useMemo, useState } from "react";
+import { CheckCircle2, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getAllUsers } from "../../service/UserService";
@@ -14,7 +14,8 @@ import {
 } from "../../service/AdminService";
 import { getHiddenUserIds, hideUser } from "../../mocks/adminMock";
 import { ApiError } from "../../apicalls/apiClient";
-import { capitalize } from "../../utils/text";
+import { capitalize, formatRoleName } from "../../utils/text";
+import { isUserActive } from "../../utils/userStatus";
 import type { PLMUser } from "../../types/userTypes";
 
 const USERS_QUERY_KEY = ["plm-users"];
@@ -32,6 +33,8 @@ function errorMessageFrom(error: unknown, fallback: string): string {
   return fallback;
 }
 
+const TOAST_DURATION_MS = 4_000;
+
 function AdminUsers() {
   const queryClient = useQueryClient();
 
@@ -44,9 +47,20 @@ function AdminUsers() {
   });
   const [createRoleId, setCreateRoleId] = useState("");
   const [createError, setCreateError] = useState("");
-  const [createSuccess, setCreateSuccess] = useState("");
 
   const [managingUserId, setManagingUserId] = useState<string | null>(null);
+  const [resettingUserId, setResettingUserId] = useState<string | null>(null);
+  // Short-lived confirmation ("User created successfully.", "Password
+  // reset for …") shown as a toast at the top of the screen.
+  const [toastMessage, setToastMessage] = useState("");
+
+  // Auto-dismisses the toast after a few seconds. Re-runs (restarting the
+  // timer) whenever a new message replaces the current one.
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timeoutId = setTimeout(() => setToastMessage(""), TOAST_DURATION_MS);
+    return () => clearTimeout(timeoutId);
+  }, [toastMessage]);
 
   const usersQuery = useQuery({
     queryKey: USERS_QUERY_KEY,
@@ -66,7 +80,15 @@ function AdminUsers() {
   const hiddenIds = useMemo(() => new Set(hiddenIdsQuery.data ?? []), [hiddenIdsQuery.data]);
 
   const visibleUsers = useMemo(
-    () => (usersQuery.data ?? []).filter((user) => !hiddenIds.has(user.userId)),
+    // Alphabetical by name — the API returns users in no meaningful order
+    // and has no `createdAt` to sort newest-first by. Switch to that once
+    // the backend adds it.
+    () =>
+      (usersQuery.data ?? [])
+        .filter((user) => !hiddenIds.has(user.userId))
+        .toSorted((a, b) =>
+          (a.userName ?? "").localeCompare(b.userName ?? "", undefined, { sensitivity: "base" }),
+        ),
     [usersQuery.data, hiddenIds],
   );
 
@@ -86,35 +108,33 @@ function AdminUsers() {
     mutationFn: async () => {
       await createUser(createForm);
 
+      // Every new user must get a role (enforced in handleCreate). But
       // create-user has no role field (RegisterDto only takes
       // username/email/name) and doesn't hand back the new user's id, so
-      // assigning a role at creation means creating first, then finding
-      // the new user by their (unique) email in a fresh list, then
-      // assigning — three real calls chained client-side.
-      if (createRoleId) {
-        const freshUsers = await getAllUsers();
-        const created = freshUsers.find(
-          (user) => user.email.toLowerCase() === createForm.emailAddress.trim().toLowerCase(),
+      // the role is assigned right after: create, find the new user by
+      // their (unique) email in a fresh list, then assign — three real
+      // calls chained client-side.
+      const freshUsers = await getAllUsers();
+      const created = freshUsers.find(
+        (user) => user.email.toLowerCase() === createForm.emailAddress.trim().toLowerCase(),
+      );
+
+      if (!created) {
+        throw new Error(
+          "User was created, but couldn't be found to assign the role. Assign it from the list instead.",
         );
-
-        if (!created) {
-          throw new Error(
-            "User was created, but couldn't be found to assign the role. Assign it from the list instead.",
-          );
-        }
-
-        await assignRole({ userId: created.userId, roleId: createRoleId });
       }
+
+      await assignRole({ userId: created.userId, roleId: createRoleId });
     },
     onSuccess: () => {
       setCreateError("");
-      setCreateSuccess("User created successfully.");
+      setToastMessage("User created successfully.");
       setCreateForm({ username: "", emailAddress: "", firstName: "", lastName: "" });
       setCreateRoleId("");
       queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
     },
     onError: (error) => {
-      setCreateSuccess("");
       setCreateError(errorMessageFrom(error, "Unable to create this user."));
       queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
     },
@@ -127,8 +147,12 @@ function AdminUsers() {
       !createForm.firstName.trim() ||
       !createForm.lastName.trim()
     ) {
-      setCreateSuccess("");
       setCreateError("Fill in every field.");
+      return;
+    }
+
+    if (!createRoleId) {
+      setCreateError("Choose a role for this user.");
       return;
     }
 
@@ -140,9 +164,25 @@ function AdminUsers() {
   const hasError = usersQuery.isError || rolesQuery.isError;
 
   const managingUser = visibleUsers.find((user) => user.userId === managingUserId) ?? null;
+  const resettingUser = visibleUsers.find((user) => user.userId === resettingUserId) ?? null;
 
   return (
     <div className="dashboard-page">
+      {toastMessage && (
+        <div className="app-toast" role="status" aria-live="polite">
+          <CheckCircle2 size={18} aria-hidden="true" />
+          <span>{toastMessage}</span>
+          <button
+            type="button"
+            className="app-toast_close"
+            onClick={() => setToastMessage("")}
+            aria-label="Dismiss"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       <header className="dashboard-header">
         <div className="dashboard-header__content">
           <p className="dashboard-breadcrumb">PremiumPLM / Users</p>
@@ -160,7 +200,6 @@ function AdminUsers() {
             className="button button--primary"
             onClick={() => {
               setIsCreating(true);
-              setCreateSuccess("");
               setCreateError("");
             }}
             disabled={isCreating}
@@ -170,15 +209,8 @@ function AdminUsers() {
         </div>
       </header>
 
-      <p className="mock-data-notice">
-        There's no real "delete user" endpoint on the live API yet — only
-        activate/deactivate and role removal. "Remove" in the manage dialog
-        just hides a user from this list for this session; it resets if you
-        reload the page.
-      </p>
-
       {isCreating && (
-        <section className="dashboard-panel initiative-detail-panel">
+        <section className="dashboard-panel initiative-detail-panel admin-users-create-panel">
           <div className="dashboard-panel__header">
             <div>
               <h2>New user</h2>
@@ -190,6 +222,7 @@ function AdminUsers() {
               <div className="form-field">
                 <label htmlFor="username">Username</label>
                 <input
+                  placeholder=" "
                   id="username"
                   type="text"
                   value={createForm.username}
@@ -202,6 +235,7 @@ function AdminUsers() {
               <div className="form-field">
                 <label htmlFor="emailAddress">Email</label>
                 <input
+                  placeholder=" "
                   id="emailAddress"
                   type="email"
                   value={createForm.emailAddress}
@@ -219,6 +253,7 @@ function AdminUsers() {
               <div className="form-field">
                 <label htmlFor="firstName">First name</label>
                 <input
+                  placeholder=" "
                   id="firstName"
                   type="text"
                   value={createForm.firstName}
@@ -231,6 +266,7 @@ function AdminUsers() {
               <div className="form-field">
                 <label htmlFor="lastName">Last name</label>
                 <input
+                  placeholder=" "
                   id="lastName"
                   type="text"
                   value={createForm.lastName}
@@ -250,15 +286,15 @@ function AdminUsers() {
                 onChange={(event) => setCreateRoleId(event.target.value)}
                 disabled={rolesQuery.isLoading}
               >
-                <option value="">
-                  {rolesQuery.isLoading ? "Loading roles…" : "No role (assign later)"}
+                <option value="" disabled>
+                  {rolesQuery.isLoading ? "Loading roles…" : "Select a role"}
                 </option>
 
                 {(rolesQuery.data ?? [])
                   .filter((role) => role.roleId && role.roleName)
                   .map((role) => (
                     <option key={role.roleId} value={role.roleId as string}>
-                      {role.roleName}
+                      {formatRoleName(role.roleName as string)}
                     </option>
                   ))}
               </select>
@@ -267,12 +303,6 @@ function AdminUsers() {
             {createError && (
               <p className="form-error" role="alert">
                 {createError}
-              </p>
-            )}
-
-            {createSuccess && (
-              <p className="brd-status-message" role="status">
-                {createSuccess}
               </p>
             )}
           </div>
@@ -348,7 +378,7 @@ function AdminUsers() {
                         <ul className="role-chip-list">
                           {user.role.map((roleName) => (
                             <li key={roleName} className="role-chip">
-                              {roleName}
+                              {formatRoleName(roleName)}
                             </li>
                           ))}
                         </ul>
@@ -358,23 +388,35 @@ function AdminUsers() {
                     <td>
                       <span
                         className={
-                          user.isLockedOut
-                            ? "status-badge status-badge--overdue"
-                            : "status-badge status-badge--approved"
+                          isUserActive(user)
+                            ? "status-badge status-badge--approved"
+                            : "status-badge status-badge--overdue"
                         }
                       >
-                        {user.isLockedOut ? "Locked" : "Active"}
+                        {isUserActive(user) ? "Active" : "Inactive"}
                       </span>
                     </td>
 
                     <td>
-                      <button
-                        type="button"
-                        className="table-action"
-                        onClick={() => setManagingUserId(user.userId)}
-                      >
-                        Manage
-                      </button>
+                      <div className="admin-users-row-actions">
+                        <button
+                          type="button"
+                          className="table-action table-action--dark"
+                          onClick={() => setManagingUserId(user.userId)}
+                        >
+                          Manage
+                        </button>
+
+                        <button
+                          type="button"
+                          className="table-action table-action--premium"
+                          onClick={() => {
+                            setResettingUserId(user.userId);
+                          }}
+                        >
+                          Reset
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -399,6 +441,17 @@ function AdminUsers() {
           onClose={() => setManagingUserId(null)}
         />
       )}
+
+      {resettingUser && (
+        <ResetPasswordModal
+          user={resettingUser}
+          onClose={() => setResettingUserId(null)}
+          onResetSuccess={() => {
+            setToastMessage(`Password reset for ${capitalize(resettingUser.userName)}.`);
+            setResettingUserId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -421,11 +474,6 @@ function ManageUserModal({
   const [selectedRoleId, setSelectedRoleId] = useState("");
   const [roleError, setRoleError] = useState("");
 
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [passwordSuccess, setPasswordSuccess] = useState("");
-
   const [removeError, setRemoveError] = useState("");
   const [statusError, setStatusError] = useState("");
 
@@ -435,7 +483,7 @@ function ManageUserModal({
 
   const toggleActiveMutation = useMutation({
     mutationFn: () =>
-      user.isLockedOut ? activateUser(user.userId) : deactivateUser(user.userId),
+      isUserActive(user) ? deactivateUser(user.userId) : activateUser(user.userId),
     onSuccess: () => {
       setStatusError("");
       invalidateUser();
@@ -444,7 +492,7 @@ function ManageUserModal({
       setStatusError(
         errorMessageFrom(
           error,
-          user.isLockedOut ? "Unable to activate this user." : "Unable to deactivate this user.",
+          isUserActive(user) ? "Unable to deactivate this user." : "Unable to activate this user.",
         ),
       );
     },
@@ -473,25 +521,6 @@ function ManageUserModal({
     },
   });
 
-  const resetPasswordMutation = useMutation({
-    mutationFn: () =>
-      resetUserPassword({
-        email: user.email,
-        newPassword,
-        confirmPassword,
-      }),
-    onSuccess: () => {
-      setPasswordError("");
-      setPasswordSuccess("Password reset.");
-      setNewPassword("");
-      setConfirmPassword("");
-    },
-    onError: (error) => {
-      setPasswordSuccess("");
-      setPasswordError(errorMessageFrom(error, "Unable to reset this password."));
-    },
-  });
-
   const removeUserMutation = useMutation({
     mutationFn: () => hideUser(user.userId),
     onSuccess: () => {
@@ -503,23 +532,6 @@ function ManageUserModal({
       setRemoveError("Unable to remove this user. Try again.");
     },
   });
-
-  function handleResetPassword() {
-    if (!newPassword || !confirmPassword) {
-      setPasswordSuccess("");
-      setPasswordError("Enter and confirm the new password.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setPasswordSuccess("");
-      setPasswordError("Passwords don't match.");
-      return;
-    }
-
-    setPasswordError("");
-    resetPasswordMutation.mutate();
-  }
 
   const assignableRoles = availableRoles.filter(
     (role) => role.roleId && role.roleName && !user.role.includes(role.roleName),
@@ -544,8 +556,11 @@ function ManageUserModal({
               <div>
                 <label>Account status</label>
 
-                <p className="brd-status-message" role="status">
-                  {user.isLockedOut ? "Locked" : "Active"}
+                <p
+                  className={isUserActive(user) ? "brd-status-message" : "form-error"}
+                  role="status"
+                >
+                  {isUserActive(user) ? "Active" : "Inactive"}
                 </p>
               </div>
 
@@ -559,9 +574,9 @@ function ManageUserModal({
                 >
                   {toggleActiveMutation.isPending
                     ? "Working…"
-                    : user.isLockedOut
-                      ? "Activate"
-                      : "Deactivate"}
+                    : isUserActive(user)
+                      ? "Deactivate"
+                      : "Activate"}
                 </button>
               </div>
             </div>
@@ -586,11 +601,11 @@ function ManageUserModal({
 
                     return (
                       <li key={roleName} className="role-chip">
-                        {roleName}
+                        {formatRoleName(roleName)}
                         <button
                           type="button"
                           className="role-chip_remove"
-                          aria-label={`Remove ${roleName}`}
+                          aria-label={`Remove ${formatRoleName(roleName)}`}
                           disabled={!roleId || removeRoleMutation.isPending}
                           onClick={() => roleId && removeRoleMutation.mutate(roleId)}
                         >
@@ -618,7 +633,7 @@ function ManageUserModal({
 
                   {assignableRoles.map((role) => (
                     <option key={role.roleId} value={role.roleId as string}>
-                      {role.roleName}
+                      {formatRoleName(role.roleName as string)}
                     </option>
                   ))}
                 </select>
@@ -644,53 +659,6 @@ function ManageUserModal({
             )}
           </div>
 
-          <div className="proposal-section">
-            <div className="form-field-row">
-              <div className="form-field">
-                <label htmlFor="newPassword">New password</label>
-                <input
-                  id="newPassword"
-                  type="password"
-                  maxLength={15}
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                />
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="confirmPassword">Confirm password</label>
-                <input
-                  id="confirmPassword"
-                  type="password"
-                  maxLength={15}
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                />
-              </div>
-            </div>
-
-            {passwordError && (
-              <p className="form-error" role="alert">
-                {passwordError}
-              </p>
-            )}
-
-            {passwordSuccess && (
-              <p className="brd-status-message" role="status">
-                {passwordSuccess}
-              </p>
-            )}
-
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={handleResetPassword}
-              disabled={resetPasswordMutation.isPending}
-            >
-              {resetPasswordMutation.isPending ? "Resetting…" : "Reset password"}
-            </button>
-          </div>
-
           {removeError && (
             <p className="form-error" role="alert">
               {removeError}
@@ -708,6 +676,137 @@ function ManageUserModal({
             {removeUserMutation.isPending ? "Removing…" : "Remove user"}
           </button>
 
+          <button type="button" className="button button--primary" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The Super Admin's password reset (PLMAuth/autoreset-password), opened
+// from a user row's Reset button. The API doesn't generate a password — the
+// admin sets one (max 15 chars, per the Swagger DTO). `email` always comes
+// from the row it was opened for, never typed, so a reset can't land on the
+// wrong account.
+interface ResetPasswordFormProps {
+  email: string;
+  // Called after a successful reset — the Reset modal closes itself and
+  // the page shows a confirmation toast.
+  onSuccess: () => void;
+}
+
+function ResetPasswordForm({ email, onSuccess }: ResetPasswordFormProps) {
+  const fieldId = useId();
+
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: () => resetUserPassword({ email, newPassword, confirmPassword }),
+    onSuccess,
+    onError: (error) => {
+      setPasswordError(errorMessageFrom(error, "Unable to reset this password."));
+    },
+  });
+
+  function handleResetPassword() {
+    if (!newPassword || !confirmPassword) {
+      setPasswordError("Enter and confirm the new password.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords don't match.");
+      return;
+    }
+
+    setPasswordError("");
+    resetPasswordMutation.mutate();
+  }
+
+  return (
+    <>
+      <div className="form-field">
+        <label htmlFor={`${fieldId}-email`}>Email</label>
+        <input id={`${fieldId}-email`} placeholder=" " type="email" value={email} readOnly disabled />
+      </div>
+
+      <div className="form-field-row">
+        <div className="form-field">
+          <label htmlFor={`${fieldId}-new`}>New password</label>
+          <input
+            placeholder=" "
+            id={`${fieldId}-new`}
+            type="password"
+            autoComplete="new-password"
+            maxLength={15}
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+          />
+        </div>
+
+        <div className="form-field">
+          <label htmlFor={`${fieldId}-confirm`}>Confirm password</label>
+          <input
+            placeholder=" "
+            id={`${fieldId}-confirm`}
+            type="password"
+            autoComplete="new-password"
+            maxLength={15}
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+          />
+        </div>
+      </div>
+
+      {passwordError && (
+        <p className="form-error" role="alert">
+          {passwordError}
+        </p>
+      )}
+
+      <button
+        type="button"
+        className="button button--dark"
+        onClick={handleResetPassword}
+        disabled={resetPasswordMutation.isPending}
+      >
+        {resetPasswordMutation.isPending ? "Resetting…" : "Reset password"}
+      </button>
+    </>
+  );
+}
+
+interface ResetPasswordModalProps {
+  user: PLMUser;
+  onClose: () => void;
+  onResetSuccess: () => void;
+}
+
+function ResetPasswordModal({ user, onClose, onResetSuccess }: ResetPasswordModalProps) {
+  return (
+    <div className="modal-overlay" role="presentation" onClick={onClose}>
+      <div
+        className="modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reset-password-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="modal-panel_header">
+          <h2 id="reset-password-title">Reset password — {capitalize(user.userName)}</h2>
+        </div>
+
+        <div className="modal-panel_body">
+          <div className="proposal-section">
+            <ResetPasswordForm email={user.email} onSuccess={onResetSuccess} />
+          </div>
+        </div>
+
+        <div className="modal-panel_footer">
           <button type="button" className="button button--primary" onClick={onClose}>
             Done
           </button>
