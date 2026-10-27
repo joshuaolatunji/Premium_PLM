@@ -5741,3 +5741,42 @@ select:disabled {
     font-weight: 700;
   }
 }
+
+/* =========================
+   Project activity (Group Head notifications)
+   ========================= */
+
+/* Which part of the product an action was on, e.g. "Sign-off". */
+.activity-area {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 1px 8px;
+
+  border-radius: var(--radius-pill);
+  background-color: var(--color-neutral-tint);
+
+  color: var(--color-ink-secondary);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.notifications-item_detail {
+  overflow: hidden;
+
+  color: var(--color-ink-secondary);
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notifications-item_time {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notifications-item_body {
+  min-width: 0;
+}

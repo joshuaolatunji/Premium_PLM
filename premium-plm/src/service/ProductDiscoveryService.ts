@@ -11,6 +11,10 @@ import type {
   ProductDiscovery,
   UpdateDiscoveryRequest,
 } from "../types/discoveryTypes";
+import { initiativeOf, linkToInitiative, recordActivity } from "./ActivityService";
+
+const BDO_LINK = (initiativeId: string | null | undefined) =>
+  initiativeId ? `/dashboard/bdo-reviews/${initiativeId}` : undefined;
 
 // Returns null when the initiative has no discovery document yet, rather
 // than throwing — a 404 here is an expected, normal state (not started),
@@ -29,7 +33,9 @@ export async function getDiscoveryByInitiativeId(
       },
     );
 
-    return response?.data ?? null;
+    const discovery = response?.data ?? null;
+    linkToInitiative("discovery", discovery?.id, initiativeId);
+    return discovery;
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       return null;
@@ -53,7 +59,12 @@ export async function createDiscovery(
     },
   );
 
-  return response?.data ?? null;
+  const discovery = response?.data ?? null;
+  const initiativeId = discovery?.productInitiativeId ?? payload.productInitiativeId;
+  linkToInitiative("discovery", discovery?.id, initiativeId);
+  recordActivity({ initiativeId, area: "BDO documentation", action: "started the BDO documentation", link: BDO_LINK(initiativeId) });
+
+  return discovery;
 }
 
 export async function updateDiscovery(
@@ -70,6 +81,8 @@ export async function updateDiscovery(
       body: JSON.stringify(payload),
     },
   );
+
+  recordActivity({ initiativeId, area: "BDO documentation", action: "saved changes to the BDO documentation", link: BDO_LINK(initiativeId) });
 }
 
 // Group Head's real approve/reject decision on the BDO's submitted
@@ -91,6 +104,15 @@ export async function reviewDiscovery(
       body: JSON.stringify(decision),
     },
   );
+
+  recordActivity({
+    initiativeId,
+    area: "BDO documentation",
+    action: decision.isApproved ? "approved the BDO documentation" : "returned the BDO documentation for changes",
+    detail: decision.comment,
+    tone: decision.isApproved ? "success" : "danger",
+    link: BDO_LINK(initiativeId),
+  });
 }
 
 // The BDO's real "submit for approval" action. The request body is the
@@ -108,6 +130,15 @@ export async function submitDiscovery(discoveryId: string): Promise<DiscoverySub
     },
   );
 
+  const initiativeId = initiativeOf("discovery", discoveryId);
+  recordActivity({
+    initiativeId,
+    area: "BDO documentation",
+    action: "submitted the BDO documentation to the Group Head",
+    tone: "warning",
+    link: BDO_LINK(initiativeId),
+  });
+
   return response?.data ?? [];
 }
 
@@ -122,6 +153,22 @@ export async function resubmitDiscovery(discoveryId: string): Promise<void> {
     method: "POST",
     token: token ?? undefined,
   });
+
+  const initiativeId = initiativeOf("discovery", discoveryId);
+  recordActivity({
+    initiativeId,
+    area: "BDO documentation",
+    action: "resubmitted the BDO documentation to the Group Head",
+    tone: "warning",
+    link: BDO_LINK(initiativeId),
+  });
+}
+
+// The initiative an attachment target belongs to, when it's known here.
+function initiativeOfTarget(target: AttachmentTarget): string | null {
+  if (target.type === "ProductInitiative") return target.id;
+  if (target.type === "ProductDiscovery") return initiativeOf("discovery", target.id);
+  return initiativeOf("document", target.id);
 }
 
 // What an attachment belongs to — the API's AttachmentTargetType enum
@@ -176,6 +223,12 @@ export function uploadAttachments(
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
+        recordActivity({
+          initiativeId: initiativeOfTarget(target),
+          area: target.type === "ProductDiscovery" ? "BDO documentation" : target.type === "ProductInitiative" ? "Initiative" : "Documents",
+          action: `uploaded ${files.length === 1 ? "a file" : `${files.length} files`}`,
+          detail: labels.filter(Boolean).join(", ") || files.map((file) => file.name).join(", "),
+        });
         resolve();
         return;
       }
@@ -247,9 +300,15 @@ export async function getAttachments(target: AttachmentTarget): Promise<Discover
     },
   );
 
-  return (response?.data ?? [])
+  const attachments = (response?.data ?? [])
     .map(toDiscoveryAttachment)
     .filter((attachment): attachment is DiscoveryAttachment => attachment !== null);
+
+  // So removing one later can be linked to its initiative.
+  const initiativeId = initiativeOfTarget(target);
+  attachments.forEach((attachment) => linkToInitiative("attachment", attachment.id, initiativeId));
+
+  return attachments;
 }
 
 // The BDO's documentation files for a discovery — what the BDO workspace,
@@ -322,6 +381,8 @@ export async function deleteDiscoveryAttachment(attachmentId: string): Promise<v
       token: token ?? undefined,
     },
   );
+
+  recordActivity({ initiativeId: initiativeOf("attachment", attachmentId), area: "BDO documentation", action: "removed a file", tone: "warning" });
 }
 
 // The API rejects a URL without a scheme ("A valid HTTP or HTTPS URL is
@@ -345,6 +406,15 @@ export async function addDiscoveryWorkflowLink(
     method: "POST",
     token: token ?? undefined,
     body: JSON.stringify({ ...payload, url: withHttpScheme(payload.url) }),
+  });
+
+  const initiativeId = initiativeOf("discovery", discoveryId);
+  recordActivity({
+    initiativeId,
+    area: "BDO documentation",
+    action: "added a design link",
+    detail: payload.title,
+    link: BDO_LINK(initiativeId),
   });
 }
 

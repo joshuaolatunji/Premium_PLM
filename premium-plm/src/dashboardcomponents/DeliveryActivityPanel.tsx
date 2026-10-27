@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Check, Info, TriangleAlert, X } from "lucide-react";
 
-import { getDeliveryActivity } from "../service/TicketService";
-import type { DeliveryActivity } from "../types/ticketTypes";
+import { describeActivity, getProjectActivity } from "../service/ActivityService";
+import type { ActivityTone } from "../service/ActivityService";
 
-function icon(tone: DeliveryActivity["tone"]) {
+function icon(tone: ActivityTone) {
   switch (tone) {
     case "success":
       return <Check size={13} />;
@@ -32,16 +32,16 @@ interface DeliveryActivityPanelProps {
   initiativeName: (initiativeId: string) => string | null;
 }
 
-// Keeps the Group Head informed as tickets move through delivery: the PM
-// sending one to a Lead Engineer, the Lead Engineer accepting it and
-// assigning tasks, developers starting and submitting work, and the Lead
-// Engineer's reviews. Newest first; each opens the initiative's tickets.
+// Keeps the Group Head informed of everything happening on every product:
+// initiatives, the BDO's documentation, the PID / FRD / BRD / SWR and their
+// reviews, sign-offs, tickets and developer tasks. Newest first; each opens
+// where it happened.
 function DeliveryActivityPanel({ initiativeName }: DeliveryActivityPanelProps) {
   const navigate = useNavigate();
 
   const activityQuery = useQuery({
-    queryKey: ["delivery-activity"],
-    queryFn: () => getDeliveryActivity(12),
+    queryKey: ["project-activity", "latest"],
+    queryFn: () => getProjectActivity(12),
   });
 
   const activities = activityQuery.data ?? [];
@@ -50,54 +50,56 @@ function DeliveryActivityPanel({ initiativeName }: DeliveryActivityPanelProps) {
     <section className="dashboard-panel governance-activity">
       <div className="dashboard-panel__header">
         <div>
-          <h2>Delivery activity</h2>
-          <p>Ticket and task updates from Product Managers, Lead Engineers and developers.</p>
+          <h2>Project activity</h2>
+          <p>Everything done on your products, by everyone involved.</p>
         </div>
+
+        <Link to="/dashboard/notifications" className="table-action table-action--dark">
+          View all
+        </Link>
       </div>
 
       <div className="governance-activity__list">
         {activities.length === 0 && (
-          <p className="approval-queue_empty">
-            {activityQuery.isLoading ? "Loading…" : "No ticket or task updates yet."}
-          </p>
+          <p className="approval-queue_empty">{activityQuery.isLoading ? "Loading…" : "No activity yet."}</p>
         )}
 
-        {activities.map((activity) => (
-          <button
-            type="button"
-            key={activity.id}
-            className="governance-activity__item delivery-activity_item"
-            onClick={() => activity.initiativeId && navigate(`/dashboard/initiatives/${activity.initiativeId}/tickets`)}
-          >
-            <div className={`governance-activity__icon governance-activity__icon--${activity.tone}`}>
-              {icon(activity.tone)}
-            </div>
+        {activities.map((activity) => {
+          const initiative = initiativeName(activity.initiativeId) ?? activity.initiativeName;
 
-            <div className="governance-activity__content">
-              <p className="governance-activity__action">{activity.action}</p>
-
-              <p className="governance-activity__initiative">
-                {activity.taskTitle ? `${activity.taskTitle} · ` : ""}
-                {activity.ticketTitle}
-                {initiativeName(activity.initiativeId) ? ` · ${initiativeName(activity.initiativeId)}` : ""}
-              </p>
-
-              <div className="governance-activity__meta">
-                <span>
-                  {activity.actorName}
-                  {activity.actorRole ? ` (${activity.actorRole})` : ""}
-                </span>
-                <span aria-hidden="true">·</span>
-                <time dateTime={activity.at}>{when(activity.at)}</time>
+          return (
+            <button
+              type="button"
+              key={activity.id}
+              className="governance-activity__item delivery-activity_item"
+              onClick={() => navigate(activity.link)}
+            >
+              <div className={`governance-activity__icon governance-activity__icon--${activity.tone}`}>
+                {icon(activity.tone)}
               </div>
-            </div>
-          </button>
-        ))}
+
+              <div className="governance-activity__content">
+                <p className="governance-activity__action">{describeActivity(activity)}</p>
+
+                {(initiative || activity.detail) && (
+                  <p className="governance-activity__initiative">
+                    {[initiative, activity.detail].filter(Boolean).join(" · ")}
+                  </p>
+                )}
+
+                <div className="governance-activity__meta">
+                  <span className="activity-area">{activity.area}</span>
+                  <span aria-hidden="true">·</span>
+                  <time dateTime={activity.at}>{when(activity.at)}</time>
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       <p className="mock-data-notice delivery-activity_notice">
-        Recorded on this browser until the backend notifies the Group Head of ticket and task updates (gaps
-        file M21).
+        Recorded on this browser until the backend notifies the Group Head of every action (gaps file M21).
       </p>
     </section>
   );

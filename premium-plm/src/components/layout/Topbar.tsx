@@ -25,6 +25,7 @@ function Topbar({ onMenuClick }: TopbarProps) {
     const unreadCountQuery = useQuery({
         queryKey: ["notifications-unread-count"],
         queryFn: getUnreadCount,
+        refetchInterval: 30_000,
     });
 
     const unreadCount = unreadCountQuery.data ?? 0;

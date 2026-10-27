@@ -7,9 +7,21 @@ import { DOCUMENT_TYPES } from "../../types/documentTypes";
 import { useInitiativeDocuments } from "../../utils/documentStatus";
 import { getAllUsers } from "../../service/UserService";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
-import { getTicketsForInitiative } from "../../service/TicketService";
 import { capitalize } from "../../utils/text";
 import { isAwaitingGroupHeadDecision } from "../../utils/initiativeStatus";
+import { describeActivity, listActivity } from "../../service/ActivityService";
+import type { ProjectActivity } from "../../service/ActivityService";
+
+// Recorded actions this page already shows from the API's own data (the
+// initiative's creation, document and BDO documentation submissions and
+// decisions) are left out so they don't appear twice.
+function isDerivedElsewhere(entry: ProjectActivity): boolean {
+  if (entry.area !== "Initiative" && entry.area !== "Documents" && entry.area !== "BDO documentation") {
+    return false;
+  }
+
+  return /^(created the initiative|started the (PID|FRD|BRD|SWR)|submitted|resubmitted|approved|returned)/.test(entry.action);
+}
 
 interface AuditEvent {
   id: string;
@@ -62,27 +74,17 @@ function AuditTrail() {
     })),
   });
 
-  const ticketQueries = useQueries({
-    queries: initiatives.map((initiative) => ({
-      queryKey: ["tickets", initiative.id],
-      queryFn: () => getTicketsForInitiative(initiative.id),
-      enabled: Boolean(initiative.id),
-    })),
-  });
-
   const isLoading =
     initiativesQuery.isLoading ||
     usersQuery.isLoading ||
     documents.isLoading ||
-    discoveryQueries.some((q) => q.isLoading) ||
-    ticketQueries.some((q) => q.isLoading);
+    discoveryQueries.some((q) => q.isLoading);
 
   const hasError =
     initiativesQuery.isError ||
     usersQuery.isError ||
     documents.isError ||
-    discoveryQueries.some((q) => q.isError) ||
-    ticketQueries.some((q) => q.isError);
+    discoveryQueries.some((q) => q.isError);
 
   function userName(userId: string | null) {
     if (!userId) {
@@ -192,20 +194,27 @@ function AuditTrail() {
           isMocked: false,
         });
       }
+    });
+  }
 
-      const tickets = ticketQueries[index]?.data ?? [];
-
-      tickets.forEach((ticket) => {
+  // Everything else people did: sign-offs, tickets, tasks, uploads, saves…
+  // recorded on this browser (gaps file M21).
+  if (!isLoading && !hasError) {
+    listActivity()
+      .filter((entry) => !isDerivedElsewhere(entry))
+      .forEach((entry) => {
         events.push({
-          id: `ticket-created-${ticket.id}`,
-          timestamp: ticket.createdAt,
-          description: `Ticket "${ticket.title}" created`,
-          initiativeName: initiative.projectName,
-          type: "info",
+          id: entry.id,
+          timestamp: entry.at,
+          description: entry.detail ? `${describeActivity(entry)}: ${entry.detail}` : describeActivity(entry),
+          initiativeName:
+            initiatives.find((initiative) => initiative.id === entry.initiativeId)?.projectName ??
+            entry.initiativeName ??
+            "",
+          type: entry.tone === "success" ? "success" : entry.tone === "danger" ? "danger" : "info",
           isMocked: true,
         });
       });
-    });
   }
 
   events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -258,7 +267,7 @@ function AuditTrail() {
                   <p className="governance-activity__action">
                     {event.description}
                     {event.isMocked && (
-                      <span className="admin-users-empty-roles"> (session-only)</span>
+                      <span className="admin-users-empty-roles"> (recorded on this browser)</span>
                     )}
                   </p>
 

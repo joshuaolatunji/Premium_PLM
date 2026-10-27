@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -6,7 +7,9 @@ import {
   getUnreadCount,
   markAllAsRead,
   markAsRead,
+  NOTIFICATIONS_API_AVAILABLE,
 } from "../../service/NotificationService";
+import type { AppNotification } from "../../types/notificationTypes";
 import { ApiError } from "../../apicalls/apiClient";
 
 function formatDate(value: string) {
@@ -27,6 +30,7 @@ function formatDate(value: string) {
 
 function Notifications() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [errorMessage, setErrorMessage] = useState("");
 
   const notificationsQuery = useQuery({
@@ -75,6 +79,18 @@ function Notifications() {
   });
 
   const notifications = notificationsQuery.data ?? [];
+  // The Group Head's project activity, recorded on this browser (gaps file M21).
+  const isActivityFeed = !NOTIFICATIONS_API_AVAILABLE && notifications.some((item) => item.area);
+
+  function open(notification: AppNotification) {
+    if (!notification.isRead) {
+      markOneMutation.mutate(notification.id);
+    }
+
+    if (notification.link) {
+      navigate(notification.link);
+    }
+  }
   const unreadCount = unreadCountQuery.data ?? 0;
 
   return (
@@ -95,7 +111,7 @@ function Notifications() {
         <div className="dashboard-header__actions">
           <button
             type="button"
-            className="button button--secondary"
+            className="button button--dark"
             onClick={() => markAllMutation.mutate()}
             disabled={markAllMutation.isPending || unreadCount === 0}
           >
@@ -107,6 +123,13 @@ function Notifications() {
       {errorMessage && (
         <p className="form-error" role="alert">
           {errorMessage}
+        </p>
+      )}
+
+      {isActivityFeed && (
+        <p className="mock-data-notice">
+          You're notified of every action taken on your products. These are recorded on this browser until the
+          backend sends them (gaps file M21), so actions taken on other devices don't appear yet.
         </p>
       )}
 
@@ -133,10 +156,8 @@ function Notifications() {
                     ? "notifications-item"
                     : "notifications-item notifications-item--unread"
                 }
-                onClick={() =>
-                  !notification.isRead && markOneMutation.mutate(notification.id)
-                }
-                disabled={notification.isRead || markOneMutation.isPending}
+                onClick={() => open(notification)}
+                disabled={(notification.isRead && !notification.link) || markOneMutation.isPending}
               >
                 <span className="notifications-item_dot" aria-hidden="true" />
 
@@ -145,7 +166,14 @@ function Notifications() {
                     {notification.message}
                   </span>
 
+                  {(notification.initiativeName || notification.detail) && (
+                    <span className="notifications-item_detail">
+                      {[notification.initiativeName, notification.detail].filter(Boolean).join(" · ")}
+                    </span>
+                  )}
+
                   <span className="notifications-item_time">
+                    {notification.area && <span className="activity-area">{notification.area}</span>}
                     {formatDate(notification.createdAt)}
                   </span>
                 </span>

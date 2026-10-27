@@ -16,6 +16,12 @@
 import { apiClient, ApiError } from "../apicalls/apiClient";
 import { getToken } from "../apicalls/authStorage";
 import { fetchPdfBlob } from "./PdfService";
+import { linkToInitiative, recordActivity } from "./ActivityService";
+
+// Where the Group Head opens a document from an activity entry.
+function documentLink(initiativeId: string, type: DocumentType) {
+  return `/dashboard/document-reviews/${type.toLowerCase()}/${initiativeId}`;
+}
 import type { ApiResponse } from "../types/apiTypes";
 import { DOCUMENT_TYPES } from "../types/documentTypes";
 import type {
@@ -91,6 +97,8 @@ function toAppStatus(status: ApiStatus): DocumentStatus {
 }
 
 function toAppDocument(api: ApiProductDocument): ProductDocument {
+  // So a sign-off or upload on this document can be linked to its initiative.
+  linkToInitiative("document", api.id, api.productInitiativeId);
   const status = toAppStatus(readApiStatus(api.status));
   const type =
     typeof api.documentType === "number" ? API_DOCUMENT_TYPES[api.documentType] : api.documentType;
@@ -209,6 +217,7 @@ export async function saveDocument(
       body: JSON.stringify({ productInitiativeId: initiativeId, documentType: type, ...fields }),
     });
 
+    recordActivity({ initiativeId, area: "Documents", action: `started the ${type}`, link: documentLink(initiativeId, type) });
     return toAppDocument(response?.data ?? (await requireApiDocument(initiativeId, type)));
   }
 
@@ -217,6 +226,7 @@ export async function saveDocument(
     { method: "PATCH", ...authOptions(), body: JSON.stringify(fields) },
   );
 
+  recordActivity({ initiativeId, area: "Documents", action: `saved changes to the ${type}`, link: documentLink(initiativeId, type) });
   return toAppDocument(response?.data ?? (await requireApiDocument(initiativeId, type)));
 }
 
@@ -233,6 +243,14 @@ export async function submitDocument(initiativeId: string, type: DocumentType): 
   await apiClient<unknown>(`${existing.id}/${isResubmit ? "resubmit" : "submit-document"}`, {
     method: "POST",
     ...authOptions(),
+  });
+
+  recordActivity({
+    initiativeId,
+    area: "Documents",
+    action: `${isResubmit ? "resubmitted" : "submitted"} the ${type} to the BDO for review`,
+    tone: "warning",
+    link: documentLink(initiativeId, type),
   });
 
   return toAppDocument(await requireApiDocument(initiativeId, type));
@@ -261,6 +279,19 @@ export async function reviewDocument(
       isApproved: approved,
       comment: comment || null,
     }),
+  });
+
+  recordActivity({
+    initiativeId,
+    area: "Documents",
+    action: approved
+      ? reviewer === "BDO"
+        ? `approved the ${type} and sent it to the Group Head`
+        : `approved the ${type}`
+      : `returned the ${type} to the Product Manager`,
+    detail: comment,
+    tone: approved ? "success" : "danger",
+    link: documentLink(initiativeId, type),
   });
 
   return toAppDocument(await requireApiDocument(initiativeId, type));

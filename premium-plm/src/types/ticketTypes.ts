@@ -131,21 +131,3 @@ export interface SubmitTaskRequest {
   pullRequestUrl: string;
   branchName: string;
 }
-
-// One ticket or task update, for the Group Head's "Delivery activity".
-export type DeliveryActivityTone = "info" | "success" | "warning" | "danger";
-
-export interface DeliveryActivity {
-  id: string;
-  at: string;
-  // e.g. "Ticket sent to the Lead Engineer".
-  action: string;
-  // The task's title, for task events.
-  taskTitle: string | null;
-  ticketId: string;
-  ticketTitle: string;
-  initiativeId: string;
-  actorName: string;
-  actorRole: string;
-  tone: DeliveryActivityTone;
-}

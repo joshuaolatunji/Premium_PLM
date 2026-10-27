@@ -41,6 +41,7 @@ import {
 import type { ApiRecord } from "../utils/apiShape";
 import { listRows, makeLocalId, readRow, simulateLatency, updateRow, writeRow } from "../mocks/localStore";
 import { fetchPdfBlob } from "./PdfService";
+import { initiativeOf, linkToInitiative, recordActivity } from "./ActivityService";
 import { toApiRoleName } from "../utils/text";
 
 const WORKFLOWS = "approval-workflows";
@@ -81,6 +82,16 @@ function toDocumentType(value: unknown): DocumentType | null {
 function toBase64(dataUrl: string): string {
   const comma = dataUrl.indexOf(",");
   return dataUrl.startsWith("data:") && comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+}
+
+// The initiative and document a workflow is for, for the activity log.
+function workflowContext(workflowId: string): { initiativeId: string | null; document: string } {
+  const workflow = getLocalWorkflow(workflowId);
+
+  return {
+    initiativeId: workflow?.initiativeId ?? initiativeOf("workflow", workflowId),
+    document: workflow?.documentType ?? "document",
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -213,6 +224,16 @@ export async function sendWorkflow(workflowId: string): Promise<void> {
     submittedAt: nowIso(),
     steps: workflow.steps.map((step, index) => (index === 0 ? { ...step, status: "Pending" } : step)),
   }));
+
+  const context = workflowContext(workflowId);
+  const approvers = getLocalWorkflow(workflowId)?.steps.map((step) => `${step.approverName} (${step.approverRole})`) ?? [];
+  recordActivity({
+    initiativeId: context.initiativeId,
+    area: "Sign-off",
+    action: `sent the ${context.document} for sign-off`,
+    detail: approvers.length > 0 ? `In order: ${approvers.join(", ")}` : null,
+    tone: "warning",
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -228,6 +249,8 @@ function toPendingApprovals(record: ApiRecord, myId: string | null): PendingAppr
     const local = getLocalWorkflow(workflowId);
     const source = [step, record, nestedWorkflow, nestedDocument];
     const read = (...keys: string[]) => source.map((item) => readString(item, ...keys)).find(Boolean) ?? null;
+
+    linkToInitiative("workflow", workflowId, read("productInitiativeId", "initiativeId") ?? local?.initiativeId);
 
     return {
       workflowId,
@@ -347,6 +370,16 @@ export async function signAndApprove(
 
     return { ...workflow, steps, status: steps.every((step) => step.status === "Signed") ? "Approved" : "InProgress" };
   });
+
+  const context = workflowContext(workflowId);
+  const fullySigned = getLocalWorkflow(workflowId)?.status === "Approved";
+  recordActivity({
+    initiativeId: context.initiativeId,
+    area: "Sign-off",
+    action: fullySigned ? `signed the ${context.document}, completing its sign-off` : `signed the ${context.document}`,
+    detail: comment,
+    tone: "success",
+  });
 }
 
 export async function rejectApproval(workflowId: string, stepId: string, comment: string): Promise<void> {
@@ -363,6 +396,15 @@ export async function rejectApproval(workflowId: string, stepId: string, comment
       step.id === stepId ? { ...step, status: "Rejected", decidedAt: nowIso(), comment } : step,
     ),
   }));
+
+  const context = workflowContext(workflowId);
+  recordActivity({
+    initiativeId: context.initiativeId,
+    area: "Sign-off",
+    action: `rejected the ${context.document} at sign-off`,
+    detail: comment,
+    tone: "danger",
+  });
 }
 
 // ---------------------------------------------------------------------------

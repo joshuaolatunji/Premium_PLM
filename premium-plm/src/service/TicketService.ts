@@ -27,15 +27,14 @@
 // ticket or task page fetches the live version and refreshes the record.
 
 import { apiClient, ApiError } from "../apicalls/apiClient";
-import { getCurrentUserId, getStoredUser, getToken } from "../apicalls/authStorage";
-import { capitalize, formatRoleName } from "../utils/text";
+import { getCurrentUserId, getToken } from "../apicalls/authStorage";
+import { recordActivity } from "./ActivityService";
+import type { ActivityTone } from "./ActivityService";
 import { priorityFromApi, priorityToApi } from "../types/initiativeTypes";
 import { taskStatusLabel } from "../utils/ticketStatus";
 import type {
   CreateTaskRequest,
   CreateTicketRequest,
-  DeliveryActivity,
-  DeliveryActivityTone,
   DeveloperTask,
   DeveloperTaskStatus,
   SubmitTaskRequest,
@@ -56,7 +55,7 @@ import {
   statusKey,
 } from "../utils/apiShape";
 import type { ApiRecord } from "../utils/apiShape";
-import { deleteRow, listRows, makeLocalId, readRow, simulateLatency, updateRow, writeRow } from "../mocks/localStore";
+import { deleteRow, listRows, readRow, simulateLatency, updateRow, writeRow } from "../mocks/localStore";
 
 const TICKETS = "tickets";
 const TASKS = "developer-tasks";
@@ -65,8 +64,6 @@ const TASKS = "developer-tasks";
 const TASK_REVIEWS = "task-reviews";
 // Simulated: a ticket's completion (M12), applied on top of what the API reports.
 const TICKET_COMPLETIONS = "ticket-completions";
-// Every ticket and task update, for the Group Head (gaps file M21).
-const ACTIVITY = "delivery-activity";
 
 function auth() {
   return { token: getToken() ?? undefined };
@@ -224,32 +221,21 @@ function setTaskStatus(taskId: string, status: DeveloperTaskStatus, extra: Parti
   updateRow<DeveloperTask>(TASKS, taskId, (task) => ({ ...task, status, ...extra }));
 }
 
-// Records who did what, for the Group Head's Delivery activity. Until the
-// backend notifies the Group Head itself (gaps file M21), this is kept on
-// this browser.
-function logActivity(ticketId: string, action: string, tone: DeliveryActivityTone, task?: DeveloperTask | null) {
+// Records the action for the Group Head (see ActivityService). `action`
+// follows the person's name, e.g. "sent a ticket to the Lead Engineer".
+function logActivity(ticketId: string, action: string, tone: ActivityTone, task?: DeveloperTask | null) {
   const ticket = readRow<Ticket>(TICKETS, ticketId);
-  const user = getStoredUser();
-  const entry: DeliveryActivity = {
-    id: makeLocalId("activity"),
-    at: nowIso(),
+  const initiativeId = ticket?.initiativeId ?? task?.initiativeId ?? null;
+  const ticketTitle = ticket?.title ?? task?.ticketTitle ?? null;
+
+  recordActivity({
+    initiativeId,
+    area: task ? "Tasks" : "Tickets",
     action,
-    taskTitle: task?.title ?? null,
-    ticketId,
-    ticketTitle: ticket?.title ?? task?.ticketTitle ?? "Ticket",
-    initiativeId: ticket?.initiativeId ?? task?.initiativeId ?? "",
-    actorName: user?.userName ? capitalize(user.userName) : "Someone",
-    actorRole: user?.roles[0] ? formatRoleName(user.roles[0]) : "",
+    detail: [task?.title, ticketTitle ? `Ticket: ${ticketTitle}` : null].filter(Boolean).join(" · "),
     tone,
-  };
-
-  writeRow(ACTIVITY, entry.id, entry);
-}
-
-// Newest first.
-export async function getDeliveryActivity(limit = 12): Promise<DeliveryActivity[]> {
-  const entries = listRows<DeliveryActivity>(ACTIVITY).sort((a, b) => b.at.localeCompare(a.at));
-  return simulateLatency(entries.slice(0, limit));
+    link: initiativeId ? `/dashboard/initiatives/${initiativeId}/tickets` : undefined,
+  });
 }
 
 function taskFor(taskId: string) {
@@ -306,7 +292,7 @@ export async function createTicket(request: CreateTicketRequest): Promise<Ticket
   });
 
   rememberTicket(ticket);
-  logActivity(ticket.id, "Ticket created", "info");
+  logActivity(ticket.id, "created a ticket", "info");
   return ticket;
 }
 
@@ -363,19 +349,19 @@ export async function getTicketsForLeadEngineer(leadEngineerId: string): Promise
 export async function submitTicket(ticketId: string): Promise<void> {
   await apiClient<unknown>(`api/ticketing-requests/${ticketId}/submit-ticket`, { method: "POST", ...auth() });
   setTicketStatus(ticketId, "WithLeadEngineer", { rejectionReason: null });
-  logActivity(ticketId, "Ticket sent to the Lead Engineer", "info");
+  logActivity(ticketId, "sent a ticket to the Lead Engineer", "warning");
 }
 
 export async function recallTicket(ticketId: string): Promise<void> {
   await apiClient<unknown>(`api/ticketing-requests/${ticketId}/recall-ticket`, { method: "POST", ...auth() });
   setTicketStatus(ticketId, "Draft");
-  logActivity(ticketId, "Ticket recalled by the Product Manager", "warning");
+  logActivity(ticketId, "recalled a ticket", "warning");
 }
 
 export async function acceptTicket(ticketId: string): Promise<void> {
   await apiClient<unknown>(`api/ticketing-requests/${ticketId}/accept-ticket`, { method: "POST", ...auth() });
   setTicketStatus(ticketId, "Accepted");
-  logActivity(ticketId, "Ticket accepted by the Lead Engineer", "success");
+  logActivity(ticketId, "accepted a ticket", "success");
 }
 
 // The API no longer takes a reason (gaps file R23), so it's kept on this
@@ -383,13 +369,13 @@ export async function acceptTicket(ticketId: string): Promise<void> {
 export async function rejectTicket(ticketId: string, reason: string): Promise<void> {
   await apiClient<unknown>(`api/ticketing-requests/${ticketId}/reject-ticket`, { method: "POST", ...auth() });
   setTicketStatus(ticketId, "Rejected", { rejectionReason: reason });
-  logActivity(ticketId, "Ticket rejected by the Lead Engineer", "danger");
+  logActivity(ticketId, "rejected a ticket", "danger");
 }
 
 // M12 — simulated. Only once every task has been approved.
 export async function completeTicket(ticketId: string): Promise<void> {
   writeRow(TICKET_COMPLETIONS, ticketId, { completedAt: nowIso() });
-  logActivity(ticketId, "Ticket completed", "success");
+  logActivity(ticketId, "marked a ticket completed", "success");
   await simulateLatency(undefined);
 }
 
@@ -440,7 +426,7 @@ export async function assignTask(ticketId: string, request: CreateTaskRequest): 
 
   rememberTask(task);
   setTicketStatus(ticketId, "InProgress");
-  logActivity(ticketId, "Task assigned to a developer", "info", task);
+  logActivity(ticketId, "assigned a task to a developer", "info", task);
   return task;
 }
 
@@ -506,7 +492,7 @@ export async function startTask(taskId: string): Promise<void> {
   await apiClient<unknown>(`api/ticketing-requests/${taskId}/dev-start-task`, { method: "POST", ...auth() });
   setTaskStatus(taskId, "InProgress", { startedAt: nowIso() });
   const task = taskFor(taskId);
-  logActivity(task?.ticketId ?? "", "Developer started a task", "info", task);
+  logActivity(task?.ticketId ?? "", "started a task", "info", task);
 }
 
 export async function submitTask(taskId: string, request: SubmitTaskRequest): Promise<void> {
@@ -526,7 +512,7 @@ export async function submitTask(taskId: string, request: SubmitTaskRequest): Pr
   deleteRow(TASK_REVIEWS, taskId);
   setTaskStatus(taskId, "Submitted", { submission: { ...submission, submittedAt: nowIso() } });
   const task = taskFor(taskId);
-  logActivity(task?.ticketId ?? "", "Task sent to the Lead Engineer for review", "warning", task);
+  logActivity(task?.ticketId ?? "", "submitted a task for review", "warning", task);
 }
 
 // The Lead Engineer opens a submitted task for review (Submitted → Under review).
@@ -534,13 +520,13 @@ export async function beginTaskReview(taskId: string): Promise<void> {
   await apiClient<unknown>(`api/ticketing-requests/${taskId}/begin-devwork-review`, { method: "POST", ...auth() });
   setTaskStatus(taskId, "UnderReview");
   const task = taskFor(taskId);
-  logActivity(task?.ticketId ?? "", "Lead Engineer started reviewing a task", "info", task);
+  logActivity(task?.ticketId ?? "", "started reviewing a task", "info", task);
 }
 
-const REVIEW_ACTIVITY: Record<TaskReviewDecision, { action: string; tone: DeliveryActivityTone }> = {
-  Accepted: { action: "Task accepted by the Lead Engineer", tone: "success" },
-  ReworkRequested: { action: "Rework requested on a task", tone: "warning" },
-  Rejected: { action: "Task rejected by the Lead Engineer", tone: "danger" },
+const REVIEW_ACTIVITY: Record<TaskReviewDecision, { action: string; tone: ActivityTone }> = {
+  Accepted: { action: "accepted a task", tone: "success" },
+  ReworkRequested: { action: "requested rework on a task", tone: "warning" },
+  Rejected: { action: "rejected a task", tone: "danger" },
 };
 
 // The Lead Engineer's conclusion on a task under review.

@@ -8,6 +8,7 @@ import {
   type CreateInitiativeRequest,
   type ProductInitiative,
 } from "../types/initiativeTypes";
+import { recordActivity, rememberInitiativeName } from "./ActivityService";
 
 // The API returns priority as an enum name ("Critical", "High", …). The app
 // works with the numeric tier, so each initiative is converted on the way in.
@@ -16,6 +17,8 @@ type RawProductInitiative = Omit<ProductInitiative, "priority"> & {
 };
 
 function normalizeInitiative(raw: RawProductInitiative): ProductInitiative {
+  // Kept so activity on this initiative can name it.
+  rememberInitiativeName(raw.id, raw.projectName);
   return { ...raw, priority: priorityFromApi(raw.priority) };
 }
 
@@ -65,7 +68,15 @@ export async function createInitiative(
     },
   );
 
-  return response?.data ? normalizeInitiative(response.data) : null;
+  const created = response?.data ? normalizeInitiative(response.data) : null;
+
+  recordActivity({
+    initiativeId: created?.id,
+    area: "Initiative",
+    action: `created the initiative "${payload.projectName}"`,
+  });
+
+  return created;
 }
 
 export async function getInitiativeById(
@@ -101,4 +112,10 @@ export async function updateInitiativePriority(
       token: token ?? undefined,
     },
   );
+
+  recordActivity({
+    initiativeId,
+    area: "Initiative",
+    action: `changed the priority to ${priorityToApi(newPriority)}`,
+  });
 }

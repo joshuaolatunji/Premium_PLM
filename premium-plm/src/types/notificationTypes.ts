@@ -9,4 +9,10 @@ export interface AppNotification {
   message: string;
   isRead: boolean;
   createdAt: string;
+  // Set on the Group Head's project-activity notifications.
+  detail?: string | null;
+  initiativeName?: string | null;
+  area?: string;
+  tone?: "info" | "success" | "warning" | "danger";
+  link?: string;
 }
