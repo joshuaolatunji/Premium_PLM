@@ -27,7 +27,9 @@ export type DocumentStatus =
   | "PendingBDOReview"
   | "PendingGroupHeadReview"
   | "Approved"
-  | "Rejected";
+  | "Rejected"
+  // Withdrawn on the backend — no longer in the review chain.
+  | "Cancelled";
 
 export type DocumentReviewer = "BDO" | "GroupHead";
 
@@ -40,7 +42,8 @@ export interface DocumentOverview {
 }
 
 export interface DocumentDecision {
-  reviewer: DocumentReviewer;
+  // Null when the API doesn't say who decided (gaps file R2).
+  reviewer: DocumentReviewer | null;
   approved: boolean;
   comment: string;
   decidedAt: string;
@@ -62,7 +65,8 @@ export interface ProductDocument {
   createdAt: string;
   updatedAt: string;
   submittedAt: string | null;
-  // The most recent review decision — carries the reason when rejected.
+  // The most recent review decision — carries the reason when rejected
+  // (from the API's commentReview).
   lastDecision: DocumentDecision | null;
 }
 

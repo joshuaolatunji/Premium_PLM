@@ -4202,6 +4202,25 @@ select:disabled {
   box-shadow: var(--shadow-dropdown);
 }
 
+/* Panels clip their contents (overflow: hidden) for their rounded corners,
+   which cut off the toolbar dropdowns. Panels holding the editor let them
+   spill out instead. */
+.dashboard-panel:has(.rte) {
+  overflow: visible;
+}
+
+/* The table menu is the longest dropdown: tighter rows, and it scrolls
+   rather than running off the top of the screen. */
+.rte-menu_panel--table {
+  max-height: min(420px, 60vh);
+  overflow-y: auto;
+}
+
+.rte-menu_panel--table .rte-menu_item {
+  padding: 6px 10px;
+  font-size: 13.5px;
+}
+
 .rte-swatches {
   flex-direction: row;
   flex-wrap: wrap;
@@ -4248,6 +4267,19 @@ select:disabled {
 .rte-menu_item:hover,
 .rte-menu_item--active {
   background-color: var(--color-neutral-tint);
+}
+
+.rte-menu_item:disabled {
+  color: var(--color-ink-disabled);
+  background: transparent;
+  cursor: default;
+}
+
+.rte-menu_item--danger {
+  margin-top: 4px;
+  border-top: 1px solid var(--color-border);
+  border-radius: 0 0 var(--radius-2) var(--radius-2);
+  color: var(--color-danger);
 }
 
 .rte-menu_item--h1 { font-size: 20px; font-weight: 700; }
@@ -4306,6 +4338,73 @@ select:disabled {
   padding: 0 2px;
   border-radius: 2px;
   color: #16181c;
+}
+
+/* Tables — in the editor, the read-only views and print. Wide tables
+   scroll sideways inside their own box rather than stretching the page. */
+.rich-text-content .tableWrapper {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.rich-text-content table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.rich-text-content th,
+.rich-text-content td {
+  position: relative;
+  min-width: 80px;
+  padding: 8px 10px;
+
+  border: 1px solid var(--color-border-strong);
+
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.rich-text-content th {
+  background-color: var(--color-neutral-tint);
+  font-weight: 700;
+}
+
+.rich-text-content th > * + *,
+.rich-text-content td > * + * {
+  margin-top: 0.4em;
+}
+
+/* Editing only: highlight selected cells and show the resize handle. */
+.rte-content .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: var(--premium-tint);
+  pointer-events: none;
+}
+
+.rte-content .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: -2px;
+  width: 4px;
+  background-color: var(--premium-red);
+  pointer-events: none;
+}
+
+/* A whole table selected (e.g. by Backspace/Delete next to it) — one more
+   press deletes it. */
+.rte-content .tableWrapper.ProseMirror-selectednode,
+.rte-content table.ProseMirror-selectednode {
+  outline: 2px solid var(--premium-red);
+  outline-offset: 2px;
+}
+
+.rte-content.resize-cursor {
+  cursor: col-resize;
 }
 
 .rich-text-content--empty {
@@ -4499,4 +4598,1146 @@ select:disabled {
   padding: 20px;
   color: var(--color-ink-muted);
   font-size: 14px;
+}
+
+/* =========================
+   Session expiry warning
+   ========================= */
+
+.session-warning {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 60;
+
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+
+  max-width: 420px;
+  padding: 14px 16px;
+
+  border: 1px solid var(--color-warning);
+  border-left-width: 4px;
+  border-radius: var(--radius-3);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-modal);
+
+  color: var(--color-ink);
+  animation: app-toast-in 200ms ease-out;
+}
+
+.session-warning_icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-warning);
+}
+
+.session-warning strong {
+  font-size: 15px;
+}
+
+.session-warning p {
+  margin-top: 4px;
+  color: var(--color-ink-secondary);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.session-warning_close {
+  flex-shrink: 0;
+  padding: 2px;
+
+  border: none;
+  background: transparent;
+  color: var(--color-ink-muted);
+
+  cursor: pointer;
+}
+
+.session-warning_close:hover {
+  color: var(--color-ink);
+}
+
+@media (max-width: 480px) {
+  .session-warning {
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    max-width: none;
+  }
+}
+
+/* Login: why the user is back on the sign-in page. */
+.login-form_notice {
+  margin-top: 18px;
+  padding: 10px 12px;
+
+  border-radius: 8px;
+  background-color: rgb(240 166 74 / 16%);
+
+  color: var(--login-text);
+  font-size: 13.5px;
+  text-align: center;
+}
+
+/* Document editor: unsaved edits brought back from this device. */
+.document-draft-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  margin-bottom: 20px;
+  padding: 12px 16px;
+
+  border: 1px solid var(--color-info);
+  border-left-width: 4px;
+  border-radius: var(--radius-2);
+  background-color: var(--color-info-tint);
+
+  color: var(--color-ink);
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .document-draft-note {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Decision modal: a rejection reason brought back from this device. */
+.decision-modal_restored {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+
+  margin-top: 8px;
+
+  color: var(--color-info);
+  font-size: 13px;
+}
+
+/* Previous (left) and Next (right) between the PID, FRD, BRD and SWR at the
+   bottom of a document — two plain buttons at their natural size. */
+.document-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  margin-top: 20px;
+}
+
+.document-pager_link {
+  text-decoration: none;
+}
+
+/* =========================
+   Generate with AI (document Description)
+   ========================= */
+
+/* Pushed to the far end of the editor's bottom toolbar. */
+.rte-group--end {
+  margin-left: auto;
+  padding-right: 0;
+  border-right: none;
+}
+
+.rte-ai-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  height: 34px;
+  padding: 0 14px;
+
+  border: none;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(135deg, var(--premium-red) 0%, var(--premium-red-deep) 100%);
+
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.15);
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+.rte-ai-button:not(:disabled):hover {
+  filter: brightness(1.08);
+}
+
+.rte-ai-button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.rte-ai-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ai-note {
+  margin-top: 8px;
+
+  color: var(--color-info);
+  font-size: 13px;
+}
+
+.ai-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  margin-top: 12px;
+  padding: 12px 14px;
+
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-2);
+  background-color: var(--color-surface-alt);
+}
+
+.ai-confirm p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* =========================
+   Approval & sign-off
+   ========================= */
+
+.approval-panel .dashboard-panel__header {
+  align-items: flex-start;
+}
+
+.approval-panel_actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+
+  margin-top: 16px;
+}
+
+/* The signature spaces — one card per approver, in signing order. */
+.signoff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+
+  margin: 0;
+  padding: 0;
+
+  list-style: none;
+}
+
+.signoff-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  padding: 14px;
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background-color: var(--color-surface);
+}
+
+.signoff-card--pending {
+  border-color: var(--color-warning);
+}
+
+.signoff-card--signed {
+  border-color: var(--color-success-border);
+}
+
+.signoff-card--rejected {
+  border-color: var(--color-danger);
+}
+
+.signoff-card--current {
+  border-color: var(--premium-red);
+  box-shadow: 0 0 0 3px var(--premium-tint);
+}
+
+.signoff-card_header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.signoff-card_sequence {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 26px;
+  height: 26px;
+
+  border-radius: 50%;
+  background-color: var(--color-slate);
+
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.signoff-card_status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  color: var(--color-ink-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.signoff-card--pending .signoff-card_status { color: var(--color-warning); }
+.signoff-card--signed .signoff-card_status { color: var(--color-success); }
+.signoff-card--rejected .signoff-card_status { color: var(--color-danger); }
+
+/* Always paper-white, so a dark-ink signature reads in dark mode too. */
+.signoff-card_signature {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+
+  height: 72px;
+  padding: 4px 8px;
+
+  border-bottom: 1.5px solid #1f2937;
+  border-radius: var(--radius-1) var(--radius-1) 0 0;
+  background-color: #fff;
+}
+
+.signoff-card_signature img {
+  max-width: 100%;
+  max-height: 64px;
+  object-fit: contain;
+}
+
+.signoff-card_placeholder {
+  color: #9ca3af;
+  font-size: 12.5px;
+  font-style: italic;
+}
+
+.signoff-card_person {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  color: var(--color-ink-secondary);
+  font-size: 13px;
+}
+
+.signoff-card_person strong {
+  overflow: hidden;
+
+  color: var(--color-ink);
+  font-size: 14.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signoff-card_person span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signoff-card_comment {
+  margin: 0;
+
+  color: var(--color-danger);
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* The PM's ordered list of approvers. */
+.approver-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  margin: 0 0 4px;
+  padding: 0;
+
+  list-style: none;
+}
+
+/* One row per approval level: level, person, their role, reorder/remove. */
+.approver-row {
+  position: relative;
+
+  display: grid;
+  /* Level · name (sized for a name, not the whole row) · role · tools on the right. */
+  /* The role tag is always shown in full; the name box gives way first. */
+  grid-template-columns: 190px minmax(200px, 440px) max-content minmax(max-content, 1fr);
+  align-items: center;
+  gap: 14px;
+
+  padding: 12px 14px;
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background-color: var(--color-surface-alt);
+}
+
+/* A line joining each level's number to the next, showing the signing order. */
+.approver-row:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 27px;
+  top: calc(50% + 14px);
+  height: calc(50% + 12px);
+
+  border-left: 2px dashed var(--color-border-strong);
+}
+
+.approver-row .form-field {
+  margin: 0;
+}
+
+.approver-row_level {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+
+  white-space: nowrap;
+
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.approver-row_level em {
+  flex-shrink: 0;
+
+  padding: 2px 8px;
+
+  line-height: 1.5;
+  white-space: nowrap;
+
+  border-radius: var(--radius-pill);
+  background-color: var(--premium-tint);
+
+  color: var(--premium-red);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.approver-row_number {
+  position: relative;
+  z-index: 1;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  width: 28px;
+  height: 28px;
+
+  border-radius: 50%;
+  background-color: var(--premium-red);
+
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.approver-row_role {
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+
+  padding: 6px 12px;
+
+  border-radius: var(--radius-pill);
+  background-color: var(--color-neutral-tint);
+
+  color: var(--color-ink-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.approver-row_role--empty {
+  color: var(--color-ink-muted);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.approver-row_tools {
+  justify-self: end;
+
+  display: flex;
+  gap: 4px;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 34px;
+  height: 34px;
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background-color: var(--color-surface);
+
+  color: var(--color-ink-secondary);
+
+  cursor: pointer;
+}
+
+.icon-button:not(:disabled):hover {
+  background-color: var(--color-neutral-tint);
+  color: var(--color-ink);
+}
+
+.icon-button--danger:not(:disabled):hover {
+  border-color: var(--color-danger);
+  background-color: var(--color-danger-tint);
+  color: var(--color-danger);
+}
+
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.approver-confirm-list {
+  margin: 12px 0 0;
+  padding: 0;
+
+  font-size: 14px;
+  line-height: 1.8;
+  list-style: none;
+}
+
+@media (max-width: 760px) {
+  .approver-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .approver-row_level,
+  .approver-row > .form-field,
+  .approver-row_role {
+    grid-column: 1 / -1;
+  }
+
+  .approver-row_role {
+    justify-self: start;
+  }
+
+  .approver-row:not(:last-child)::after {
+    display: none;
+  }
+}
+
+/* =========================
+   Signature pad
+   ========================= */
+
+.signature-pad {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  margin-bottom: 16px;
+}
+
+.signature-pad_tabs {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 4px;
+
+  padding: 4px;
+
+  border-radius: var(--radius-pill);
+  background-color: var(--color-neutral-tint);
+}
+
+.signature-pad_tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  padding: 6px 14px;
+
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+
+  color: var(--color-ink-secondary);
+  font-size: 13.5px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.signature-pad_tab--active {
+  background-color: var(--color-slate);
+  color: #fff;
+}
+
+/* White paper, whatever the theme, with a signing line near the bottom. */
+.signature-pad_paper {
+  position: relative;
+
+  height: 190px;
+
+  border: 1.5px dashed #9ca3af;
+  border-radius: var(--radius-2);
+  background-color: #fff;
+}
+
+.signature-pad_canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+
+  width: 100%;
+  height: 100%;
+
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.signature-pad_hint {
+  position: absolute;
+  left: 24px;
+  bottom: 42px;
+
+  color: #9ca3af;
+  font-size: 14px;
+  font-style: italic;
+
+  pointer-events: none;
+}
+
+.signature-pad_line {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 36px;
+
+  border-bottom: 1.5px solid #374151;
+
+  pointer-events: none;
+}
+
+.signature-pad--disabled .signature-pad_canvas {
+  cursor: not-allowed;
+}
+
+.signature-pad_paper--upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.signature-pad_upload {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  max-width: 420px;
+  padding: 16px;
+
+  color: #374151;
+  font-size: 13px;
+  line-height: 1.5;
+
+  cursor: pointer;
+}
+
+.signature-pad_upload strong {
+  display: block;
+
+  color: #111827;
+  font-size: 14.5px;
+}
+
+.signature-pad_upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.signature-pad_upload:focus-within {
+  border-radius: var(--radius-2);
+  outline: 2px solid var(--premium-red);
+  outline-offset: 2px;
+}
+
+.signature-pad_preview {
+  max-width: 90%;
+  max-height: 150px;
+  object-fit: contain;
+}
+
+.signature-pad_actions {
+  display: flex;
+  gap: 8px;
+}
+
+.signature-confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+
+  margin-top: 14px;
+  padding: 12px;
+
+  border-radius: var(--radius-2);
+  background-color: #fff;
+
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.signature-confirm img {
+  max-width: 100%;
+  max-height: 90px;
+  padding-bottom: 6px;
+  border-bottom: 1.5px solid #374151;
+}
+
+/* =========================
+   Tickets & developer tasks
+   ========================= */
+
+.cell-note {
+  color: var(--color-ink-muted);
+  font-size: 12.5px;
+}
+
+.cell-note--alert {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.ticket-details-row > td {
+  background-color: var(--color-surface-alt);
+}
+
+.ticket-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  padding: 6px 4px;
+}
+
+.ticket-details .document-returned-note {
+  margin-bottom: 0;
+}
+
+.ticket-details_grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+
+  margin: 0;
+}
+
+.ticket-details_grid--panel {
+  padding: 0 24px 22px;
+}
+
+.ticket-details_grid dt {
+  margin-bottom: 4px;
+
+  color: var(--color-ink-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.ticket-details_grid dd {
+  margin: 0;
+
+  color: var(--color-ink);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.ticket-details_heading {
+  margin: 4px 0 0;
+
+  color: var(--color-ink);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.task-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  margin: 0;
+  padding: 0;
+
+  list-style: none;
+}
+
+.task-mini-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+
+  padding: 8px 10px;
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background-color: var(--color-surface);
+
+  font-size: 13.5px;
+}
+
+.task-mini-list_title {
+  overflow: hidden;
+
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  margin: 0;
+  padding: 0 24px;
+
+  list-style: none;
+}
+
+.task-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  padding: 14px 16px;
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background-color: var(--color-surface);
+}
+
+.task-card_header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.task-card_badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.task-card_description {
+  margin: 0;
+
+  color: var(--color-ink-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.task-card_submission {
+  padding: 10px 12px;
+
+  border-left: 3px solid var(--color-info);
+  border-radius: var(--radius-1);
+  background-color: var(--color-info-tint);
+
+  font-size: 13.5px;
+}
+
+.task-card_submission--panel {
+  margin: 0 24px 22px;
+}
+
+.task-card_submission p {
+  margin: 4px 0 6px;
+  white-space: pre-wrap;
+}
+
+.task-card_links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+
+  color: var(--color-ink-secondary);
+  font-size: 13px;
+}
+
+.task-card_links a,
+.task-card_links span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.task-card_links a {
+  color: var(--color-info);
+  font-weight: 600;
+}
+
+.task-card_review {
+  margin: 0;
+
+  color: var(--color-danger);
+  font-size: 13.5px;
+}
+
+.task-card_actions {
+  justify-content: flex-end;
+}
+
+.task-form {
+  margin-top: 8px;
+  border-top: 1px solid var(--color-divider);
+}
+
+.task-history {
+  display: flex;
+  flex-direction: column;
+
+  margin: 0;
+  padding: 0 24px 22px;
+
+  list-style: none;
+}
+
+.task-history li {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+
+  padding: 10px 0;
+
+  border-bottom: 1px solid var(--color-divider);
+
+  font-size: 14px;
+}
+
+.task-history li:last-child {
+  border-bottom: none;
+}
+
+.task-history_when {
+  color: var(--color-ink-muted);
+  font-size: 13px;
+}
+
+.task-history p {
+  margin: 4px 0 0;
+
+  color: var(--color-ink-secondary);
+  white-space: pre-wrap;
+}
+
+/* Delivery activity (Group Head): each row opens the initiative's tickets. */
+.delivery-activity_item {
+  width: 100%;
+
+  border: none;
+  border-bottom: 1px solid var(--color-divider);
+  background: transparent;
+
+  color: inherit;
+  font: inherit;
+  text-align: left;
+
+  cursor: pointer;
+}
+
+.delivery-activity_item:hover {
+  background-color: var(--color-surface-hover);
+}
+
+.delivery-activity_notice {
+  margin: 0 24px 20px;
+}
+
+/* Activate (a deactivated user) in the admin Users table. */
+.table-action--success {
+  border-color: var(--color-success);
+  background-color: var(--color-success);
+  color: #ffffff;
+}
+
+.table-action--success:not(:disabled):hover {
+  filter: brightness(1.1);
+}
+
+/* =========================
+   Admin: Manage user (change role)
+   ========================= */
+
+.user-manage-modal {
+  max-width: 520px;
+}
+
+.user-manage-modal_header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  padding: 22px 24px;
+
+  border-bottom: 1px solid var(--color-border);
+}
+
+.user-manage-modal_identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-manage-modal_identity h2 {
+  margin: 0;
+
+  color: var(--color-ink);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.user-manage-modal_identity p {
+  overflow: hidden;
+
+  margin: 2px 0 0;
+
+  color: var(--color-ink-muted);
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-manage-modal_body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.user-manage-modal_section-title {
+  margin: 0;
+
+  color: var(--color-ink-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Current role and new role as two aligned label/value rows. */
+.user-manage-modal_roles {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+
+  margin: 0;
+  padding: 16px;
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background-color: var(--color-surface-alt);
+}
+
+.user-manage-modal_row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.user-manage-modal_row dt,
+.user-manage-modal_row dt label {
+  margin: 0;
+
+  color: var(--color-ink-secondary);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.user-manage-modal_row dd {
+  margin: 0;
+}
+
+.user-manage-modal_row .role-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 14px;
+}
+
+.user-manage-modal_hint {
+  margin: 0;
+
+  color: var(--color-ink-secondary);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+@media (max-width: 520px) {
+  .user-manage-modal_row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+}
+
+/* =========================
+   Approvals: approver picker
+   ========================= */
+
+/* One flat A–Z list of full names, bold and lined up on the same left edge
+   as the chosen name in the closed box. */
+.approver-picker {
+  font-weight: 700;
+}
+
+.approver-picker option {
+  padding: 10px 12px;
+
+  color: var(--color-ink);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.approver-picker option[value=""] {
+  color: var(--color-ink-muted);
+  font-weight: 500;
+}
+
+@supports (appearance: base-select) {
+  .approver-picker option {
+    min-height: 42px;
+  }
+
+  .approver-picker option:checked {
+    font-weight: 700;
+  }
 }

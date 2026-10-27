@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { getMyAssignedInitiatives } from "../../service/InitiativeService";
-import { getTicketsForInitiative } from "../../mocks/ticketsMock";
+import { getTicketsForInitiative } from "../../service/TicketService";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
 import {
   currentStageFor,

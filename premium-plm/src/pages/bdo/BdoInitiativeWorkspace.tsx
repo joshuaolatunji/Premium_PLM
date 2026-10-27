@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Check, FileText, Link2, Upload } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useDraftState } from "../../utils/useDraftState";
+import DraftRestoredNotice from "../../components/common/DraftRestoredNotice";
 
 import { getInitiativeById } from "../../service/InitiativeService";
 import {
@@ -111,8 +113,19 @@ function BdoInitiativeWorkspaceForm({
   const [discoveryId, setDiscoveryId] = useState<string | null>(
     initialDiscovery?.id ?? null,
   );
-  const [form, setForm] = useState<DiscoveryFormFields>(
-    initialDiscovery ?? EMPTY_DISCOVERY_FORM,
+  // Unsaved discovery edits are kept on this device until saved (see
+  // useDraftState). Only the form fields are compared, not the record's ids.
+  const [form, setForm, formDraft] = useDraftState<DiscoveryFormFields>(
+    `discovery:${initiativeId}`,
+    () =>
+      initialDiscovery
+        ? (Object.fromEntries(
+            Object.keys(EMPTY_DISCOVERY_FORM).map((key) => [
+              key,
+              initialDiscovery[key as keyof DiscoveryFormFields] ?? "",
+            ]),
+          ) as unknown as DiscoveryFormFields)
+        : EMPTY_DISCOVERY_FORM,
   );
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -131,9 +144,17 @@ function BdoInitiativeWorkspaceForm({
   // file(s). Nothing uploads until both are set and Upload is clicked.
   const [fileLabel, setFileLabel] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [linkTitle, setLinkTitle] = useState("");
-  const [linkUrl, setLinkUrl] = useState("");
-  const [linkDescription, setLinkDescription] = useState("");
+  // A design link being typed, kept on this device until it's added.
+  const [linkForm, setLinkForm, linkDraft] = useDraftState(`discovery-link:${initiativeId}`, {
+    title: "",
+    url: "",
+    description: "",
+  });
+  const { title: linkTitle, url: linkUrl, description: linkDescription } = linkForm;
+  const setLinkTitle = (title: string) => setLinkForm((current) => ({ ...current, title }));
+  const setLinkUrl = (url: string) => setLinkForm((current) => ({ ...current, url }));
+  const setLinkDescription = (description: string) =>
+    setLinkForm((current) => ({ ...current, description }));
 
   function updateField<K extends keyof DiscoveryFormFields>(
     key: K,
@@ -207,6 +228,7 @@ function BdoInitiativeWorkspaceForm({
       return refetched?.id ?? null;
     },
     onSuccess: (savedId) => {
+      formDraft.markSaved();
       setDiscoveryId(savedId);
       setStatusMessage("Discovery document saved.");
       setErrorMessage("");
@@ -432,6 +454,18 @@ function BdoInitiativeWorkspaceForm({
           {errorMessage}
         </p>
       )}
+
+      <DraftRestoredNotice
+        savedAt={formDraft.restoredAt}
+        onDiscard={formDraft.discard}
+        keepHint="Save the discovery to keep them."
+      />
+
+      <DraftRestoredNotice
+        savedAt={linkDraft.restoredAt}
+        onDiscard={linkDraft.discard}
+        keepHint="A design link you were adding was brought back — add it to keep it."
+      />
 
       <section className="dashboard-panel bdo-card">
         <div className="bdo-card_header">

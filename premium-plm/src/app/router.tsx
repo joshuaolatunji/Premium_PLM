@@ -21,6 +21,10 @@ import LeadEngineerDashboard from "../pages/leadengineer/LeadEngineerDashboard";
 import TicketWorkspace from "../pages/leadengineer/TicketWorkspace";
 import DeveloperDashboard from "../pages/developer/DeveloperDashboard";
 import DeveloperTicketWorkspace from "../pages/developer/DeveloperTicketWorkspace";
+import ExecutiveDashboard from "../pages/executive/ExecutiveDashboard";
+import MyApprovals from "../pages/approvals/MyApprovals";
+import ApprovalSign from "../pages/approvals/ApprovalSign";
+import SignOffOnly from "../pages/approvals/SignOffOnly";
 import AdminUsers from "../pages/admin/AdminUsers";
 import AdminCategories from "../pages/admin/AdminCategories";
 import AuditTrail from "../pages/audit/AuditTrail";
@@ -150,8 +154,26 @@ const router = createBrowserRouter([
                 element: <DeveloperDashboard />,
             },
             {
-                path: "developer/tickets/:ticketId",
+                path: "developer/tasks/:taskId",
                 element: <DeveloperTicketWorkspace />,
+            },
+            // Old ticket-based addresses — developers now work per task.
+            {
+                path: "developer/tickets/:ticketId",
+                element: <Navigate to="/dashboard/developer" replace />,
+            },
+            {
+                path: "executive",
+                element: <ExecutiveDashboard />,
+            },
+            // Sign-off: anyone a Product Manager picks as an approver.
+            {
+                path: "approvals",
+                element: <SignOffOnly><MyApprovals /></SignOffOnly>,
+            },
+            {
+                path: "approvals/:workflowId/:stepId",
+                element: <SignOffOnly><ApprovalSign /></SignOffOnly>,
             },
             {
                 path: "admin/users",

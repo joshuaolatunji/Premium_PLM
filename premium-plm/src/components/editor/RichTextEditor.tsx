@@ -4,6 +4,8 @@ import type { Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Color, TextStyle } from "@tiptap/extension-text-style";
 import Highlight from "@tiptap/extension-highlight";
+import { TableKit } from "@tiptap/extension-table";
+import { TableKeyboardDelete } from "./tableKeyboardDelete";
 import { Placeholder } from "@tiptap/extensions";
 import {
   Baseline,
@@ -21,6 +23,8 @@ import {
   Redo2,
   RemoveFormatting,
   Strikethrough,
+  Table,
+  TableProperties,
   TextQuote,
   Underline,
   Undo2,
@@ -53,7 +57,22 @@ const TEXT_STYLES = [
   { label: "Heading 3", level: 3 },
 ] as const;
 
-type MenuName = "highlight" | "colour" | "style";
+type MenuName = "highlight" | "colour" | "style" | "table";
+
+// What the "Table options" menu offers while the cursor is inside a table.
+// Each entry is only enabled when Tiptap says it can run right now (e.g.
+// "Merge cells" needs several cells selected).
+const TABLE_ACTIONS = [
+  { label: "Add row above", run: (editor: Editor) => editor.chain().focus().addRowBefore(), can: (editor: Editor) => editor.can().addRowBefore() },
+  { label: "Add row below", run: (editor: Editor) => editor.chain().focus().addRowAfter(), can: (editor: Editor) => editor.can().addRowAfter() },
+  { label: "Delete row", run: (editor: Editor) => editor.chain().focus().deleteRow(), can: (editor: Editor) => editor.can().deleteRow() },
+  { label: "Add column left", run: (editor: Editor) => editor.chain().focus().addColumnBefore(), can: (editor: Editor) => editor.can().addColumnBefore() },
+  { label: "Add column right", run: (editor: Editor) => editor.chain().focus().addColumnAfter(), can: (editor: Editor) => editor.can().addColumnAfter() },
+  { label: "Delete column", run: (editor: Editor) => editor.chain().focus().deleteColumn(), can: (editor: Editor) => editor.can().deleteColumn() },
+  { label: "Merge cells", run: (editor: Editor) => editor.chain().focus().mergeCells(), can: (editor: Editor) => editor.can().mergeCells() },
+  { label: "Split cell", run: (editor: Editor) => editor.chain().focus().splitCell(), can: (editor: Editor) => editor.can().splitCell() },
+  { label: "Toggle header row", run: (editor: Editor) => editor.chain().focus().toggleHeaderRow(), can: (editor: Editor) => editor.can().toggleHeaderRow() },
+] as const;
 
 interface ToolButtonProps {
   label: string;
@@ -119,6 +138,8 @@ interface RichTextEditorProps {
   placeholder?: string;
   disabled?: boolean;
   ariaLabel?: string;
+  // Extra control at the end of the toolbar, e.g. "Generate with AI".
+  toolbarAction?: React.ReactNode;
 }
 
 // A text box with a formatting toolbar (Tiptap). Saves HTML; anything that
@@ -130,6 +151,7 @@ function RichTextEditor({
   placeholder = "Click to add…",
   disabled = false,
   ariaLabel,
+  toolbarAction,
 }: RichTextEditorProps) {
   const [openMenu, setOpenMenu] = useState<MenuName | null>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -144,6 +166,9 @@ function RichTextEditor({
       Color,
       Highlight.configure({ multicolor: true }),
       Placeholder.configure({ placeholder }),
+      // Tables: rows, columns, header row, merge/split, drag a column edge to resize.
+      TableKit.configure({ table: { resizable: true } }),
+      TableKeyboardDelete,
     ],
     content: value,
     editable: !disabled,
@@ -180,6 +205,7 @@ function RichTextEditor({
       canOutdent: current?.can().liftListItem("listItem") ?? false,
       canUndo: current?.can().undo() ?? false,
       canRedo: current?.can().redo() ?? false,
+      inTable: current?.isActive("table") ?? false,
     }),
   });
 
@@ -370,6 +396,53 @@ function RichTextEditor({
           </div>
 
           <div className="rte-group">
+            <ToolButton
+              label="Insert table"
+              disabled={state.inTable}
+              onClick={() => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+            >
+              <Table size={17} />
+            </ToolButton>
+
+            <div className="rte-menu">
+              <ToolButton
+                label="Table options"
+                disabled={!state.inTable}
+                isActive={openMenu === "table"}
+                onClick={() => toggleMenu("table")}
+              >
+                <TableProperties size={17} />
+                <ChevronDown size={13} />
+              </ToolButton>
+
+              {openMenu === "table" && state.inTable && (
+                <div className="rte-menu_panel rte-menu_panel--table" role="menu">
+                  {TABLE_ACTIONS.map((action) => (
+                    <button
+                      key={action.label}
+                      type="button"
+                      className="rte-menu_item"
+                      disabled={!action.can(editor)}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => runAndClose(() => action.run(editor).run())}
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="rte-menu_item rte-menu_item--danger"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => runAndClose(() => chain().deleteTable().run())}
+                  >
+                    Delete table
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rte-group">
             <ToolButton label="Inline code" isActive={state.code} onClick={() => chain().toggleCode().run()}>
               <Code size={17} />
             </ToolButton>
@@ -395,6 +468,8 @@ function RichTextEditor({
               <Redo2 size={17} />
             </ToolButton>
           </div>
+
+          {toolbarAction && <div className="rte-group rte-group--end">{toolbarAction}</div>}
         </div>
       )}
     </div>

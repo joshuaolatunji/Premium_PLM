@@ -1,89 +1,107 @@
-
-
-
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ExternalLink, GitBranch } from "lucide-react";
 
+import { clearDraft, useDraftState } from "../../utils/useDraftState";
+import DraftRestoredNotice from "../../components/common/DraftRestoredNotice";
 import { getInitiativeById } from "../../service/InitiativeService";
-import { getInitiativeDocuments } from "../../service/DocumentService";
-import { documentsQueryKey } from "../../utils/documentStatus";
+import { getAllUsers, isUserListForbidden } from "../../service/UserService";
 import {
-  getDiscoveryAttachments,
-  getDiscoveryByInitiativeId,
-  getDiscoveryWorkflowLinks,
-  openDiscoveryAttachment,
-} from "../../service/ProductDiscoveryService";
-import { getAllUsers } from "../../service/UserService";
-import { ApiError } from "../../apicalls/apiClient";
-import {
-  assignTicketToDeveloper,
-  getTicketById,
-  getTicketRejection,
-  reviewTicket,
-} from "../../mocks/ticketsMock";
-import DocumentsViewer from "../../components/documents/DocumentsViewer";
+  acceptTicket,
+  assignTask,
+  completeTicket,
+  getTasksForTicket,
+  getTicket,
+  beginTaskReview,
+  concludeTaskReview,
+  rejectTicket,
+} from "../../service/TicketService";
+import { INITIATIVE_PRIORITIES } from "../../types/initiativeTypes";
+import type { CreateTaskRequest, DeveloperTask, TaskReviewDecision } from "../../types/ticketTypes";
 import DecisionModal, { type Decision } from "../../components/review/DecisionModal";
 import ReviewDecisionBar from "../../components/review/ReviewDecisionBar";
+import TicketBrief from "../../components/tickets/TicketBrief";
+import InitiativeContext from "../../components/tickets/InitiativeContext";
+import BackLink from "../../components/common/BackLink";
+import {
+  formatDate,
+  isTaskClosed,
+  taskStatusBadgeClass,
+  taskStatusLabel,
+  ticketStatusBadgeClass,
+  ticketStatusLabel,
+} from "../../utils/ticketStatus";
 import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
-import { ticketStatusBadgeClass, ticketStatusLabel } from "../../utils/ticketStatus";
+import { currentTimestamp } from "../../utils/documentStatus";
 import { capitalize } from "../../utils/text";
 import { activeUsersWithRole } from "../../utils/userStatus";
-import BackLink from "../../components/common/BackLink";
 
-// Mocked — tickets, and the developer assignment on them, have no real
-// endpoint yet (see mocks/ticketsMock.ts). The BRD/discovery/attachments/
-// links lookups below are all real.
+const EMPTY_TASK: CreateTaskRequest = {
+  title: "",
+  description: "",
+  developerId: "",
+  priority: 3,
+  startDate: "",
+  targetDate: "",
+};
+
+// What the Lead Engineer is deciding: the ticket itself, or their
+// conclusion on one task under review.
+type PendingDecision =
+  | { kind: "ticket"; decision: Decision }
+  | { kind: "task"; outcome: TaskReviewDecision; task: DeveloperTask };
+
+// The decision modal for each conclusion on a task.
+const TASK_OUTCOME_COPY: Record<
+  TaskReviewDecision,
+  { decision: Decision; title: string; label: string; placeholder: string }
+> = {
+  Accepted: { decision: "approve", title: "Accept work", label: "", placeholder: "" },
+  ReworkRequested: {
+    decision: "reject",
+    title: "Request rework",
+    label: "What needs to change",
+    placeholder: "What should the developer fix before resubmitting?",
+  },
+  Rejected: {
+    decision: "reject",
+    title: "Reject work",
+    label: "Reason",
+    placeholder: "Why is this work being rejected?",
+  },
+};
+
 function TicketWorkspace() {
   const { ticketId } = useParams<{ ticketId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [developerId, setDeveloperId] = useState("");
-  const [timelineDays, setTimelineDays] = useState("");
+  // The task being written is kept on this device until it's assigned.
+  const [task, setTask, taskDraft] = useDraftState<CreateTaskRequest>(`task-new:${ticketId}`, EMPTY_TASK);
   const [errorMessage, setErrorMessage] = useState("");
-  const [pendingDecision, setPendingDecision] = useState<Decision | null>(null);
+  const [pending, setPending] = useState<PendingDecision | null>(null);
+  const [confirmingComplete, setConfirmingComplete] = useState(false);
 
   const ticketQuery = useQuery({
     queryKey: ["ticket", ticketId],
-    queryFn: () => getTicketById(ticketId as string),
+    queryFn: () => getTicket(ticketId as string),
     enabled: Boolean(ticketId),
   });
 
-  const initiativeId = ticketQuery.data?.initiativeId ?? null;
+  const ticket = ticketQuery.data ?? null;
 
   const initiativeQuery = useQuery({
-    queryKey: ["product-initiative", initiativeId],
-    queryFn: () => getInitiativeById(initiativeId as string),
-    enabled: Boolean(initiativeId),
+    queryKey: ["product-initiative", ticket?.initiativeId],
+    queryFn: () => getInitiativeById(ticket?.initiativeId as string),
+    enabled: Boolean(ticket?.initiativeId),
   });
 
-  // PID / FRD / BRD / SWR (mock — see DocumentService).
-  const documentsQuery = useQuery({
-    queryKey: documentsQueryKey(initiativeId),
-    queryFn: () => getInitiativeDocuments(initiativeId as string),
-    enabled: Boolean(initiativeId),
-  });
-
-  const discoveryQuery = useQuery({
-    queryKey: ["product-discovery", initiativeId],
-    queryFn: () => getDiscoveryByInitiativeId(initiativeId as string),
-    enabled: Boolean(initiativeId),
-  });
-
-  const discoveryId = discoveryQuery.data?.id ?? null;
-
-  const attachmentsQuery = useQuery({
-    queryKey: ["discovery-attachments", discoveryId],
-    queryFn: () => getDiscoveryAttachments(discoveryId as string),
-    enabled: Boolean(discoveryId),
-  });
-
-  const workflowLinksQuery = useQuery({
-    queryKey: ["discovery-workflow-links", discoveryId],
-    queryFn: () => getDiscoveryWorkflowLinks(discoveryId as string),
-    enabled: Boolean(discoveryId),
+  // M10 — the tasks recorded for this ticket.
+  const tasksQuery = useQuery({
+    queryKey: ["ticket-tasks", ticketId],
+    queryFn: () => getTasksForTicket(ticketId as string),
+    enabled: Boolean(ticketId) && ticketQuery.isSuccess,
   });
 
   const usersQuery = useQuery({
@@ -91,72 +109,97 @@ function TicketWorkspace() {
     queryFn: getAllUsers,
   });
 
-  const rejectionQuery = useQuery({
-    queryKey: ["ticket-rejection", ticketId],
-    queryFn: () => getTicketRejection(ticketId as string),
-    enabled: Boolean(ticketId),
-  });
-
-  const openAttachmentMutation = useMutation({
-    mutationFn: ({ attachmentId, targetWindow }: { attachmentId: string; targetWindow: Window | null }) =>
-      openDiscoveryAttachment(attachmentId, targetWindow),
-    onSuccess: () => setErrorMessage(""),
-    onError: (error) => {
-      setErrorMessage(
-        error instanceof ApiError ? error.message : "Unable to open that attachment. Try again.",
-      );
-    },
-  });
-
-  // Opened synchronously in the click handler (before the mutation's first
-  // await) so browsers still treat it as a user-gesture-triggered window,
-  // not a blocked popup.
-  function handleOpenAttachment(attachmentId: string) {
-    const targetWindow = window.open("", "_blank");
-    openAttachmentMutation.mutate({ attachmentId, targetWindow });
-  }
-
   // Only active accounts can be assigned — deactivated users are left out.
-  const developers = activeUsersWithRole(usersQuery.data, "SoftwareEngineer");
+  const developers = activeUsersWithRole(usersQuery.data, "Developer");
 
   function userName(userId: string | null) {
     if (!userId) {
       return "Unassigned";
     }
 
-    return capitalize(
-      usersQuery.data?.find((user) => user.userId === userId)?.userName ?? "Unassigned",
-    );
+    return capitalize(usersQuery.data?.find((user) => user.userId === userId)?.userName ?? "Unassigned");
   }
+
+  async function refresh() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["ticket", ticketId] }),
+      queryClient.invalidateQueries({ queryKey: ["ticket-tasks"] }),
+      queryClient.invalidateQueries({ queryKey: ["tickets"] }),
+      queryClient.invalidateQueries({ queryKey: ["lead-engineer-tickets"] }),
+      queryClient.invalidateQueries({ queryKey: ["developer-tasks"] }),
+    ]);
+  }
+
+  const ticketDraftKey = `decision:ticket:${ticketId}`;
+  const taskDraftKey = (taskId: string) => `decision:task:${taskId}`;
+
+  const ticketDecisionMutation = useMutation({
+    mutationFn: ({ accept, reason }: { accept: boolean; reason: string }) =>
+      accept ? acceptTicket(ticketId as string) : rejectTicket(ticketId as string, reason),
+    onSuccess: async (_data, { accept }) => {
+      setPending(null);
+      clearDraft(ticketDraftKey);
+      await refresh();
+
+      if (!accept) {
+        navigate("/dashboard/lead-engineer");
+      }
+    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : "Couldn't record your decision."),
+  });
+
+  const beginReviewMutation = useMutation({
+    mutationFn: (taskId: string) => beginTaskReview(taskId),
+    onSuccess: async () => {
+      setErrorMessage("");
+      await refresh();
+    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : "Couldn't start the review."),
+  });
+
+  const taskDecisionMutation = useMutation({
+    mutationFn: ({ taskId, outcome, comment }: { taskId: string; outcome: TaskReviewDecision; comment: string }) =>
+      concludeTaskReview(taskId, outcome, comment),
+    onSuccess: async (_data, { taskId }) => {
+      setPending(null);
+      clearDraft(taskDraftKey(taskId));
+      await refresh();
+    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : "Couldn't record your decision."),
+  });
 
   const assignMutation = useMutation({
     mutationFn: () =>
-      assignTicketToDeveloper(
-        initiativeId as string,
-        ticketId as string,
-        developerId,
-        Number(timelineDays),
-      ),
-    onSuccess: () => {
+      assignTask(ticketId as string, { ...task, title: task.title.trim(), description: task.description.trim() }),
+    onSuccess: async () => {
+      setTask(EMPTY_TASK);
       setErrorMessage("");
-      queryClient.invalidateQueries({ queryKey: ["ticket", ticketId] });
-      queryClient.invalidateQueries({ queryKey: ["lead-engineer-tickets"] });
+      await refresh();
     },
-    onError: () => {
-      setErrorMessage("Unable to assign this ticket. Try again.");
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : "Unable to assign this task."),
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: () => completeTicket(ticketId as string),
+    onSuccess: async () => {
+      setConfirmingComplete(false);
+      await refresh();
     },
   });
 
   function handleAssign() {
-    const days = Number(timelineDays);
-
-    if (!developerId) {
-      setErrorMessage("Select a developer.");
+    if (!task.title.trim() || !task.developerId) {
+      setErrorMessage("Give the task a title and choose a developer.");
       return;
     }
 
-    if (!timelineDays || Number.isNaN(days) || days < 0) {
-      setErrorMessage("Enter a valid number of days.");
+    if (task.startDate && task.targetDate && task.targetDate < task.startDate) {
+      setErrorMessage("The target date must be on or after the start date.");
+      return;
+    }
+
+    if (ticket?.targetDate && task.targetDate && task.targetDate > ticket.targetDate.slice(0, 10)) {
+      setErrorMessage(`The target date is after the ticket's own (${formatDate(ticket.targetDate)}).`);
       return;
     }
 
@@ -164,44 +207,21 @@ function TicketWorkspace() {
     assignMutation.mutate();
   }
 
-  const decisionMutation = useMutation({
-    mutationFn: ({ isApproved, comment }: { isApproved: boolean; comment: string }) =>
-      reviewTicket(initiativeId as string, ticketId as string, { isApproved, comment }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-engineer-tickets"] });
-      navigate("/dashboard/lead-engineer");
-    },
-    onError: () => {
-      setErrorMessage("Unable to record this decision. Try again.");
-    },
-  });
-
-  function openDecision(decision: Decision) {
-    setErrorMessage("");
-    setPendingDecision(decision);
-  }
-
   function confirmDecision(comment: string) {
+    if (!pending) {
+      return;
+    }
+
     setErrorMessage("");
-    decisionMutation.mutate({ isApproved: pendingDecision === "approve", comment });
+
+    if (pending.kind === "ticket") {
+      ticketDecisionMutation.mutate({ accept: pending.decision === "approve", reason: comment });
+    } else {
+      taskDecisionMutation.mutate({ taskId: pending.task.id, outcome: pending.outcome, comment });
+    }
   }
 
-  const isLoading =
-    ticketQuery.isLoading ||
-    (Boolean(initiativeId) &&
-      (initiativeQuery.isLoading ||
-        documentsQuery.isLoading ||
-        discoveryQuery.isLoading ||
-        attachmentsQuery.isLoading ||
-        workflowLinksQuery.isLoading));
-
-  const hasError =
-    ticketQuery.isError ||
-    !ticketQuery.data ||
-    initiativeQuery.isError ||
-    (Boolean(initiativeId) && !initiativeQuery.data);
-
-  if (isLoading) {
+  if (ticketQuery.isLoading || (ticket && initiativeQuery.isLoading)) {
     return (
       <div className="dashboard-page">
         <p className="initiatives-empty">Loading ticket…</p>
@@ -209,24 +229,27 @@ function TicketWorkspace() {
     );
   }
 
-  if (hasError) {
+  if (!ticket || !initiativeQuery.data) {
     return (
       <div className="dashboard-page">
         <BackLink fallbackTo="/dashboard/lead-engineer" fallbackLabel="Back to your tickets" />
 
         <p className="initiatives-empty initiatives-empty--error initiative-detail-message">
-          Couldn't load this ticket. It may not exist, or you may not have
-          access to it.
+          Couldn't load this ticket. It may not exist, or you may not have access to it.
         </p>
       </div>
     );
   }
 
-  const ticket = ticketQuery.data!;
-  const initiative = initiativeQuery.data!;
-  const discovery = discoveryQuery.data;
-  const attachments = attachmentsQuery.data ?? [];
-  const workflowLinks = workflowLinksQuery.data ?? [];
+  const initiative = initiativeQuery.data;
+  const tasks = tasksQuery.data ?? [];
+  const isNew = ticket.status === "WithLeadEngineer";
+  const canAssign = ticket.status === "Accepted" || ticket.status === "InProgress";
+  // Every task finished, at least one of them accepted.
+  const allApproved =
+    tasks.some((item) => item.status === "Accepted") && tasks.every((item) => isTaskClosed(item.status));
+  const today = new Date(currentTimestamp()).toISOString().slice(0, 10);
+  const isDeciding = ticketDecisionMutation.isPending || taskDecisionMutation.isPending || beginReviewMutation.isPending;
 
   return (
     <div className="dashboard-page">
@@ -235,28 +258,24 @@ function TicketWorkspace() {
       <header className="dashboard-header initiative-detail-header">
         <div className="dashboard-header__content">
           <p className="dashboard-breadcrumb">
-            PremiumPLM / Lead Engineer / {ticket.title}
+            PremiumPLM / Tickets / {initiative.projectName} / {ticket.title}
           </p>
 
           <h1 className="dashboard-title">{ticket.title}</h1>
 
-          <p className="dashboard-subtitle">{ticket.description}</p>
-
           <p className="dashboard-subtitle initiative-detail-badges">
-            <span className={priorityBadgeClass(initiative.priority)}>{priorityLabel(initiative.priority)}</span>
-            <span className={ticketStatusBadgeClass(ticket.status)}>
-              {ticketStatusLabel(ticket.status)}
-            </span>
+            <span>{initiative.projectName}</span>
+            <span className={ticketStatusBadgeClass(ticket.status)}>{ticketStatusLabel(ticket.status)}</span>
           </p>
         </div>
 
-        {ticket.status === "UnderReview" && (
+        {isNew && (
           <div className="dashboard-header__actions">
             <button
               type="button"
               className="button button--secondary brd-reject-button"
-              onClick={() => openDecision("reject")}
-              disabled={decisionMutation.isPending}
+              onClick={() => setPending({ kind: "ticket", decision: "reject" })}
+              disabled={isDeciding}
             >
               Reject
             </button>
@@ -264,253 +283,347 @@ function TicketWorkspace() {
             <button
               type="button"
               className="button button--primary"
-              onClick={() => openDecision("approve")}
-              disabled={decisionMutation.isPending}
+              onClick={() => setPending({ kind: "ticket", decision: "approve" })}
+              disabled={isDeciding}
             >
-              Approve
+              Accept ticket
+            </button>
+          </div>
+        )}
+
+        {canAssign && allApproved && (
+          <div className="dashboard-header__actions">
+            <button type="button" className="button button--primary" onClick={() => setConfirmingComplete(true)}>
+              Mark ticket completed
             </button>
           </div>
         )}
       </header>
 
-      <p className="mock-data-notice">
-        Tickets and developer assignment are temporary, local-only data
-        until the real tickets API is ready — they reset if you reload the
-        page.
-      </p>
+      <DraftRestoredNotice
+        savedAt={taskDraft.restoredAt}
+        onDiscard={taskDraft.discard}
+        keepHint="Assign the task to keep them."
+      />
 
-      {ticket.status === "Rejected" && rejectionQuery.data && (
+      {ticket.status === "Rejected" && (
         <div className="bdo-rejection-notice">
-          <strong>Rejected by you:</strong> {rejectionQuery.data.comment}
+          <strong>Rejected by you:</strong> {ticket.rejectionReason || "No reason recorded."}
         </div>
       )}
 
-      {errorMessage && (
+      {errorMessage && !pending && (
         <p className="form-error" role="alert">
           {errorMessage}
         </p>
       )}
 
-      <section className="dashboard-panel initiative-detail-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <h2>Project</h2>
-          </div>
-        </div>
+      <TicketBrief ticket={ticket} initiativeName={initiative.projectName} />
 
-        <div className="initiative-detail-grid">
-          <div>
-            <span className="initiative-detail-grid_label">Initiative</span>
-            <span className="initiative-detail-grid_value">{initiative.projectName}</span>
-          </div>
-
-          <div>
-            <span className="initiative-detail-grid_label">Ticket timeline</span>
-            <span className="initiative-detail-grid_value">
-              {ticket.timelineDaysAllocated !== null
-                ? `${ticket.timelineDaysAllocated} days`
-                : "Not yet allocated by the Product Manager"}
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {documentsQuery.data && (
-        <DocumentsViewer documents={documentsQuery.data} initiativeName={initiative.projectName} />
-      )}
-
-      <section className="dashboard-panel initiative-detail-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <h2>Product discovery</h2>
-          </div>
-        </div>
-
-        {discovery ? (
-          <div className="initiative-detail-grid">
+      {(canAssign || ticket.status === "Completed") && (
+        <section className="dashboard-panel initiative-detail-panel">
+          <div className="dashboard-panel__header">
             <div>
-              <span className="initiative-detail-grid_label">Description</span>
-              <span className="initiative-detail-grid_value brd-readonly-value">
-                {discovery.businessLogic || "—"}
-              </span>
-            </div>
-
-            <div>
-              <span className="initiative-detail-grid_label">User flow</span>
-              <span className="initiative-detail-grid_value brd-readonly-value">
-                {discovery.userFlow || "—"}
-              </span>
+              <h2>Developer tasks</h2>
+              <p>
+                {tasks.length === 0
+                  ? "Split the ticket into tasks and assign each to a developer."
+                  : `${tasks.filter((item) => item.status === "Accepted").length} of ${tasks.length} accepted.`}
+              </p>
             </div>
           </div>
-        ) : (
-          <p className="initiatives-empty">No discovery document was saved.</p>
-        )}
-      </section>
 
-      <section className="dashboard-panel initiative-detail-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <h2>Attachments</h2>
-          </div>
-        </div>
+          {tasks.length > 0 && (
+            <ul className="task-cards">
+              {tasks.map((item) => (
+                <li key={item.id} className="task-card">
+                  <div className="task-card_header">
+                    <div className="initiative-cell">
+                      <strong title={item.title}>{item.title}</strong>
+                      <span>
+                        {userName(item.developerId)} · {formatDate(item.startDate)} → {formatDate(item.targetDate)}
+                      </span>
+                    </div>
 
-        <div className="bdo-upload-section">
-          {attachments.length === 0 ? (
-            <p className="bdo-upload-empty">No attachments were uploaded.</p>
-          ) : (
-            <ul className="bdo-upload-list">
-              {attachments.map((attachment) => (
-                <li key={attachment.id} className="bdo-upload-list_item">
-                  <div className="bdo-upload-list_info">
-                    <span className="bdo-upload-list_name">{attachment.label ?? attachment.fileName}</span>
+                    <div className="task-card_badges">
+                      <span className={priorityBadgeClass(item.priority)}>{priorityLabel(item.priority)}</span>
+                      <span className={taskStatusBadgeClass(item.status)}>{taskStatusLabel(item.status)}</span>
+                    </div>
                   </div>
 
-                  <button
-                    type="button"
-                    className="bdo-upload-list_open"
-                    onClick={() => handleOpenAttachment(attachment.id)}
-                    disabled={openAttachmentMutation.isPending}
-                  >
-                    Open
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
+                  {item.description && <p className="task-card_description">{item.description}</p>}
 
-      <section className="dashboard-panel initiative-detail-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <h2>Design links</h2>
-          </div>
-        </div>
+                  {item.submission && item.status !== "Assigned" && item.status !== "InProgress" && (
+                    <div className="task-card_submission">
+                      <strong>Developer's note</strong>
+                      <p>{item.submission.comment || "—"}</p>
+                      <div className="task-card_links">
+                        {item.submission.pullRequestUrl && (
+                          <a href={item.submission.pullRequestUrl} target="_blank" rel="noreferrer">
+                            <ExternalLink size={14} aria-hidden="true" />
+                            Pull request
+                          </a>
+                        )}
+                        {item.submission.branchName && (
+                          <span>
+                            <GitBranch size={14} aria-hidden="true" />
+                            {item.submission.branchName}
+                          </span>
+                        )}
+                        <span>Submitted {formatDate(item.submission.submittedAt)}</span>
+                      </div>
+                    </div>
+                  )}
 
-        <div className="bdo-upload-section">
-          {workflowLinks.length === 0 ? (
-            <p className="bdo-upload-empty">No links were added.</p>
-          ) : (
-            <ul className="bdo-upload-list">
-              {workflowLinks.map((link) => (
-                <li key={link.id} className="bdo-upload-list_item">
-                  <a href={link.url} target="_blank" rel="noreferrer">
-                    {link.title}
-                  </a>
-                  {link.description && (
-                    <span className="bdo-upload-list_meta">{link.description}</span>
+                  {(item.status === "ReworkRequested" || item.status === "Rejected") && item.review?.comment && (
+                    <p className="task-card_review">
+                      <strong>{item.status === "Rejected" ? "You rejected it:" : "You asked for rework:"}</strong>{" "}
+                      {item.review.comment}
+                    </p>
+                  )}
+
+                  {item.status === "Submitted" && (
+                    <div className="brd-reviews-actions task-card_actions">
+                      <button
+                        type="button"
+                        className="button button--primary"
+                        onClick={() => beginReviewMutation.mutate(item.id)}
+                        disabled={isDeciding}
+                      >
+                        {beginReviewMutation.isPending && beginReviewMutation.variables === item.id
+                          ? "Starting…"
+                          : "Start review"}
+                      </button>
+                    </div>
+                  )}
+
+                  {item.status === "UnderReview" && (
+                    <div className="brd-reviews-actions task-card_actions">
+                      <button
+                        type="button"
+                        className="button button--secondary brd-reject-button"
+                        onClick={() => setPending({ kind: "task", outcome: "Rejected", task: item })}
+                        disabled={isDeciding}
+                      >
+                        Reject
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--dark"
+                        onClick={() => setPending({ kind: "task", outcome: "ReworkRequested", task: item })}
+                        disabled={isDeciding}
+                      >
+                        Request rework
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--primary"
+                        onClick={() => setPending({ kind: "task", outcome: "Accepted", task: item })}
+                        disabled={isDeciding}
+                      >
+                        Accept work
+                      </button>
+                    </div>
                   )}
                 </li>
               ))}
             </ul>
           )}
-        </div>
-      </section>
 
-      <section className="dashboard-panel initiative-detail-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <h2>Developer assignment</h2>
-          </div>
-        </div>
-
-        {ticket.assignedDeveloperId ? (
-          <div className="initiative-detail-grid">
-            <div>
-              <span className="initiative-detail-grid_label">Developer</span>
-              <span className="initiative-detail-grid_value">
-                {userName(ticket.assignedDeveloperId)}
-              </span>
-            </div>
-
-            <div>
-              <span className="initiative-detail-grid_label">Timeline slice</span>
-              <span className="initiative-detail-grid_value">
-                {ticket.developerTimelineDays} days
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div className="proposal-section">
-            <div className="form-field-row">
-              <div className="form-field">
-                <label htmlFor="developerId">Developer</label>
-
-                <select
-                  id="developerId"
-                  value={developerId}
-                  onChange={(event) => setDeveloperId(event.target.value)}
-                  disabled={usersQuery.isLoading}
-                >
-                  <option value="" disabled>
-                    {usersQuery.isLoading ? "Loading developers…" : "Select a developer"}
-                  </option>
-
-                  {developers.map((user) => (
-                    <option key={user.userId} value={user.userId}>
-                      {capitalize(user.userName)} ({user.email})
-                    </option>
-                  ))}
-                </select>
-
-                {usersQuery.isSuccess && developers.length === 0 && (
-                  <p className="form-field_hint">
-                    No users with the Developer role were found yet.
-                  </p>
-                )}
-              </div>
+          {canAssign && (
+            <div className="proposal-section task-form">
+              <h3 className="ticket-details_heading">Assign a task</h3>
 
               <div className="form-field">
-                <label htmlFor="timelineDays">Timeline slice (days)</label>
+                <label htmlFor="taskTitle">Title</label>
                 <input
-                  id="timelineDays"
-                  type="number" onFocus={(event) => event.target.select()}
-                  min={0}
-                  value={timelineDays}
-                  onChange={(event) => setTimelineDays(event.target.value)}
-                  placeholder={
-                    ticket.timelineDaysAllocated !== null
-                      ? `Out of ${ticket.timelineDaysAllocated} days`
-                      : undefined
-                  }
+                  id="taskTitle"
+                  type="text"
+                  value={task.title}
+                  onChange={(event) => setTask((current) => ({ ...current, title: event.target.value }))}
+                  placeholder="e.g. Build the application form API"
                 />
               </div>
+
+              <div className="form-field">
+                <label htmlFor="taskDescription">Description</label>
+                <textarea
+                  id="taskDescription"
+                  rows={3}
+                  value={task.description}
+                  onChange={(event) => setTask((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="What should the developer build, and how will it be checked?"
+                />
+              </div>
+
+              <div className="form-field-row">
+                <div className="form-field">
+                  <label htmlFor="taskDeveloper">Developer</label>
+                  <select
+                    id="taskDeveloper"
+                    value={task.developerId}
+                    onChange={(event) => setTask((current) => ({ ...current, developerId: event.target.value }))}
+                    disabled={usersQuery.isLoading}
+                  >
+                    <option value="" disabled>
+                      {usersQuery.isLoading ? "Loading developers…" : "Select a developer"}
+                    </option>
+
+                    {developers.map((user) => (
+                      <option key={user.userId} value={user.userId}>
+                        {capitalize(user.userName)} ({user.email})
+                      </option>
+                    ))}
+                  </select>
+
+                  {usersQuery.isSuccess && developers.length === 0 && (
+                    <p className={isUserListForbidden() ? "form-error" : "form-field_hint"}>
+                  {isUserListForbidden()
+                    ? "Your role isn't allowed to read the user list yet, so no one can be chosen. This is waiting on the backend (gaps file R7)."
+                    : "No active users with the Developer role were found."}
+                </p>
+                  )}
+                </div>
+
+                <div className="form-field">
+                  <label htmlFor="taskPriority">Priority</label>
+                  <select
+                    id="taskPriority"
+                    value={task.priority}
+                    onChange={(event) => setTask((current) => ({ ...current, priority: Number(event.target.value) }))}
+                  >
+                    {INITIATIVE_PRIORITIES.map((priority) => (
+                      <option key={priority.value} value={priority.value}>
+                        {priority.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-field-row">
+                <div className="form-field">
+                  <label htmlFor="taskStart">Start date</label>
+                  <input
+                    id="taskStart"
+                    type="date"
+                    min={today}
+                    value={task.startDate}
+                    onChange={(event) => setTask((current) => ({ ...current, startDate: event.target.value }))}
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label htmlFor="taskTarget">Target date</label>
+                  <input
+                    id="taskTarget"
+                    type="date"
+                    min={task.startDate || today}
+                    max={ticket.targetDate?.slice(0, 10)}
+                    value={task.targetDate}
+                    onChange={(event) => setTask((current) => ({ ...current, targetDate: event.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="brd-reviews-actions">
+                <button
+                  type="button"
+                  className="button button--primary"
+                  onClick={handleAssign}
+                  disabled={assignMutation.isPending}
+                >
+                  {assignMutation.isPending ? "Assigning…" : "Assign task"}
+                </button>
+              </div>
             </div>
+          )}
 
-            <button
-              type="button"
-              className="button button--primary"
-              onClick={handleAssign}
-              disabled={assignMutation.isPending}
-            >
-              {assignMutation.isPending ? "Assigning…" : "Assign to developer"}
-            </button>
-          </div>
-        )}
-      </section>
+          <p className="mock-data-notice">
+            Assigning and reviewing tasks use the live API. The task list and completing the ticket are
+            simulated on this browser until the backend adds them (gaps files M10 and M12).
+          </p>
+        </section>
+      )}
 
-      {ticket.status === "UnderReview" && (
+      <InitiativeContext initiativeId={initiative.id} initiativeName={initiative.projectName} />
+
+      {isNew && (
         <ReviewDecisionBar
-          hint="Reviewed the developer's work? Approve it, or reject it with a reason."
-          onReject={() => openDecision("reject")}
-          onApprove={() => openDecision("approve")}
-          disabled={decisionMutation.isPending}
+          hint="Read the ticket and the initiative's documents? Accept it to start assigning tasks, or reject it with a reason."
+          onReject={() => setPending({ kind: "ticket", decision: "reject" })}
+          onApprove={() => setPending({ kind: "ticket", decision: "approve" })}
+          disabled={isDeciding}
         />
       )}
 
-      {pendingDecision && (
+      {pending?.kind === "ticket" && (
         <DecisionModal
-          decision={pendingDecision}
-          approveTitle="Approve work"
-          rejectTitle="Reject work"
-          approveBody="This marks the ticket as completed. No comment is needed."
-          rejectLabel="Rejection rationale"
-          rejectPlaceholder="What needs to change before the developer resubmits?"
-          isPending={decisionMutation.isPending}
+          decision={pending.decision}
+          draftKey={ticketDraftKey}
+          approveTitle="Accept ticket"
+          rejectTitle="Reject ticket"
+          approveBody="You'll then split it into tasks for your developers. No comment is needed."
+          rejectLabel="Reason"
+          rejectPlaceholder="What does the Product Manager need to change?"
+          isPending={ticketDecisionMutation.isPending}
           errorMessage={errorMessage}
-          onCancel={() => setPendingDecision(null)}
+          onCancel={() => setPending(null)}
           onConfirm={confirmDecision}
         />
+      )}
+
+      {pending?.kind === "task" && (
+        <DecisionModal
+          decision={TASK_OUTCOME_COPY[pending.outcome].decision}
+          draftKey={taskDraftKey(pending.task.id)}
+          approveTitle={TASK_OUTCOME_COPY.Accepted.title}
+          rejectTitle={TASK_OUTCOME_COPY[pending.outcome].title}
+          approveBody={`This marks "${pending.task.title}" as done. No comment is needed.`}
+          rejectLabel={TASK_OUTCOME_COPY[pending.outcome].label}
+          rejectPlaceholder={TASK_OUTCOME_COPY[pending.outcome].placeholder}
+          isPending={taskDecisionMutation.isPending}
+          errorMessage={errorMessage}
+          onCancel={() => setPending(null)}
+          onConfirm={confirmDecision}
+        />
+      )}
+
+      {confirmingComplete && (
+        <div className="modal-overlay" role="presentation" onClick={() => setConfirmingComplete(false)}>
+          <div
+            className="modal-panel modal-panel--compact"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ticket-complete-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-panel_header">
+              <h2 id="ticket-complete-title">Mark ticket completed</h2>
+            </div>
+
+            <div className="modal-panel_body">
+              <p className="brd-confirm-copy">
+                Every task on this ticket has been reviewed. Completing it tells the Product Manager the work
+                is done.
+              </p>
+            </div>
+
+            <div className="modal-panel_footer">
+              <button type="button" className="button button--secondary" onClick={() => setConfirmingComplete(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="button button--primary"
+                onClick={() => completeMutation.mutate()}
+                disabled={completeMutation.isPending}
+              >
+                {completeMutation.isPending ? "Completing…" : "Complete ticket"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

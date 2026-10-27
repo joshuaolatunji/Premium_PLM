@@ -1,63 +1,87 @@
-import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
-import { getInitiativeById } from "../../service/InitiativeService";
-import { getTicketsForDeveloper } from "../../mocks/ticketsMock";
-import { getCurrentUserId } from "../../apicalls/authStorage";
-import { ticketStatusBadgeClass, ticketStatusLabel } from "../../utils/ticketStatus";
+import { getMyTasks } from "../../service/TicketService";
+import DashboardStatCard from "../../dashboardcomponents/DashboardStatCard";
+import { currentTimestamp } from "../../utils/documentStatus";
+import { formatDate, isTaskWorkable, taskStatusBadgeClass, taskStatusLabel } from "../../utils/ticketStatus";
+import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
 
-// Mocked — tickets have no real endpoint yet (see mocks/ticketsMock.ts).
+// The developer's tasks from their Lead Engineers, from the live API.
 function DeveloperDashboard() {
   const navigate = useNavigate();
-  const currentUserId = getCurrentUserId();
+  const now = currentTimestamp();
 
-  const ticketsQuery = useQuery({
-    queryKey: ["developer-tickets", currentUserId],
-    queryFn: () => getTicketsForDeveloper(currentUserId as string),
-    enabled: Boolean(currentUserId),
+  const tasksQuery = useQuery({
+    queryKey: ["developer-tasks"],
+    queryFn: getMyTasks,
   });
 
-  const tickets = useMemo(() => ticketsQuery.data ?? [], [ticketsQuery.data]);
+  const tasks = tasksQuery.data ?? [];
+  const isOverdue = (targetDate: string | null, done: boolean) =>
+    !done && Boolean(targetDate) && new Date(targetDate as string).getTime() < now - 24 * 60 * 60 * 1000;
 
-  const initiativeQueries = useQueries({
-    queries: tickets.map((ticket) => ({
-      queryKey: ["product-initiative", ticket.initiativeId],
-      queryFn: () => getInitiativeById(ticket.initiativeId),
-      enabled: Boolean(ticket.initiativeId),
-    })),
-  });
-
-  const isLoading = ticketsQuery.isLoading || initiativeQueries.some((query) => query.isLoading);
-  const hasError = ticketsQuery.isError || initiativeQueries.some((query) => query.isError);
+  const toStart = tasks.filter((task) => task.status === "Assigned").length;
+  const working = tasks.filter((task) => task.status === "InProgress" || task.status === "ReworkRequested").length;
+  const inReview = tasks.filter((task) => task.status === "Submitted" || task.status === "UnderReview").length;
+  const overdue = tasks.filter((task) => isOverdue(task.targetDate, !isTaskWorkable(task.status))).length;
 
   return (
     <div className="dashboard-page">
       <header className="dashboard-header">
         <div className="dashboard-header__content">
-          <p className="dashboard-breadcrumb">PremiumPLM / Tickets</p>
+          <p className="dashboard-breadcrumb">PremiumPLM / Tasks</p>
 
           <h1 className="dashboard-title">Developer workspace</h1>
 
-          <p className="dashboard-subtitle">
-            Tickets assigned to you, and everything you need to work on them.
-          </p>
+          <p className="dashboard-subtitle">Tasks assigned to you, and everything you need to work on them.</p>
         </div>
       </header>
 
-      <p className="mock-data-notice">
-        Tickets are temporary, local-only data until the real tickets API is
-        ready — they reset if you reload the page.
-      </p>
+      <section className="dashboard-stats" aria-label="Your tasks">
+        <DashboardStatCard
+          stat={{
+            label: "To start",
+            value: toStart,
+            description: toStart > 0 ? "Newly assigned" : "Nothing new",
+            descriptionType: toStart > 0 ? "warning" : "neutral",
+          }}
+        />
+        <DashboardStatCard
+          stat={{
+            label: "In progress",
+            value: working,
+            description: "Including any returned to you",
+            descriptionType: "neutral",
+          }}
+        />
+        <DashboardStatCard
+          stat={{
+            label: "Awaiting review",
+            value: inReview,
+            description: "Submitted to your Lead Engineer",
+            descriptionType: "neutral",
+          }}
+        />
+        <DashboardStatCard
+          stat={{
+            label: "Overdue",
+            value: overdue,
+            description: overdue > 0 ? "Past their target date" : "All on time",
+            descriptionType: overdue > 0 ? "danger" : "success",
+          }}
+        />
+      </section>
 
       <section className="dashboard-panel">
         <div className="portfolio-table-wrapper">
           <table className="portfolio-table">
             <thead>
               <tr>
-                <th>Initiative</th>
+                <th>Task</th>
                 <th>Ticket</th>
-                <th>Timeline (days)</th>
+                <th>Priority</th>
+                <th>Target date</th>
                 <th>Status</th>
                 <th>
                   <span className="sr-only">Action</span>
@@ -66,80 +90,74 @@ function DeveloperDashboard() {
             </thead>
 
             <tbody>
-              {isLoading && (
+              {tasksQuery.isLoading && (
                 <tr>
-                  <td colSpan={5} className="initiatives-empty">
-                    Loading your tickets…
+                  <td colSpan={6} className="initiatives-empty">
+                    Loading your tasks…
                   </td>
                 </tr>
               )}
 
-              {hasError && (
+              {tasksQuery.isError && (
                 <tr>
-                  <td colSpan={5} className="initiatives-empty initiatives-empty--error">
-                    Couldn't load your tickets. Try refreshing the page.
+                  <td colSpan={6} className="initiatives-empty initiatives-empty--error">
+                    Couldn't load your tasks. Try refreshing the page.
                   </td>
                 </tr>
               )}
 
-              {!isLoading &&
-                !hasError &&
-                tickets.map((ticket, index) => {
-                  const initiative = initiativeQueries[index]?.data;
+              {tasks.map((task) => (
+                <tr key={task.id}>
+                  <td>
+                    <div className="initiative-cell">
+                      <strong title={task.title}>{task.title}</strong>
+                      <span>{task.description}</span>
+                    </div>
+                  </td>
 
-                  return (
-                    <tr key={ticket.id}>
-                      <td>
-                        <div className="initiative-cell">
-                          <strong title={initiative?.projectName ?? "—"}>{initiative?.projectName ?? "—"}</strong>
-                          <span>{ticket.initiativeId.slice(0, 8)}</span>
-                        </div>
-                      </td>
+                  <td>{task.ticketTitle ?? "—"}</td>
 
-                      <td>
-                        <div className="initiative-cell">
-                          <strong title={ticket.title}>{ticket.title}</strong>
-                          <span>{ticket.description}</span>
-                        </div>
-                      </td>
+                  <td>
+                    <span className={priorityBadgeClass(task.priority)}>{priorityLabel(task.priority)}</span>
+                  </td>
 
-                      <td>{ticket.developerTimelineDays ?? "—"}</td>
+                  <td>
+                    {formatDate(task.targetDate)}
+                    {isOverdue(task.targetDate, !isTaskWorkable(task.status)) && (
+                      <span className="cell-note cell-note--alert"> · overdue</span>
+                    )}
+                  </td>
 
-                      <td>
-                        <span className={ticketStatusBadgeClass(ticket.status)}>
-                          {ticketStatusLabel(ticket.status)}
-                        </span>
-                      </td>
+                  <td>
+                    <span className={taskStatusBadgeClass(task.status)}>{taskStatusLabel(task.status)}</span>
+                  </td>
 
-                      <td className="brd-reviews-actions">
-                        <button
-                          type="button"
-                          className="table-action table-action--dark"
-                          onClick={() => navigate(`/dashboard/initiatives/${ticket.initiativeId}`)}
-                        >
-                          View initiative
-                        </button>
-
-                        <button
-                          type="button"
-                          className="table-action table-action--premium"
-                          onClick={() =>
-                            navigate(`/dashboard/developer/tickets/${ticket.id}`)
-                          }
-                        >
-                          {ticket.status === "InProgress" || ticket.status === "Rejected"
+                  <td className="brd-reviews-actions">
+                    <button
+                      type="button"
+                      className={
+                        isTaskWorkable(task.status)
+                          ? "table-action table-action--premium"
+                          : "table-action table-action--dark"
+                      }
+                      onClick={() => navigate(`/dashboard/developer/tasks/${task.id}`)}
+                    >
+                      {task.status === "Assigned"
+                        ? "Start"
+                        : task.status === "ReworkRequested"
+                          ? "Fix & resubmit"
+                          : task.status === "InProgress"
                             ? "Work on it"
                             : "View"}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                    </button>
+                  </td>
+                </tr>
+              ))}
 
-              {!isLoading && !hasError && tickets.length === 0 && (
+              {!tasksQuery.isLoading && !tasksQuery.isError && tasks.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="initiatives-empty">
-                    No tickets are currently assigned to you.
+                  <td colSpan={6} className="initiatives-empty">
+                    No tasks are assigned to you yet.
                   </td>
                 </tr>
               )}

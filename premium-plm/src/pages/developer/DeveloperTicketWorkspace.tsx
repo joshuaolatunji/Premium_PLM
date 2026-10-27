@@ -1,46 +1,61 @@
-
-
-
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ExternalLink, GitBranch } from "lucide-react";
 
+import { useDraftState } from "../../utils/useDraftState";
+import DraftRestoredNotice from "../../components/common/DraftRestoredNotice";
 import { getInitiativeById } from "../../service/InitiativeService";
-import { getInitiativeDocuments } from "../../service/DocumentService";
-import { documentsQueryKey } from "../../utils/documentStatus";
-import {
-  getDiscoveryAttachments,
-  getDiscoveryByInitiativeId,
-  getDiscoveryWorkflowLinks,
-  openDiscoveryAttachment,
-} from "../../service/ProductDiscoveryService";
-import {
-  getTicketById,
-  getTicketRejection,
-  submitTicketForReview,
-} from "../../mocks/ticketsMock";
-import { ApiError } from "../../apicalls/apiClient";
-import DocumentsViewer from "../../components/documents/DocumentsViewer";
-import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
-import { ticketStatusBadgeClass, ticketStatusLabel } from "../../utils/ticketStatus";
+import { getTask, getTaskHistory, getTicket, startTask, submitTask } from "../../service/TicketService";
+import type { SubmitTaskRequest } from "../../types/ticketTypes";
+import TicketBrief from "../../components/tickets/TicketBrief";
+import InitiativeContext from "../../components/tickets/InitiativeContext";
 import BackLink from "../../components/common/BackLink";
+import { formatDate, taskStatusBadgeClass, taskStatusLabel } from "../../utils/ticketStatus";
+import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
 
-// Mocked — tickets have no real endpoint yet (see mocks/ticketsMock.ts).
-// The BRD/discovery/attachments/links lookups below are all real.
+const EMPTY_SUBMISSION: SubmitTaskRequest = { comment: "", pullRequestUrl: "", branchName: "" };
+
+function isValidUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+// One task for the developer: start it, then submit it to the Lead Engineer
+// with a note, the pull request and the branch.
 function DeveloperTicketWorkspace() {
-  const { ticketId } = useParams<{ ticketId: string }>();
+  const { taskId } = useParams<{ taskId: string }>();
   const queryClient = useQueryClient();
 
+  // What's typed for the submission is kept on this device until it's sent.
+  const [submission, setSubmission, submissionDraft] = useDraftState<SubmitTaskRequest>(
+    `task-submit:${taskId}`,
+    EMPTY_SUBMISSION,
+  );
   const [errorMessage, setErrorMessage] = useState("");
 
-  const ticketQuery = useQuery({
-    queryKey: ["ticket", ticketId],
-    queryFn: () => getTicketById(ticketId as string),
-    enabled: Boolean(ticketId),
+  const taskQuery = useQuery({
+    queryKey: ["developer-task", taskId],
+    queryFn: () => getTask(taskId as string),
+    enabled: Boolean(taskId),
   });
 
-  const initiativeId = ticketQuery.data?.initiativeId ?? null;
+  const task = taskQuery.data ?? null;
+
+  // The parent ticket, for the PM's brief. A developer may not be allowed to
+  // read it, so a failure just hides the brief.
+  const ticketQuery = useQuery({
+    queryKey: ["ticket", task?.ticketId],
+    queryFn: () => getTicket(task?.ticketId as string),
+    enabled: Boolean(task?.ticketId),
+    retry: false,
+  });
+
+  const initiativeId = ticketQuery.data?.initiativeId || task?.initiativeId || null;
 
   const initiativeQuery = useQuery({
     queryKey: ["product-initiative", initiativeId],
@@ -48,157 +63,143 @@ function DeveloperTicketWorkspace() {
     enabled: Boolean(initiativeId),
   });
 
-  // PID / FRD / BRD / SWR (mock — see DocumentService).
-  const documentsQuery = useQuery({
-    queryKey: documentsQueryKey(initiativeId),
-    queryFn: () => getInitiativeDocuments(initiativeId as string),
-    enabled: Boolean(initiativeId),
+  const historyQuery = useQuery({
+    queryKey: ["developer-task-history", taskId],
+    queryFn: () => getTaskHistory(taskId as string),
+    enabled: Boolean(taskId),
   });
 
-  const discoveryQuery = useQuery({
-    queryKey: ["product-discovery", initiativeId],
-    queryFn: () => getDiscoveryByInitiativeId(initiativeId as string),
-    enabled: Boolean(initiativeId),
-  });
-
-  const discoveryId = discoveryQuery.data?.id ?? null;
-
-  const attachmentsQuery = useQuery({
-    queryKey: ["discovery-attachments", discoveryId],
-    queryFn: () => getDiscoveryAttachments(discoveryId as string),
-    enabled: Boolean(discoveryId),
-  });
-
-  const workflowLinksQuery = useQuery({
-    queryKey: ["discovery-workflow-links", discoveryId],
-    queryFn: () => getDiscoveryWorkflowLinks(discoveryId as string),
-    enabled: Boolean(discoveryId),
-  });
-
-  const rejectionQuery = useQuery({
-    queryKey: ["ticket-rejection", ticketId],
-    queryFn: () => getTicketRejection(ticketId as string),
-    enabled: Boolean(ticketId),
-  });
-
-  const openAttachmentMutation = useMutation({
-    mutationFn: ({ attachmentId, targetWindow }: { attachmentId: string; targetWindow: Window | null }) =>
-      openDiscoveryAttachment(attachmentId, targetWindow),
-    onSuccess: () => setErrorMessage(""),
-    onError: (error) => {
-      setErrorMessage(
-        error instanceof ApiError ? error.message : "Unable to open that attachment. Try again.",
-      );
-    },
-  });
-
-  // Opened synchronously in the click handler (before the mutation's first
-  // await) so browsers still treat it as a user-gesture-triggered window,
-  // not a blocked popup.
-  function handleOpenAttachment(attachmentId: string) {
-    const targetWindow = window.open("", "_blank");
-    openAttachmentMutation.mutate({ attachmentId, targetWindow });
+  async function refresh() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["developer-task", taskId] }),
+      queryClient.invalidateQueries({ queryKey: ["developer-task-history", taskId] }),
+      queryClient.invalidateQueries({ queryKey: ["developer-tasks"] }),
+      queryClient.invalidateQueries({ queryKey: ["ticket-tasks"] }),
+    ]);
   }
 
-  const submitMutation = useMutation({
-    mutationFn: () => submitTicketForReview(initiativeId as string, ticketId as string),
-    onSuccess: () => {
+  const startMutation = useMutation({
+    mutationFn: () => startTask(taskId as string),
+    onSuccess: async () => {
       setErrorMessage("");
-      queryClient.invalidateQueries({ queryKey: ["ticket", ticketId] });
-      queryClient.invalidateQueries({ queryKey: ["developer-tickets"] });
+      await refresh();
     },
-    onError: () => {
-      setErrorMessage("Unable to submit this ticket for review. Try again.");
-    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : "Couldn't start this task."),
   });
 
-  const isLoading =
-    ticketQuery.isLoading ||
-    (Boolean(initiativeId) &&
-      (initiativeQuery.isLoading ||
-        documentsQuery.isLoading ||
-        discoveryQuery.isLoading ||
-        attachmentsQuery.isLoading ||
-        workflowLinksQuery.isLoading));
+  const submitMutation = useMutation({
+    mutationFn: () =>
+      submitTask(taskId as string, {
+        comment: submission.comment.trim(),
+        pullRequestUrl: submission.pullRequestUrl.trim(),
+        branchName: submission.branchName.trim(),
+      }),
+    onSuccess: async () => {
+      setErrorMessage("");
+      setSubmission(EMPTY_SUBMISSION);
+      await refresh();
+    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : "Couldn't submit this task."),
+  });
 
-  const hasError =
-    ticketQuery.isError ||
-    !ticketQuery.data ||
-    initiativeQuery.isError ||
-    (Boolean(initiativeId) && !initiativeQuery.data);
+  function handleSubmit() {
+    if (!submission.comment.trim()) {
+      setErrorMessage("Add a note for your Lead Engineer about what you did.");
+      return;
+    }
 
-  if (isLoading) {
+    if (submission.pullRequestUrl.trim() && !isValidUrl(submission.pullRequestUrl.trim())) {
+      setErrorMessage("The pull request link must be a full web address, starting with https://");
+      return;
+    }
+
+    setErrorMessage("");
+    submitMutation.mutate();
+  }
+
+  if (taskQuery.isLoading) {
     return (
       <div className="dashboard-page">
-        <p className="initiatives-empty">Loading ticket…</p>
+        <p className="initiatives-empty">Loading task…</p>
       </div>
     );
   }
 
-  if (hasError) {
+  if (!task) {
     return (
       <div className="dashboard-page">
-        <BackLink fallbackTo="/dashboard/developer" fallbackLabel="Back to your tickets" />
+        <BackLink fallbackTo="/dashboard/developer" fallbackLabel="Back to your tasks" />
 
         <p className="initiatives-empty initiatives-empty--error initiative-detail-message">
-          Couldn't load this ticket. It may not exist, or you may not have
-          access to it.
+          Couldn't load this task. It may not exist, or you may not have access to it.
         </p>
       </div>
     );
   }
 
-  const ticket = ticketQuery.data!;
-  const initiative = initiativeQuery.data!;
-  const discovery = discoveryQuery.data;
-  const attachments = attachmentsQuery.data ?? [];
-  const workflowLinks = workflowLinksQuery.data ?? [];
-  const canSubmit = ticket.status === "InProgress" || ticket.status === "Rejected";
+  const history = historyQuery.data ?? [];
+  // The Lead Engineer's comment from the history, for when it wasn't
+  // recorded on this device.
+  const reviewComment = history.find((entry) => entry.comment && entry.actor !== task.developerId)?.comment ?? null;
+  const canSubmit = task.status === "InProgress" || task.status === "ReworkRequested";
 
   return (
     <div className="dashboard-page">
-      <BackLink fallbackTo="/dashboard/developer" fallbackLabel="Back to your tickets" />
+      <BackLink fallbackTo="/dashboard/developer" fallbackLabel="Back to your tasks" />
 
       <header className="dashboard-header initiative-detail-header">
         <div className="dashboard-header__content">
           <p className="dashboard-breadcrumb">
-            PremiumPLM / Developer / {ticket.title}
+            PremiumPLM / Tasks / {initiativeQuery.data ? `${initiativeQuery.data.projectName} / ` : ""}
+            {task.title}
           </p>
 
-          <h1 className="dashboard-title">{ticket.title}</h1>
-
-          <p className="dashboard-subtitle">{ticket.description}</p>
+          <h1 className="dashboard-title">{task.title}</h1>
 
           <p className="dashboard-subtitle initiative-detail-badges">
-            <span className={priorityBadgeClass(initiative.priority)}>{priorityLabel(initiative.priority)}</span>
-            <span className={ticketStatusBadgeClass(ticket.status)}>
-              {ticketStatusLabel(ticket.status)}
-            </span>
+            {initiativeQuery.data && <span>{initiativeQuery.data.projectName}</span>}
+            {task.ticketTitle && <span>Ticket: {task.ticketTitle}</span>}
+            <span className={priorityBadgeClass(task.priority)}>{priorityLabel(task.priority)}</span>
+            <span className={taskStatusBadgeClass(task.status)}>{taskStatusLabel(task.status)}</span>
           </p>
         </div>
 
-        {canSubmit && (
+        {task.status === "Assigned" && (
           <div className="dashboard-header__actions">
             <button
               type="button"
               className="button button--primary"
-              onClick={() => submitMutation.mutate()}
-              disabled={submitMutation.isPending}
+              onClick={() => startMutation.mutate()}
+              disabled={startMutation.isPending}
             >
-              {submitMutation.isPending ? "Submitting…" : "Submit for review"}
+              {startMutation.isPending ? "Starting…" : "Start task"}
             </button>
           </div>
         )}
       </header>
 
-      <p className="mock-data-notice">
-        Tickets are temporary, local-only data until the real tickets API is
-        ready — they reset if you reload the page.
-      </p>
+      <DraftRestoredNotice
+        savedAt={submissionDraft.restoredAt}
+        onDiscard={submissionDraft.discard}
+        keepHint="Submit the task to keep them."
+      />
 
-      {ticket.status === "Rejected" && rejectionQuery.data && (
+      {task.status === "ReworkRequested" && (
         <div className="bdo-rejection-notice">
-          <strong>Rejected by your Lead Engineer:</strong> {rejectionQuery.data.comment}
+          <strong>Rework requested by your Lead Engineer:</strong>{" "}
+          {task.review?.comment || reviewComment || "Make the changes asked for, then resubmit."}
+        </div>
+      )}
+
+      {task.status === "Rejected" && (
+        <div className="bdo-rejection-notice">
+          <strong>Rejected by your Lead Engineer:</strong> {task.review?.comment || reviewComment || "No reason recorded."}
+        </div>
+      )}
+
+      {task.status === "UnderReview" && (
+        <div className="document-returned-note">
+          <strong>Your Lead Engineer is reviewing this task.</strong>
         </div>
       )}
 
@@ -211,118 +212,156 @@ function DeveloperTicketWorkspace() {
       <section className="dashboard-panel initiative-detail-panel">
         <div className="dashboard-panel__header">
           <div>
-            <h2>Project</h2>
+            <h2>Task</h2>
           </div>
         </div>
 
         <div className="initiative-detail-grid">
           <div>
-            <span className="initiative-detail-grid_label">Initiative</span>
-            <span className="initiative-detail-grid_value">{initiative.projectName}</span>
+            <span className="initiative-detail-grid_label">Start date</span>
+            <span className="initiative-detail-grid_value">{formatDate(task.startDate)}</span>
           </div>
 
           <div>
-            <span className="initiative-detail-grid_label">Your timeline slice</span>
-            <span className="initiative-detail-grid_value">
-              {ticket.developerTimelineDays !== null
-                ? `${ticket.developerTimelineDays} days`
-                : "—"}
-            </span>
+            <span className="initiative-detail-grid_label">Target date</span>
+            <span className="initiative-detail-grid_value">{formatDate(task.targetDate)}</span>
+          </div>
+
+          <div>
+            <span className="initiative-detail-grid_label">Started</span>
+            <span className="initiative-detail-grid_value">{formatDate(task.startedAt)}</span>
           </div>
         </div>
+
+        <dl className="ticket-details_grid ticket-details_grid--panel">
+          <div>
+            <dt>What to do</dt>
+            <dd>{task.description || "—"}</dd>
+          </div>
+        </dl>
       </section>
 
-      {documentsQuery.data && (
-        <DocumentsViewer documents={documentsQuery.data} initiativeName={initiative.projectName} />
+      {canSubmit && (
+        <section className="dashboard-panel initiative-detail-panel">
+          <div className="dashboard-panel__header">
+            <div>
+              <h2>{task.status === "ReworkRequested" ? "Resubmit for review" : "Submit for review"}</h2>
+              <p>Send your work to the Lead Engineer when it's ready.</p>
+            </div>
+          </div>
+
+          <div className="proposal-section">
+            <div className="form-field">
+              <label htmlFor="submitComment">Note for the Lead Engineer</label>
+              <textarea
+                id="submitComment"
+                rows={3}
+                value={submission.comment}
+                onChange={(event) => setSubmission((current) => ({ ...current, comment: event.target.value }))}
+                placeholder="What did you build or change, and how was it tested?"
+              />
+            </div>
+
+            <div className="form-field-row">
+              <div className="form-field">
+                <label htmlFor="submitPr">Pull request link (optional)</label>
+                <input
+                  id="submitPr"
+                  type="url"
+                  value={submission.pullRequestUrl}
+                  onChange={(event) => setSubmission((current) => ({ ...current, pullRequestUrl: event.target.value }))}
+                  placeholder="https://github.com/…/pull/123"
+                />
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="submitBranch">Branch (optional)</label>
+                <input
+                  id="submitBranch"
+                  type="text"
+                  value={submission.branchName}
+                  onChange={(event) => setSubmission((current) => ({ ...current, branchName: event.target.value }))}
+                  placeholder="feature/loan-form"
+                />
+              </div>
+            </div>
+
+            <div className="brd-reviews-actions">
+              <button
+                type="button"
+                className="button button--primary"
+                onClick={handleSubmit}
+                disabled={submitMutation.isPending}
+              >
+                {submitMutation.isPending ? "Submitting…" : "Submit for review"}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {task.submission && task.status === "Submitted" && (
+        <section className="dashboard-panel initiative-detail-panel">
+          <div className="dashboard-panel__header">
+            <div>
+              <h2>Your submission</h2>
+              <p>With your Lead Engineer for review since {formatDate(task.submission.submittedAt)}.</p>
+            </div>
+          </div>
+
+          <div className="task-card_submission task-card_submission--panel">
+            <p>{task.submission.comment || "—"}</p>
+            <div className="task-card_links">
+              {task.submission.pullRequestUrl && (
+                <a href={task.submission.pullRequestUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink size={14} aria-hidden="true" />
+                  Pull request
+                </a>
+              )}
+              {task.submission.branchName && (
+                <span>
+                  <GitBranch size={14} aria-hidden="true" />
+                  {task.submission.branchName}
+                </span>
+              )}
+            </div>
+          </div>
+        </section>
       )}
 
       <section className="dashboard-panel initiative-detail-panel">
         <div className="dashboard-panel__header">
           <div>
-            <h2>Product discovery</h2>
+            <h2>History</h2>
           </div>
         </div>
 
-        {discovery ? (
-          <div className="initiative-detail-grid">
-            <div>
-              <span className="initiative-detail-grid_label">Description</span>
-              <span className="initiative-detail-grid_value brd-readonly-value">
-                {discovery.businessLogic || "—"}
-              </span>
-            </div>
-
-            <div>
-              <span className="initiative-detail-grid_label">User flow</span>
-              <span className="initiative-detail-grid_value brd-readonly-value">
-                {discovery.userFlow || "—"}
-              </span>
-            </div>
-          </div>
+        {history.length === 0 ? (
+          <p className="initiatives-empty">{historyQuery.isLoading ? "Loading history…" : "Nothing recorded yet."}</p>
         ) : (
-          <p className="initiatives-empty">No discovery document was saved.</p>
+          <ol className="task-history">
+            {history.map((entry) => (
+              <li key={entry.id}>
+                <span className="task-history_when">{entry.at ? formatDate(entry.at) : "—"}</span>
+                <div>
+                  <strong>{entry.action}</strong>
+                  {/* The history gives a user id: on a task it's either the developer or their Lead Engineer. */}
+                  {entry.actor && <span> · {entry.actor === task.developerId ? "You" : "Lead Engineer"}</span>}
+                  {entry.comment && <p>{entry.comment}</p>}
+                </div>
+              </li>
+            ))}
+          </ol>
         )}
       </section>
 
-      <section className="dashboard-panel initiative-detail-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <h2>Attachments</h2>
-          </div>
-        </div>
+      {ticketQuery.data && initiativeQuery.data && (
+        <TicketBrief ticket={ticketQuery.data} initiativeName={initiativeQuery.data.projectName} />
+      )}
 
-        <div className="bdo-upload-section">
-          {attachments.length === 0 ? (
-            <p className="bdo-upload-empty">No attachments were uploaded.</p>
-          ) : (
-            <ul className="bdo-upload-list">
-              {attachments.map((attachment) => (
-                <li key={attachment.id} className="bdo-upload-list_item">
-                  <div className="bdo-upload-list_info">
-                    <span className="bdo-upload-list_name">{attachment.label ?? attachment.fileName}</span>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="bdo-upload-list_open"
-                    onClick={() => handleOpenAttachment(attachment.id)}
-                    disabled={openAttachmentMutation.isPending}
-                  >
-                    Open
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-
-      <section className="dashboard-panel initiative-detail-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <h2>Design links</h2>
-          </div>
-        </div>
-
-        <div className="bdo-upload-section">
-          {workflowLinks.length === 0 ? (
-            <p className="bdo-upload-empty">No links were added.</p>
-          ) : (
-            <ul className="bdo-upload-list">
-              {workflowLinks.map((link) => (
-                <li key={link.id} className="bdo-upload-list_item">
-                  <a href={link.url} target="_blank" rel="noreferrer">
-                    {link.title}
-                  </a>
-                  {link.description && (
-                    <span className="bdo-upload-list_meta">{link.description}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
+      {initiativeQuery.data && (
+        <InitiativeContext initiativeId={initiativeQuery.data.id} initiativeName={initiativeQuery.data.projectName} />
+      )}
     </div>
   );
 }

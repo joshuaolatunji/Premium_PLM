@@ -21,8 +21,3 @@ export interface RemoveRoleRequest {
   roleId: string;
 }
 
-export interface AdminResetPasswordRequest {
-  email: string;
-  newPassword: string;
-  confirmPassword: string;
-}

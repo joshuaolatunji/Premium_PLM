@@ -13,11 +13,12 @@ import {
   EMPTY_DOCUMENTS,
 } from "../../utils/documentStatus";
 import { documentReviewPath, documentReviewsPath } from "../../utils/documentRoutes";
-import { printDocument } from "../../utils/printDocument";
 import BackLink from "../../components/common/BackLink";
 import DocumentTabs from "../../components/documents/DocumentTabs";
+import DocumentPager from "../../components/documents/DocumentPager";
 import DocumentReadOnlyView from "../../components/documents/DocumentReadOnlyView";
 import DecisionModal, { type Decision } from "../../components/review/DecisionModal";
+import { clearDraft } from "../../utils/useDraftState";
 import ReviewDecisionBar from "../../components/review/ReviewDecisionBar";
 
 interface DocumentReviewProps {
@@ -50,11 +51,15 @@ function DocumentReview({ reviewer }: DocumentReviewProps) {
     enabled: Boolean(id),
   });
 
+  // Where a rejection reason being typed is kept until the decision is made.
+  const decisionDraftKey = `decision:document:${initiativeId}:${type}:${reviewer}`;
+
   const decisionMutation = useMutation({
     mutationFn: ({ approved, comment }: { approved: boolean; comment: string }) =>
       reviewDocument(initiativeId, type!, reviewer, approved, comment),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: documentsQueryKey(id) });
+      clearDraft(decisionDraftKey);
       setPendingDecision(null);
       navigate(documentReviewsPath(reviewer, type!));
     },
@@ -114,6 +119,8 @@ function DocumentReview({ reviewer }: DocumentReviewProps) {
     unavailableMessage = `${initiative.projectName} doesn't have a ${type} yet — there's nothing to review.`;
   } else if (document.status === "Draft") {
     unavailableMessage = `${initiative.projectName}'s ${type} hasn't been submitted for review yet.`;
+  } else if (document.status === "Cancelled") {
+    unavailableMessage = `This ${type} has been cancelled.`;
   } else if (document.status === "Rejected") {
     unavailableMessage = `This ${type} was returned to the Product Manager to revise. It'll be available again once they resubmit it.`;
   } else if (!isBdo && document.status === "PendingBDOReview") {
@@ -131,7 +138,7 @@ function DocumentReview({ reviewer }: DocumentReviewProps) {
           </p>
 
           <h1 className="dashboard-title">
-            {initiative.projectName} — {type}
+            {initiative.projectName} {type}
           </h1>
 
           <p className="dashboard-subtitle initiative-detail-badges">
@@ -190,7 +197,9 @@ function DocumentReview({ reviewer }: DocumentReviewProps) {
             </p>
           )}
 
-          <DocumentReadOnlyView document={document} onDownload={() => printDocument(document, initiative.projectName)} />
+          <DocumentReadOnlyView document={document} initiativeName={initiative.projectName} />
+
+          <DocumentPager current={type} pathFor={(tabType) => documentReviewPath(reviewer, tabType, initiativeId)} />
 
           {canDecide && (
             <ReviewDecisionBar
@@ -206,6 +215,7 @@ function DocumentReview({ reviewer }: DocumentReviewProps) {
       {pendingDecision && (
         <DecisionModal
           decision={pendingDecision}
+          draftKey={decisionDraftKey}
           approveTitle={`Approve ${type}`}
           rejectTitle={`Reject ${type}`}
           approveBody={

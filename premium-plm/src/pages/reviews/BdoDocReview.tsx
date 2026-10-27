@@ -15,6 +15,7 @@ import {
 } from "../../service/ProductDiscoveryService";
 import { capitalize } from "../../utils/text";
 import DecisionModal, { type Decision } from "../../components/review/DecisionModal";
+import { clearDraft } from "../../utils/useDraftState";
 import ReviewDecisionBar from "../../components/review/ReviewDecisionBar";
 import BackLink from "../../components/common/BackLink";
 
@@ -86,11 +87,15 @@ function BdoDocReview() {
     openAttachmentMutation.mutate({ attachmentId, targetWindow });
   }
 
+  // Where a rejection reason being typed is kept until the decision is made.
+  const decisionDraftKey = `decision:discovery:${id}`;
+
   const decisionMutation = useMutation({
     mutationFn: ({ isApproved, comment }: { isApproved: boolean; comment: string }) =>
       reviewDiscovery(id as string, { isApproved, comment }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["product-discovery", id] });
+      clearDraft(decisionDraftKey);
       navigate("/dashboard/bdo-reviews");
     },
     onError: (error) => {
@@ -176,7 +181,7 @@ function BdoDocReview() {
             PremiumPLM / BDO Reviews / {initiative.projectName}
           </p>
 
-          <h1 className="dashboard-title">{initiative.projectName} — Documentation</h1>
+          <h1 className="dashboard-title">{initiative.projectName} BDO Documentation</h1>
 
           <p className="dashboard-subtitle">
             Product discovery, logic flow, and design screens submitted by the BDO.
@@ -339,6 +344,7 @@ function BdoDocReview() {
       {pendingDecision && (
         <DecisionModal
           decision={pendingDecision}
+          draftKey={decisionDraftKey}
           approveTitle="Approve documentation"
           rejectTitle="Reject documentation"
           approveBody="This approves the BDO's documentation. No comment is needed."

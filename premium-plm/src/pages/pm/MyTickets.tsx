@@ -4,14 +4,14 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { getMyAssignedInitiatives } from "../../service/InitiativeService";
 import { getAllUsers } from "../../service/UserService";
-import { getTicketsForInitiative } from "../../mocks/ticketsMock";
-import { ticketStatusBadgeClass, ticketStatusLabel } from "../../utils/ticketStatus";
+import { getTicketsForInitiative } from "../../service/TicketService";
+import { formatDate, ticketStatusBadgeClass, ticketStatusLabel } from "../../utils/ticketStatus";
 import { capitalize } from "../../utils/text";
 import type { Ticket } from "../../types/ticketTypes";
 import type { ProductInitiative } from "../../types/initiativeTypes";
 
-// Tickets themselves are mocked (see mocks/ticketsMock.ts) — the initiative
-// list they're grouped under is real (getMyAssignedInitiatives).
+// The initiative list is real; each initiative's tickets come from the
+// local record until the API can list them (see TicketService, gaps M9).
 function MyTickets() {
   const navigate = useNavigate();
 
@@ -71,8 +71,9 @@ function MyTickets() {
       </header>
 
       <p className="mock-data-notice">
-        Tickets are temporary, local-only data until the real tickets API is
-        ready — they reset if you reload the page.
+        This list shows the tickets created on this browser until the backend
+        can list an initiative's tickets (gaps file M9). Creating, sending and
+        recalling tickets use the live API.
       </p>
 
       <section className="dashboard-panel">
@@ -83,7 +84,7 @@ function MyTickets() {
                 <th>Initiative</th>
                 <th>Ticket</th>
                 <th>Lead Engineer</th>
-                <th>Timeline (days)</th>
+                <th>Target date</th>
                 <th>Status</th>
                 <th>
                   <span className="sr-only">Action</span>
@@ -122,13 +123,13 @@ function MyTickets() {
                     <td>
                       <div className="initiative-cell">
                         <strong title={ticket.title}>{ticket.title}</strong>
-                        <span>{ticket.description}</span>
+                        <span>{ticket.scope}</span>
                       </div>
                     </td>
 
-                    <td>{userName(ticket.assignedLeadEngineerId)}</td>
+                    <td>{userName(ticket.leadEngineerId)}</td>
 
-                    <td>{ticket.timelineDaysAllocated ?? "—"}</td>
+                    <td>{formatDate(ticket.targetDate)}</td>
 
                     <td>
                       <span className={ticketStatusBadgeClass(ticket.status)}>

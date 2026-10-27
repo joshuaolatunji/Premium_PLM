@@ -7,7 +7,7 @@ import { DOCUMENT_TYPES } from "../../types/documentTypes";
 import { useInitiativeDocuments } from "../../utils/documentStatus";
 import { getAllUsers } from "../../service/UserService";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
-import { getTicketsForInitiative } from "../../mocks/ticketsMock";
+import { getTicketsForInitiative } from "../../service/TicketService";
 import { capitalize } from "../../utils/text";
 import { isAwaitingGroupHeadDecision } from "../../utils/initiativeStatus";
 
@@ -33,8 +33,9 @@ function formatDateTime(value: string): string {
 // There's no real audit-log endpoint — every event here is derived from
 // state other screens already fetch. Initiative creation and BDO
 // documentation submit/approve/reject events are real; PID / FRD / BRD /
-// SWR events come from the mock document store (DocumentService.ts) and
-// ticket creation from the ticket mock, so those are marked as mocked.
+// SWR events come from the document API (submit/decision times are approximate
+// until it returns them) and ticket creation from the ticket mock, so those
+// are marked as mocked.
 function AuditTrail() {
   const initiativesQuery = useQuery({
     queryKey: ["product-initiatives"],
@@ -141,7 +142,8 @@ function AuditTrail() {
         const decision = document.lastDecision;
 
         if (decision) {
-          const by = decision.reviewer === "BDO" ? "the BDO" : "the Group Head";
+          const by =
+            decision.reviewer === "BDO" ? "the BDO" : decision.reviewer === "GroupHead" ? "the Group Head" : "a reviewer";
 
           events.push({
             id: `${type}-decision-${initiative.id}`,

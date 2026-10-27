@@ -1,6 +1,7 @@
 import { useQueries } from "@tanstack/react-query";
 
 import { getInitiativeDocuments } from "../service/DocumentService";
+import { getDiscoveryByInitiativeId } from "../service/ProductDiscoveryService";
 import { DOCUMENT_TYPES } from "../types/documentTypes";
 import type {
   DocumentStatus,
@@ -29,6 +30,8 @@ export function documentStatusLabel(status: DocumentStatus | null | undefined): 
       return "Approved";
     case "Rejected":
       return "Returned";
+    case "Cancelled":
+      return "Cancelled";
     default:
       return "Not started";
   }
@@ -77,20 +80,35 @@ export function documentationProgress(documents: InitiativeDocuments) {
   };
 }
 
-// Loads the four documents for each initiative in the list, in parallel.
+// Loads the four documents for each initiative in the list, in parallel —
+// but only once that initiative's BDO documentation is approved. Before
+// then no document can exist, so asking would only return four 404s per
+// initiative. The discovery lookup shares its cache key with the pages' own
+// discovery queries, so it doesn't add requests.
 export function useInitiativeDocuments(initiativeIds: string[]) {
-  const queries = useQueries({
+  const discoveryQueries = useQueries({
     queries: initiativeIds.map((initiativeId) => ({
+      queryKey: ["product-discovery", initiativeId],
+      queryFn: () => getDiscoveryByInitiativeId(initiativeId),
+      enabled: Boolean(initiativeId),
+    })),
+  });
+
+  const queries = useQueries({
+    queries: initiativeIds.map((initiativeId, index) => ({
       queryKey: documentsQueryKey(initiativeId),
       queryFn: () => getInitiativeDocuments(initiativeId),
-      enabled: Boolean(initiativeId),
+      enabled: Boolean(initiativeId) && discoveryQueries[index]?.data?.status === "Approved",
     })),
   });
 
   return {
     documentsFor: (index: number): InitiativeDocuments => queries[index]?.data ?? EMPTY_DOCUMENTS,
-    isLoading: queries.some((query) => query.isLoading),
-    isError: queries.some((query) => query.isError),
+    // The BDO documentation's status ("Approved", "Rejected"…), or "" before it exists.
+    discoveryStatusFor: (index: number): string => discoveryQueries[index]?.data?.status ?? "",
+    isLoading:
+      discoveryQueries.some((query) => query.isLoading) || queries.some((query) => query.isLoading),
+    isError: discoveryQueries.some((query) => query.isError) || queries.some((query) => query.isError),
   };
 }
 

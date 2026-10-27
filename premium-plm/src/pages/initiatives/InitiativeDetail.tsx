@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getInitiativeById } from "../../service/InitiativeService";
 import { getAllUsers } from "../../service/UserService";
 import { getInitiativeDocuments } from "../../service/DocumentService";
-import { getTicketsForInitiative } from "../../mocks/ticketsMock";
+import { getTicketsForInitiative } from "../../service/TicketService";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
 import {
   currentStageFor,
@@ -20,7 +20,7 @@ import { getStoredUser } from "../../apicalls/authStorage";
 import { resolvePrimaryRole } from "../../utils/roleRouting";
 import BackLink from "../../components/common/BackLink";
 import { backState } from "../../utils/navigation";
-import { documentsQueryKey } from "../../utils/documentStatus";
+import { documentsQueryKey, EMPTY_DOCUMENTS } from "../../utils/documentStatus";
 import InitiativeDocumentsPanel from "../../components/documents/InitiativeDocumentsPanel";
 
 function formatDate(value: string | null) {
@@ -50,18 +50,21 @@ function InitiativeDetail() {
     queryFn: getAllUsers,
   });
 
-  // PID / FRD / BRD / SWR (mock — see DocumentService).
-  const documentsQuery = useQuery({
-    queryKey: documentsQueryKey(id),
-    queryFn: () => getInitiativeDocuments(id as string),
-    enabled: Boolean(id),
-  });
-
   const discoveryQuery = useQuery({
     queryKey: ["product-discovery", id],
     queryFn: () => getDiscoveryByInitiativeId(id as string),
     enabled: Boolean(id),
   });
+
+  // PID / FRD / BRD / SWR (see DocumentService).
+  const documentsQuery = useQuery({
+    queryKey: documentsQueryKey(id),
+    queryFn: () => getInitiativeDocuments(id as string),
+    // Documents can only exist once the BDO's documentation is approved —
+    // asking earlier would only return 404s.
+    enabled: Boolean(id) && discoveryQuery.data?.status === "Approved",
+  });
+
 
   const ticketsQuery = useQuery({
     queryKey: ["tickets", id],
@@ -85,7 +88,7 @@ function InitiativeDetail() {
         ? { path: "/dashboard/my-work", label: "Back to my work", crumb: "My work" }
         : primaryRole === "LeadEngineer"
           ? { path: "/dashboard/lead-engineer", label: "Back to my tickets", crumb: "My tickets" }
-          : primaryRole === "SoftwareEngineer"
+          : primaryRole === "Developer"
             ? { path: "/dashboard/developer", label: "Back to my tickets", crumb: "My tickets" }
             : { path: "/dashboard/initiatives", label: "Back to initiatives", crumb: "Initiatives" };
   // Product Managers create tickets, so their Tickets tab is always open.
@@ -203,11 +206,11 @@ function InitiativeDetail() {
         </div>
       </header>
 
-      {documentsQuery.data && (
+      {!documentsQuery.isLoading && (
         <InitiativeDocumentsPanel
           initiativeId={initiative.id}
           initiativeName={initiative.projectName}
-          documents={documentsQuery.data}
+          documents={documentsQuery.data ?? EMPTY_DOCUMENTS}
           bdoDocsApproved={bdoDocsApproved}
           viewer={
             isReviewerRole

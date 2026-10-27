@@ -3,17 +3,19 @@ import { useNavigate } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { getInitiativeById } from "../../service/InitiativeService";
-import { getAllUsers } from "../../service/UserService";
-import { getTicketsForLeadEngineer } from "../../mocks/ticketsMock";
+import { getTasksForTicket, getTicketsForLeadEngineer } from "../../service/TicketService";
 import { getCurrentUserId } from "../../apicalls/authStorage";
-import { ticketStatusBadgeClass, ticketStatusLabel } from "../../utils/ticketStatus";
-import { capitalize } from "../../utils/text";
+import DashboardStatCard from "../../dashboardcomponents/DashboardStatCard";
+import { formatDate, ticketStatusBadgeClass, ticketStatusLabel } from "../../utils/ticketStatus";
+import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
 
-// Mocked — tickets have no real endpoint yet (see mocks/ticketsMock.ts).
+// The Lead Engineer's tickets: new ones to accept or reject, the ones being
+// built (and the developer work waiting for their review), and finished ones.
 function LeadEngineerDashboard() {
   const navigate = useNavigate();
   const currentUserId = getCurrentUserId();
 
+  // M8 — from the local record until the API can list a Lead Engineer's tickets.
   const ticketsQuery = useQuery({
     queryKey: ["lead-engineer-tickets", currentUserId],
     queryFn: () => getTicketsForLeadEngineer(currentUserId as string),
@@ -23,30 +25,39 @@ function LeadEngineerDashboard() {
   const tickets = useMemo(() => ticketsQuery.data ?? [], [ticketsQuery.data]);
 
   const initiativeQueries = useQueries({
-    queries: tickets.map((ticket) => ({
-      queryKey: ["product-initiative", ticket.initiativeId],
-      queryFn: () => getInitiativeById(ticket.initiativeId),
-      enabled: Boolean(ticket.initiativeId),
+    queries: [...new Set(tickets.map((ticket) => ticket.initiativeId))].map((initiativeId) => ({
+      queryKey: ["product-initiative", initiativeId],
+      queryFn: () => getInitiativeById(initiativeId),
+      enabled: Boolean(initiativeId),
     })),
   });
 
-  const usersQuery = useQuery({
-    queryKey: ["plm-users"],
-    queryFn: getAllUsers,
+  const taskQueries = useQueries({
+    queries: tickets.map((ticket) => ({
+      queryKey: ["ticket-tasks", ticket.id],
+      queryFn: () => getTasksForTicket(ticket.id),
+    })),
   });
 
-  function userName(userId: string | null) {
-    if (!userId) {
-      return "Unassigned";
-    }
-
-    return capitalize(
-      usersQuery.data?.find((user) => user.userId === userId)?.userName ?? "Unassigned",
-    );
+  function initiativeName(initiativeId: string) {
+    return initiativeQueries.find((query) => query.data?.id === initiativeId)?.data?.projectName ?? "—";
   }
 
-  const isLoading = ticketsQuery.isLoading || initiativeQueries.some((query) => query.isLoading);
-  const hasError = ticketsQuery.isError || initiativeQueries.some((query) => query.isError);
+  const rows = tickets.map((ticket, index) => {
+    const tasks = taskQueries[index]?.data ?? [];
+
+    return {
+      ticket,
+      tasks,
+      toReview: tasks.filter((task) => task.status === "Submitted" || task.status === "UnderReview").length,
+      approved: tasks.filter((task) => task.status === "Accepted").length,
+    };
+  });
+
+  const newTickets = rows.filter((row) => row.ticket.status === "WithLeadEngineer").length;
+  const building = rows.filter((row) => row.ticket.status === "Accepted" || row.ticket.status === "InProgress").length;
+  const toReview = rows.reduce((total, row) => total + row.toReview, 0);
+  const completed = rows.filter((row) => row.ticket.status === "Completed").length;
 
   return (
     <div className="dashboard-page">
@@ -57,14 +68,49 @@ function LeadEngineerDashboard() {
           <h1 className="dashboard-title">Lead Engineer workspace</h1>
 
           <p className="dashboard-subtitle">
-            Tickets assigned to you, and the developers working on them.
+            Tickets sent to you, the developer tasks you've split them into, and work waiting for your review.
           </p>
         </div>
       </header>
 
+      <section className="dashboard-stats" aria-label="Your tickets">
+        <DashboardStatCard
+          stat={{
+            label: "New tickets",
+            value: newTickets,
+            description: newTickets > 0 ? "Accept or reject them" : "Nothing new",
+            descriptionType: newTickets > 0 ? "warning" : "neutral",
+          }}
+        />
+        <DashboardStatCard
+          stat={{
+            label: "In progress",
+            value: building,
+            description: "Accepted and being built",
+            descriptionType: "neutral",
+          }}
+        />
+        <DashboardStatCard
+          stat={{
+            label: "Work to review",
+            value: toReview,
+            description: toReview > 0 ? "Developer tasks submitted to you" : "Nothing submitted",
+            descriptionType: toReview > 0 ? "warning" : "neutral",
+          }}
+        />
+        <DashboardStatCard
+          stat={{
+            label: "Completed",
+            value: completed,
+            description: "Tickets you've closed",
+            descriptionType: "success",
+          }}
+        />
+      </section>
+
       <p className="mock-data-notice">
-        Tickets are temporary, local-only data until the real tickets API is
-        ready — they reset if you reload the page.
+        This list shows tickets sent from this browser until the backend can list a Lead Engineer's
+        tickets (gaps file M8). Each ticket's page loads it live.
       </p>
 
       <section className="dashboard-panel">
@@ -72,11 +118,12 @@ function LeadEngineerDashboard() {
           <table className="portfolio-table">
             <thead>
               <tr>
-                <th>Initiative</th>
                 <th>Ticket</th>
-                <th>Timeline (days)</th>
+                <th>Initiative</th>
+                <th>Priority</th>
+                <th>Target date</th>
                 <th>Status</th>
-                <th>Developer</th>
+                <th>Tasks</th>
                 <th>
                   <span className="sr-only">Action</span>
                 </th>
@@ -84,84 +131,70 @@ function LeadEngineerDashboard() {
             </thead>
 
             <tbody>
-              {isLoading && (
+              {ticketsQuery.isLoading && (
                 <tr>
-                  <td colSpan={6} className="initiatives-empty">
+                  <td colSpan={7} className="initiatives-empty">
                     Loading your tickets…
                   </td>
                 </tr>
               )}
 
-              {hasError && (
+              {ticketsQuery.isError && (
                 <tr>
-                  <td colSpan={6} className="initiatives-empty initiatives-empty--error">
+                  <td colSpan={7} className="initiatives-empty initiatives-empty--error">
                     Couldn't load your tickets. Try refreshing the page.
                   </td>
                 </tr>
               )}
 
-              {!isLoading &&
-                !hasError &&
-                tickets.map((ticket, index) => {
-                  const initiative = initiativeQueries[index]?.data;
+              {rows.map(({ ticket, tasks, toReview: submitted, approved }) => (
+                <tr key={ticket.id}>
+                  <td>
+                    <div className="initiative-cell">
+                      <strong title={ticket.title}>{ticket.title}</strong>
+                      <span>{ticket.scope}</span>
+                    </div>
+                  </td>
 
-                  return (
-                    <tr key={ticket.id}>
-                      <td>
-                        <div className="initiative-cell">
-                          <strong title={initiative?.projectName ?? "—"}>{initiative?.projectName ?? "—"}</strong>
-                          <span>{ticket.initiativeId.slice(0, 8)}</span>
-                        </div>
-                      </td>
+                  <td>{initiativeName(ticket.initiativeId)}</td>
 
-                      <td>
-                        <div className="initiative-cell">
-                          <strong title={ticket.title}>{ticket.title}</strong>
-                          <span>{ticket.description}</span>
-                        </div>
-                      </td>
+                  <td>
+                    <span className={priorityBadgeClass(ticket.priority)}>{priorityLabel(ticket.priority)}</span>
+                  </td>
 
-                      <td>{ticket.timelineDaysAllocated ?? "—"}</td>
+                  <td>{formatDate(ticket.targetDate)}</td>
 
-                      <td>
-                        <span className={ticketStatusBadgeClass(ticket.status)}>
-                          {ticketStatusLabel(ticket.status)}
-                        </span>
-                      </td>
+                  <td>
+                    <span className={ticketStatusBadgeClass(ticket.status)}>{ticketStatusLabel(ticket.status)}</span>
+                  </td>
 
-                      <td>{userName(ticket.assignedDeveloperId)}</td>
+                  <td>
+                    {tasks.length === 0 ? "—" : `${approved} of ${tasks.length} done`}
+                    {submitted > 0 && <span className="cell-note cell-note--alert"> · {submitted} to review</span>}
+                  </td>
 
-                      <td className="brd-reviews-actions">
-                        <button
-                          type="button"
-                          className="table-action table-action--dark"
-                          onClick={() => navigate(`/dashboard/initiatives/${ticket.initiativeId}`)}
-                        >
-                          View initiative
-                        </button>
+                  <td className="brd-reviews-actions">
+                    <button
+                      type="button"
+                      className="table-action table-action--premium"
+                      onClick={() => navigate(`/dashboard/lead-engineer/tickets/${ticket.id}`)}
+                    >
+                      {ticket.status === "WithLeadEngineer"
+                        ? "Review ticket"
+                        : submitted > 0
+                          ? "Review work"
+                          : ticket.status === "Accepted"
+                            ? "Assign tasks"
+                            : "Open"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
 
-                        <button
-                          type="button"
-                          className="table-action table-action--premium"
-                          onClick={() =>
-                            navigate(`/dashboard/lead-engineer/tickets/${ticket.id}`)
-                          }
-                        >
-                          {ticket.status === "UnderReview"
-                            ? "Review"
-                            : ticket.assignedDeveloperId
-                              ? "View"
-                              : "Assign developer"}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-
-              {!isLoading && !hasError && tickets.length === 0 && (
+              {!ticketsQuery.isLoading && !ticketsQuery.isError && tickets.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="initiatives-empty">
-                    No tickets are currently assigned to you.
+                  <td colSpan={7} className="initiatives-empty">
+                    No tickets have been sent to you yet.
                   </td>
                 </tr>
               )}

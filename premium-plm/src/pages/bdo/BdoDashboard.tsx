@@ -125,7 +125,7 @@ function BdoDashboard() {
     })),
   });
 
-  // PID / FRD / BRD / SWR for each initiative (mock — see DocumentService).
+  // PID / FRD / BRD / SWR for each initiative (see DocumentService).
   const documents = useInitiativeDocuments(assignedInitiatives.map((initiative) => initiative.id));
 
   // Only used for the "From …" name in the approval queue; the page works

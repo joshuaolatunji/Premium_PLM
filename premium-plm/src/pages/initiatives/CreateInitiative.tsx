@@ -2,6 +2,8 @@ import { useState, type SubmitEvent } from "react";
 
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useDraftState } from "../../utils/useDraftState";
+import DraftRestoredNotice from "../../components/common/DraftRestoredNotice";
 
 import { createCategory, getCategories } from "../../service/CategoryService";
 import { getAllUsers } from "../../service/UserService";
@@ -60,13 +62,24 @@ function CreateInitiativeForm() {
   const returnTo =
     (location.state as { from?: string } | null)?.from ?? "/dashboard/initiatives";
 
-  const [form, setForm] = useState<CreateInitiativeRequest>(EMPTY_FORM);
+  // Everything typed here is kept on this device until the initiative is
+  // created or the form is cancelled (see useDraftState).
+  const [form, setForm, formDraft] = useDraftState<CreateInitiativeRequest>("create-initiative", EMPTY_FORM);
   const [errorMessage, setErrorMessage] = useState("");
   const [createdInfo, setCreatedInfo] = useState<CreatedInitiativeInfo | null>(null);
 
-  const [isAddingCategory, setIsAddingCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [newCategoryDescription, setNewCategoryDescription] = useState("");
+  const [newCategoryName, setNewCategoryName, categoryNameDraft] = useDraftState(
+    "create-initiative:new-category-name",
+    "",
+  );
+  const [newCategoryDescription, setNewCategoryDescription, categoryDescriptionDraft] = useDraftState(
+    "create-initiative:new-category-description",
+    "",
+  );
+  // Reopens the "add a category" panel if a half-typed category was restored.
+  const [isAddingCategory, setIsAddingCategory] = useState(
+    () => newCategoryName !== "" || newCategoryDescription !== "",
+  );
   const [newCategoryError, setNewCategoryError] = useState("");
 
   const categoriesQuery = useQuery({
@@ -128,8 +141,20 @@ function CreateInitiativeForm() {
     setNewCategoryError("");
   }
 
-  const [bdoId, setBdoId] = useState("");
-  const [pmId, setPmId] = useState("");
+  const [bdoId, setBdoId, bdoDraft] = useDraftState("create-initiative:bdo", "");
+  const [pmId, setPmId, pmDraft] = useDraftState("create-initiative:pm", "");
+
+  const drafts = [formDraft, bdoDraft, pmDraft, categoryNameDraft, categoryDescriptionDraft];
+  // The earliest restored edit, for the "Restored your unsaved changes" note.
+  const restoredAt =
+    drafts
+      .map((draft) => draft.restoredAt)
+      .filter((at): at is string => Boolean(at))
+      .sort()[0] ?? null;
+
+  function discardAllDrafts() {
+    drafts.forEach((draft) => draft.discard());
+  }
 
   const usersQuery = useQuery({
     queryKey: ["plm-users"],
@@ -159,6 +184,8 @@ function CreateInitiativeForm() {
       return initiativeId;
     },
     onSuccess: (initiativeId, payload) => {
+      // Created — nothing left to keep.
+      drafts.forEach((draft) => draft.markSaved());
       queryClient.invalidateQueries({ queryKey: ["product-initiatives"] });
       queryClient.invalidateQueries({ queryKey: ["product-initiatives-my-assigned"] });
 
@@ -190,6 +217,8 @@ function CreateInitiativeForm() {
       return;
     }
 
+    // Cancelling is leaving on purpose, so the typed values aren't kept.
+    discardAllDrafts();
     navigate(returnTo);
   }
 
@@ -231,6 +260,12 @@ function CreateInitiativeForm() {
           </p>
         </div>
       </header>
+
+      <DraftRestoredNotice
+        savedAt={restoredAt}
+        onDiscard={discardAllDrafts}
+        keepHint="Create the initiative to keep them."
+      />
 
       {createdInfo ? (
         <section className="dashboard-panel create-initiative-success">

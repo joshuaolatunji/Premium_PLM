@@ -3,7 +3,6 @@ import { getToken } from "../apicalls/authStorage";
 
 import type { ApiResponse } from "../types/apiTypes";
 import type {
-  AdminResetPasswordRequest,
   AssignRoleRequest,
   CreateUserRequest,
   PLMRole,
@@ -22,6 +21,10 @@ export async function createUser(payload: CreateUserRequest): Promise<void> {
   });
 }
 
+// Roles the API lists but that should never be given to anyone. "NewUser"
+// is meaningless: a role is always chosen when the account is created.
+const UNASSIGNABLE_ROLES = ["NewUser"];
+
 export async function getAllRoles(): Promise<PLMRole[]> {
   const token = getToken();
 
@@ -33,7 +36,7 @@ export async function getAllRoles(): Promise<PLMRole[]> {
     },
   );
 
-  return response.data;
+  return response.data.filter((role) => !UNASSIGNABLE_ROLES.includes(role.roleName ?? ""));
 }
 
 export async function assignRole(payload: AssignRoleRequest): Promise<void> {
@@ -51,21 +54,6 @@ export async function removeUserRole(payload: RemoveRoleRequest): Promise<void> 
 
   await apiClient<unknown>("api/PLMAdmin/remove_user_role", {
     method: "DELETE",
-    token: token ?? undefined,
-    body: JSON.stringify(payload),
-  });
-}
-
-// The Super Admin's "reset an account" action — sets the user's password
-// directly (PLMAuth/autoreset-password). There's no separate "reset
-// profile" endpoint beyond this.
-export async function resetUserPassword(
-  payload: AdminResetPasswordRequest,
-): Promise<void> {
-  const token = getToken();
-
-  await apiClient<unknown>("api/PLMAuth/autoreset-password", {
-    method: "POST",
     token: token ?? undefined,
     body: JSON.stringify(payload),
   });

@@ -5,11 +5,14 @@ import { loginUser } from "../../service/LoginService"
 import { saveAuthSession } from "../../apicalls/authStorage";
 import {checkApiHealth} from "../../service/healthApi"
 import { getLandingRouteForRoles } from "../../utils/roleRouting";
+import { takeReturnPath, wasSignedOutByExpiry } from "../../utils/sessionReturn";
 
 import LoginLayout from "../../components/auth/LoginLayout";
 
 function Login() {
     const [showPassword, setShowPassword] = useState(false);
+    // Signed out because the session ran out (not a fresh visit).
+    const [sessionExpired] = useState(wasSignedOutByExpiry);
 
     const navigate = useNavigate();
 
@@ -70,7 +73,12 @@ function Login() {
                 )}ms`,
             );
 
-            navigate(getLandingRouteForRoles(response.data.roles));
+            // Back to the page they were on if their session had expired
+            // (same person only); otherwise their normal landing page.
+            navigate(
+                takeReturnPath(response.data.email ?? emailAddress) ??
+                    getLandingRouteForRoles(response.data.roles),
+            );
         } catch (error) {
             if(error instanceof Error) {
                 setErrorMessage(error.message);
@@ -92,6 +100,12 @@ function Login() {
 
                     <p>Use your Premium Trust Bank network credentials.</p>
                 </div>
+
+                {sessionExpired && (
+                    <p className="login-form_notice" role="status">
+                        Your session expired. Sign in again to continue where you left off.
+                    </p>
+                )}
 
                 <form onSubmit={handleSubmit} noValidate>
                     <div className="form-field">

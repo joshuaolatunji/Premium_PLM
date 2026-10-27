@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
-import { clearAuthSession, getSessionExpiry, hasValidSession } from '../../apicalls/authStorage';
+import { clearAuthSession, getSessionExpiry, getStoredUser, hasValidSession } from '../../apicalls/authStorage';
+import { rememberReturnPath } from '../../utils/sessionReturn';
+import SessionExpiryWarning from './SessionExpiryWarning';
 
 // Every /dashboard page renders inside AppShell, so it's the one place the
 // session gets checked for all of them. This is the outer guard: no valid
@@ -11,6 +13,12 @@ import { clearAuthSession, getSessionExpiry, hasValidSession } from '../../apica
 // refresh, so an expired session can't reach any dashboard page.
 function AppShell() {
     if (!hasValidSession()) {
+        // A session that ran out (rather than a visitor who never signed in)
+        // gets sent back to this page after signing in again.
+        if (getStoredUser()) {
+            rememberReturnPath();
+        }
+
         clearAuthSession();
         return <Navigate to="/login" replace />;
     }
@@ -20,25 +28,26 @@ function AppShell() {
 
 function AuthenticatedShell() {
     const navigate = useNavigate();
+    // Read once — it can't change without a new login, which remounts this.
+    const [expiry] = useState(getSessionExpiry);
 
     // Signs the user out at the exact moment the token expires, even if
     // they're idle on a page and never click anything. One timer, scheduled
     // for the expiry instant (read once — it can't change without a new
     // login, which remounts this shell).
     useEffect(() => {
-        const expiry = getSessionExpiry();
-
         if (expiry === null) {
             return;
         }
 
         const timeoutId = setTimeout(() => {
+            rememberReturnPath();
             clearAuthSession();
             navigate('/login', { replace: true });
         }, Math.max(0, expiry - Date.now()));
 
         return () => clearTimeout(timeoutId);
-    }, [navigate]);
+    }, [navigate, expiry]);
 
     // Below the sidebar's own breakpoint (see .sidebar in index.css) it's an
     // off-canvas drawer instead of a permanent column, so this needs to be
@@ -68,6 +77,8 @@ function AuthenticatedShell() {
                 <main className="app-shell_content">
                     <Outlet />
                 </main>
+
+                {expiry !== null && <SessionExpiryWarning expiry={expiry} />}
             </div>
         </div>
     );

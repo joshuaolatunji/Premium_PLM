@@ -1,4 +1,5 @@
 import { clearAuthSession, hasValidSession } from "./authStorage";
+import { rememberReturnPath } from "../utils/sessionReturn";
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -81,6 +82,7 @@ export async function apiClient<T>(
     // the outcome depended on the server replying with a 401 — and if the
     // request failed outright instead, pages just showed "couldn't load".
     if (token && !hasValidSession()) {
+        rememberReturnPath();
         clearAuthSession();
         window.location.replace("/login");
         throw new ApiError("Your session has expired. Please sign in again.", 401, null);

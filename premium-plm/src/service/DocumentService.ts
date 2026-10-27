@@ -1,139 +1,245 @@
-// PID / FRD / BRD / SWR documents.
+// PID / FRD / BRD / SWR documents — the real ProductDocument API.
 //
-// MOCK — the backend has no endpoints for these yet (the BRD's real
-// ProductProposal API has no Description field, so the BRD runs on this mock
-// too). Documents are kept in this browser's localStorage, so they survive a
-// refresh but are NOT shared between browsers or users. Every function is
-// async and shaped like the proposed API in docs/product-documents-api.md;
-// connecting the real endpoints means replacing the bodies below with
-// apiClient calls — nothing that calls this file has to change.
+// Endpoints (no "api/" prefix, same as create-initiative):
+//   GET   {initiativeId}/get-documents?documentType=PID   one document of a type
+//   POST  create-document                                  first save
+//   PATCH {documentId}/update-document?documentType=PID    later saves
+//   POST  {documentId}/submit-document                     Draft → BDO
+//   POST  {documentId}/resubmit                            returned → BDO again
+//   POST  {documentId}/review-document                     BDO / Group Head decision
+//   GET   {documentId}/preview-generated-pdf               PDF export
+//
+// The pages work with the app's own document shape (types/documentTypes.ts);
+// everything below converts to and from the API's shape, so the pages don't
+// change if the API's field names do.
 
+import { apiClient, ApiError } from "../apicalls/apiClient";
+import { getToken } from "../apicalls/authStorage";
+import { fetchPdfBlob } from "./PdfService";
+import type { ApiResponse } from "../types/apiTypes";
+import { DOCUMENT_TYPES } from "../types/documentTypes";
 import type {
   DocumentReviewer,
+  DocumentStatus,
   DocumentType,
   InitiativeDocuments,
   ProductDocument,
   SaveDocumentRequest,
 } from "../types/documentTypes";
-import { DOCUMENT_TYPES } from "../types/documentTypes";
 
-const STORAGE_KEY = "plm-mock-product-documents";
+// The API's ProductDocumentResponseDto.
+interface ApiProductDocument {
+  id: string;
+  productInitiativeId: string;
+  documentType: DocumentType | number;
+  author: string | null;
+  userGroup: string | null;
+  sponsor: string | null;
+  projectManager: string | null;
+  introduction: string | null;
+  contentHtml: string | null;
+  status: string | number;
+  currentVersion: number;
+  // The latest reviewer's comment — the reason, when a document is returned.
+  commentReview?: string | null;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
 
-function readAll(): ProductDocument[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as ProductDocument[]) : [];
-  } catch {
-    return [];
+// The API's ProductDocumentStatus values, in enum order (so a numeric value
+// can be read too, should the API ever send numbers instead of names).
+const API_STATUSES = [
+  "Draft",
+  "PendingApproval",
+  "PartiallyApproved",
+  "ChangesRequested",
+  "RevisionInProgress",
+  "Approved",
+  "Cancelled",
+] as const;
+
+type ApiStatus = (typeof API_STATUSES)[number];
+
+const API_DOCUMENT_TYPES: DocumentType[] = ["BRD", "FRD", "PID", "SWR"];
+
+function readApiStatus(status: string | number): ApiStatus {
+  const name = typeof status === "number" ? API_STATUSES[status] : status;
+  return (API_STATUSES as readonly string[]).includes(name) ? (name as ApiStatus) : "Draft";
+}
+
+// API status → the app's status:
+//   PendingApproval    — with the BDO (first review)
+//   PartiallyApproved  — BDO approved it; with the Group Head
+//   ChangesRequested / RevisionInProgress — returned to the PM to revise
+function toAppStatus(status: ApiStatus): DocumentStatus {
+  switch (status) {
+    case "PendingApproval":
+      return "PendingBDOReview";
+    case "PartiallyApproved":
+      return "PendingGroupHeadReview";
+    case "ChangesRequested":
+    case "RevisionInProgress":
+      return "Rejected";
+    case "Approved":
+      return "Approved";
+    case "Cancelled":
+      return "Cancelled";
+    default:
+      return "Draft";
   }
 }
 
-function writeAll(documents: ProductDocument[]) {
+function toAppDocument(api: ApiProductDocument): ProductDocument {
+  const status = toAppStatus(readApiStatus(api.status));
+  const type =
+    typeof api.documentType === "number" ? API_DOCUMENT_TYPES[api.documentType] : api.documentType;
+
+  return {
+    id: api.id,
+    initiativeId: api.productInitiativeId,
+    type,
+    overview: {
+      author: api.author ?? "",
+      sponsor: api.sponsor ?? "",
+      userGroup: api.userGroup ?? "",
+      productManager: api.projectManager ?? "",
+      introduction: api.introduction ?? "",
+    },
+    description: api.contentHtml ?? "",
+    status,
+    version: api.currentVersion ?? 0,
+    createdByUserId: api.createdByUserId ?? "",
+    createdAt: api.createdAt,
+    updatedAt: api.updatedAt ?? api.createdAt,
+    // The API doesn't return a submitted date yet; the last update is the
+    // closest — for a document under review, that's when it reached its
+    // current reviewer.
+    submittedAt:
+      status === "PendingBDOReview" || status === "PendingGroupHeadReview"
+        ? (api.updatedAt ?? api.createdAt)
+        : null,
+    // The API returns the reviewer's comment, but not who returned it or
+    // when (gaps file R2), so the reviewer is left unknown.
+    lastDecision:
+      status === "Rejected" && api.commentReview
+        ? { reviewer: null, approved: false, comment: api.commentReview, decidedAt: api.updatedAt ?? api.createdAt }
+        : null,
+  };
+}
+
+function authOptions() {
+  return { token: getToken() ?? undefined };
+}
+
+// The raw API record for one type, or null when it hasn't been started (a 404
+// or an empty response is the normal "not started" state, not an error).
+async function fetchApiDocument(initiativeId: string, type: DocumentType): Promise<ApiProductDocument | null> {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(documents));
-  } catch {
-    // Storage full or blocked — the change only lasts until the next reload.
+    const response = await apiClient<ApiResponse<ApiProductDocument | ApiProductDocument[]> | null>(
+      `${initiativeId}/get-documents?${new URLSearchParams({ documentType: type })}`,
+      { method: "GET", ...authOptions() },
+    );
+
+    const data = response?.data ?? null;
+    // Tolerate a list too, in case the endpoint returns one.
+    // Never let one type stand in for another (e.g. the PID answering for
+    // the FRD), or two documents would share one id and one sign-off.
+    const typeOf = (doc: ApiProductDocument) =>
+      typeof doc.documentType === "number" ? API_DOCUMENT_TYPES[doc.documentType] : doc.documentType;
+    const records = Array.isArray(data) ? data : data ? [data] : [];
+    const record = records.find((doc) => typeOf(doc) === type) ?? null;
+
+    return record?.id ? record : null;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+
+    throw error;
   }
 }
 
-function delay<T>(value: T): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), 120));
+async function requireApiDocument(initiativeId: string, type: DocumentType): Promise<ApiProductDocument> {
+  const record = await fetchApiDocument(initiativeId, type);
+
+  if (!record) {
+    throw new Error(`Save the ${type} before continuing.`);
+  }
+
+  return record;
 }
 
-function makeId(): string {
-  return `mock-doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function find(initiativeId: string, type: DocumentType): ProductDocument | null {
-  return readAll().find((doc) => doc.initiativeId === initiativeId && doc.type === type) ?? null;
-}
-
-function replace(updated: ProductDocument): ProductDocument {
-  writeAll(readAll().map((doc) => (doc.id === updated.id ? updated : doc)));
-  return updated;
-}
-
-// Proposed: GET api/product-documents/{initiativeId}
+// All four documents for an initiative (null where one hasn't been started),
+// fetched in parallel.
 export async function getInitiativeDocuments(initiativeId: string): Promise<InitiativeDocuments> {
-  const documents = readAll().filter((doc) => doc.initiativeId === initiativeId);
+  const records = await Promise.all(DOCUMENT_TYPES.map((type) => fetchApiDocument(initiativeId, type)));
 
-  const result = Object.fromEntries(
-    DOCUMENT_TYPES.map((type) => [type, documents.find((doc) => doc.type === type) ?? null]),
+  return Object.fromEntries(
+    DOCUMENT_TYPES.map((type, index) => [type, records[index] ? toAppDocument(records[index]!) : null]),
   ) as InitiativeDocuments;
-
-  return delay(result);
 }
 
-// Proposed: POST api/product-documents/{initiativeId}/{type}  (first save)
-//           PUT  api/product-documents/{documentId}           (later saves)
-// Only a Draft or a returned (Rejected) document can be edited.
+// Creates the document on its first save, then updates it. Only a draft or a
+// returned document can be edited (the API enforces this too).
 export async function saveDocument(
   initiativeId: string,
   type: DocumentType,
   payload: SaveDocumentRequest,
-  userId: string,
+  // Kept for the call sites; the API records the author from the signed-in user.
+  _userId?: string,
 ): Promise<ProductDocument> {
-  const now = new Date().toISOString();
-  const existing = find(initiativeId, type);
+  void _userId;
+
+  const fields = {
+    author: payload.overview.author,
+    userGroup: payload.overview.userGroup,
+    sponsor: payload.overview.sponsor,
+    projectManager: payload.overview.productManager,
+    introduction: payload.overview.introduction,
+    contentHtml: payload.description,
+  };
+
+  const existing = await fetchApiDocument(initiativeId, type);
 
   if (!existing) {
-    const created: ProductDocument = {
-      id: makeId(),
-      initiativeId,
-      type,
-      overview: payload.overview,
-      description: payload.description,
-      status: "Draft",
-      version: 0,
-      createdByUserId: userId,
-      createdAt: now,
-      updatedAt: now,
-      submittedAt: null,
-      lastDecision: null,
-    };
+    const response = await apiClient<ApiResponse<ApiProductDocument> | null>("create-document", {
+      method: "POST",
+      ...authOptions(),
+      body: JSON.stringify({ productInitiativeId: initiativeId, documentType: type, ...fields }),
+    });
 
-    writeAll([...readAll(), created]);
-    return delay(created);
+    return toAppDocument(response?.data ?? (await requireApiDocument(initiativeId, type)));
   }
 
-  if (existing.status !== "Draft" && existing.status !== "Rejected") {
-    throw new Error("This document is with a reviewer and can't be edited right now.");
-  }
-
-  return delay(
-    replace({ ...existing, overview: payload.overview, description: payload.description, updatedAt: now }),
+  const response = await apiClient<ApiResponse<ApiProductDocument> | null>(
+    `${existing.id}/update-document?${new URLSearchParams({ documentType: type })}`,
+    { method: "PATCH", ...authOptions(), body: JSON.stringify(fields) },
   );
+
+  return toAppDocument(response?.data ?? (await requireApiDocument(initiativeId, type)));
 }
 
-// Proposed: POST api/product-documents/{documentId}/submit
-// Sends a Draft (or a returned document) to the BDO.
+// Sends a draft to the BDO — or, for a returned document, resubmits it.
 export async function submitDocument(initiativeId: string, type: DocumentType): Promise<ProductDocument> {
-  const existing = find(initiativeId, type);
+  const existing = await requireApiDocument(initiativeId, type);
+  const apiStatus = readApiStatus(existing.status);
+  const isResubmit = apiStatus === "ChangesRequested" || apiStatus === "RevisionInProgress";
 
-  if (!existing) {
-    throw new Error("Save the document before submitting it.");
-  }
-
-  if (existing.status !== "Draft" && existing.status !== "Rejected") {
+  if (apiStatus !== "Draft" && !isResubmit) {
     throw new Error("This document has already been submitted.");
   }
 
-  const now = new Date().toISOString();
+  await apiClient<unknown>(`${existing.id}/${isResubmit ? "resubmit" : "submit-document"}`, {
+    method: "POST",
+    ...authOptions(),
+  });
 
-  return delay(
-    replace({
-      ...existing,
-      status: "PendingBDOReview",
-      version: existing.version + 1,
-      submittedAt: now,
-      updatedAt: now,
-    }),
-  );
+  return toAppDocument(await requireApiDocument(initiativeId, type));
 }
 
-// Proposed: POST api/product-documents/{documentId}/review
-// BDO approval forwards the document to the Group Head; the Group Head's
-// approval is final. A rejection at either step returns it to the PM.
+// Records the BDO's or Group Head's decision. The API works out which review
+// step this is from the document's status and the signed-in user's role.
 export async function reviewDocument(
   initiativeId: string,
   type: DocumentType,
@@ -141,23 +247,26 @@ export async function reviewDocument(
   approved: boolean,
   comment: string,
 ): Promise<ProductDocument> {
-  const existing = find(initiativeId, type);
-  const expectedStatus = reviewer === "BDO" ? "PendingBDOReview" : "PendingGroupHeadReview";
+  const existing = await requireApiDocument(initiativeId, type);
+  const expected = reviewer === "BDO" ? "PendingApproval" : "PartiallyApproved";
 
-  if (!existing || existing.status !== expectedStatus) {
+  if (readApiStatus(existing.status) !== expected) {
     throw new Error("This document isn't waiting for your review.");
   }
 
-  const now = new Date().toISOString();
-
-  return delay(
-    replace({
-      ...existing,
-      status: !approved ? "Rejected" : reviewer === "BDO" ? "PendingGroupHeadReview" : "Approved",
-      // Moving to the Group Head counts as a new submission for their queue.
-      submittedAt: approved && reviewer === "BDO" ? now : existing.submittedAt,
-      updatedAt: now,
-      lastDecision: { reviewer, approved, comment, decidedAt: now },
+  await apiClient<unknown>(`${existing.id}/review-document`, {
+    method: "POST",
+    ...authOptions(),
+    body: JSON.stringify({
+      isApproved: approved,
+      comment: comment || null,
     }),
-  );
+  });
+
+  return toAppDocument(await requireApiDocument(initiativeId, type));
+}
+
+// The document as a PDF, generated by the API.
+export function fetchDocumentPdf(documentId: string): Promise<Blob> {
+  return fetchPdfBlob(`${documentId}/preview-generated-pdf`);
 }

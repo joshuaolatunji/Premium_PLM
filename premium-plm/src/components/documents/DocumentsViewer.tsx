@@ -3,7 +3,6 @@ import { useState } from "react";
 import { DOCUMENT_META, DOCUMENT_TYPES } from "../../types/documentTypes";
 import type { DocumentType, InitiativeDocuments } from "../../types/documentTypes";
 import { documentStatusBadgeClass, documentStatusLabel } from "../../utils/documentStatus";
-import { printDocument } from "../../utils/printDocument";
 import DocumentReadOnlyView from "./DocumentReadOnlyView";
 
 interface DocumentsViewerProps {
@@ -53,7 +52,7 @@ function DocumentsViewer({ documents, initiativeName }: DocumentsViewerProps) {
               <span className="brd-version-tag">v{document.version}</span>
             </p>
 
-            <DocumentReadOnlyView document={document} onDownload={() => printDocument(document, initiativeName)} />
+            <DocumentReadOnlyView document={document} initiativeName={initiativeName} />
           </>
         ) : (
           <p className="initiatives-empty">No {selected} has been submitted yet.</p>

@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { useDraftState } from "../../utils/useDraftState";
+
 export type Decision = "approve" | "reject";
 
 interface DecisionModalProps {
@@ -15,6 +17,10 @@ interface DecisionModalProps {
   errorMessage?: string;
   onCancel: () => void;
   onConfirm: (comment: string) => void;
+  // When given, the rejection reason is kept on this device as it's typed
+  // (see useDraftState). The page clears it with clearDraft(draftKey) once the
+  // decision has been recorded.
+  draftKey?: string;
 }
 
 // Shared approve/reject confirmation, used everywhere in the approval
@@ -32,8 +38,9 @@ function DecisionModal({
   errorMessage,
   onCancel,
   onConfirm,
+  draftKey,
 }: DecisionModalProps) {
-  const [comment, setComment] = useState("");
+  const [comment, setComment, commentDraft] = useDraftState(draftKey ?? null, "");
   const [validationError, setValidationError] = useState("");
 
   function handleConfirm() {
@@ -79,6 +86,15 @@ function DecisionModal({
                 onChange={(event) => setComment(event.target.value)}
                 placeholder={rejectPlaceholder}
               />
+
+              {commentDraft.restoredAt && (
+                <p className="decision-modal_restored">
+                  Restored the reason you were writing earlier.{" "}
+                  <button type="button" className="text-button" onClick={commentDraft.discard}>
+                    Clear it
+                  </button>
+                </p>
+              )}
             </div>
           )}
 

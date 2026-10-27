@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useDraftState } from "../../utils/useDraftState";
+import DraftRestoredNotice from "../../components/common/DraftRestoredNotice";
 
 import {
   createCategory,
@@ -27,14 +29,36 @@ function errorMessageFrom(error: unknown, fallback: string): string {
 function AdminCategories() {
   const queryClient = useQueryClient();
 
-  const [isCreating, setIsCreating] = useState(false);
-  const [createName, setCreateName] = useState("");
-  const [createDescription, setCreateDescription] = useState("");
+  // New and edited categories are kept on this device until saved.
+  const [createName, setCreateName, createNameDraft] = useDraftState("admin-new-category:name", "");
+  const [createDescription, setCreateDescription, createDescriptionDraft] = useDraftState(
+    "admin-new-category:description",
+    "",
+  );
+  // Reopens the form if a half-typed category was restored.
+  const [isCreating, setIsCreating] = useState(() => Boolean(createName || createDescription));
   const [errorMessage, setErrorMessage] = useState("");
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editDescription, setEditDescription] = useState("");
+  // The category being edited. When editing starts, its current values
+  // become the "pristine" ones, so only real changes are kept as a draft.
+  const NOT_EDITING = { id: null as string | null, name: "", description: "" };
+  const [editing, setEditing, editDraft] = useDraftState("admin-edit-category", NOT_EDITING);
+  const { id: editingId, name: editName, description: editDescription } = editing;
+  const setEditName = (name: string) => setEditing((current) => ({ ...current, name }));
+  const setEditDescription = (description: string) =>
+    setEditing((current) => ({ ...current, description }));
+
+  function stopEditing() {
+    setEditing(NOT_EDITING);
+    editDraft.markSaved(NOT_EDITING);
+  }
+
+  const drafts = [createNameDraft, createDescriptionDraft, editDraft];
+  const restoredAt =
+    drafts
+      .map((draft) => draft.restoredAt)
+      .filter((at): at is string => Boolean(at))
+      .sort()[0] ?? null;
 
   const categoriesQuery = useQuery({
     queryKey: CATEGORIES_QUERY_KEY,
@@ -68,9 +92,9 @@ function AdminCategories() {
 
   function startEditing(category: PLMCategory) {
     setErrorMessage("");
-    setEditingId(category.id);
-    setEditName(category.name);
-    setEditDescription(category.description);
+    const current = { id: category.id, name: category.name, description: category.description };
+    setEditing(current);
+    editDraft.markSaved(current);
   }
 
   const updateMutation = useMutation({
@@ -78,7 +102,7 @@ function AdminCategories() {
       updateCategory(id, { name: editName.trim(), description: editDescription.trim() }),
     onSuccess: () => {
       setErrorMessage("");
-      setEditingId(null);
+      stopEditing();
       queryClient.invalidateQueries({ queryKey: CATEGORIES_QUERY_KEY });
     },
     onError: (error) => {
@@ -141,6 +165,12 @@ function AdminCategories() {
         </div>
       </header>
 
+      <DraftRestoredNotice
+        savedAt={restoredAt}
+        onDiscard={() => drafts.forEach((draft) => draft.discard())}
+        keepHint="Save the category to keep them."
+      />
+
       {errorMessage && (
         <p className="form-error" role="alert">
           {errorMessage}
@@ -183,7 +213,12 @@ function AdminCategories() {
             <button
               type="button"
               className="button button--secondary"
-              onClick={() => setIsCreating(false)}
+              onClick={() => {
+                // Cancelled on purpose — don't keep what was typed.
+                createNameDraft.discard();
+                createDescriptionDraft.discard();
+                setIsCreating(false);
+              }}
               disabled={createMutation.isPending}
             >
               Cancel
@@ -258,7 +293,7 @@ function AdminCategories() {
                         <button
                           type="button"
                           className="table-action"
-                          onClick={() => setEditingId(null)}
+                          onClick={stopEditing}
                           disabled={updateMutation.isPending}
                         >
                           Cancel

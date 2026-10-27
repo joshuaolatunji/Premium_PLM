@@ -13,6 +13,8 @@ import {
   History,
   LayoutDashboard,
   ListOrdered,
+  Presentation,
+  Signature,
   Tags,
   Ticket,
   Users,
@@ -57,6 +59,52 @@ function navLinkClass({ isActive }: { isActive: boolean }) {
   return isActive ? "sidebar_link sidebar_link--active" : "sidebar_link";
 }
 
+// Everyone who can be picked by a Product Manager to sign off a document
+// (all roles except Developer and Lead Engineer — see canSignOff) gets a
+// way to the documents waiting for their signature.
+function ApprovalsLink() {
+  return (
+    <NavLink to="/dashboard/approvals" className={navLinkClass}>
+      <Signature size={16} />
+      <span>Approvals</span>
+    </NavLink>
+  );
+}
+
+function ExecutiveDirectorNav() {
+    return (
+        <>
+            <p className="sidebar_section-title">
+                Oversight
+            </p>
+
+            <NavLink to="/dashboard/executive" end className={navLinkClass}>
+                <Presentation size={16} />
+                <span>Overview</span>
+            </NavLink>
+
+            <NavLink to="/dashboard/initiatives" className={navLinkClass}>
+                <Gauge size={16} />
+                <span>Initiatives</span>
+            </NavLink>
+
+            <ApprovalsLink />
+        </>
+    );
+}
+
+function ApproverNav() {
+    return (
+        <>
+            <p className="sidebar_section-title">
+                Sign-off
+            </p>
+
+            <ApprovalsLink />
+        </>
+    );
+}
+
 function GroupHeadNav() {
     return (
         <>
@@ -88,6 +136,8 @@ function GroupHeadNav() {
                 <History size={16} />
                 <span>Audit Trail</span>
             </NavLink>
+
+            <ApprovalsLink />
 
             <p className="sidebar_section-title">
                 Reviews
@@ -137,6 +187,8 @@ function BdoNav() {
 
             <DocumentReviewLinks reviewer="BDO" />
 
+            <ApprovalsLink />
+
             <NavLink to="/dashboard/notifications" className={navLinkClass}>
                 <Bell size={16} />
                 <span>Notifications</span>
@@ -172,6 +224,8 @@ function ProjectManagerNav() {
                 <Ticket size={16} />
                 <span>Tickets</span>
             </NavLink>
+
+            <ApprovalsLink />
 
             <NavLink to="/dashboard/notifications" className={navLinkClass}>
                 <Bell size={16} />
@@ -210,7 +264,7 @@ function DeveloperNav() {
 
             <NavLink to="/dashboard/developer" end className={navLinkClass}>
                 <Code2 size={16} />
-                <span>Tickets</span>
+                <span>Tasks</span>
             </NavLink>
 
             <NavLink to="/dashboard/notifications" className={navLinkClass}>
@@ -278,13 +332,13 @@ function Sidebar({ open, onClose }: SidebarProps) {
                     closes the drawer on mobile once a destination is picked. */}
                 <nav className="sidebar_navigation" onClick={onClose}>
                     {primaryRole === "SuperAdmin" && <SuperAdminNav />}
+                    {primaryRole === "Executives" && <ExecutiveDirectorNav />}
+                    {primaryRole === "Approver" && <ApproverNav />}
                     {primaryRole === "BusinessDevelopmentOfficer" && <BdoNav />}
                     {primaryRole === "ProjectManager" && <ProjectManagerNav />}
                     {primaryRole === "LeadEngineer" && <LeadEngineerNav />}
-                    {primaryRole === "SoftwareEngineer" && <DeveloperNav />}
-                    {(primaryRole === "GroupHead" || primaryRole === "Other") && (
-                        <GroupHeadNav />
-                    )}
+                    {primaryRole === "Developer" && <DeveloperNav />}
+                    {primaryRole === "GroupHead" && <GroupHeadNav />}
                 </nav>
 
 

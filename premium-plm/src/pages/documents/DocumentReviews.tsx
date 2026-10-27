@@ -15,7 +15,7 @@ import {
 } from "../../utils/documentStatus";
 import { documentReviewPath } from "../../utils/documentRoutes";
 import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
-import { printDocument } from "../../utils/printDocument";
+import { downloadDocument, previewDocument } from "../../utils/printDocument";
 import { capitalize } from "../../utils/text";
 import { backState } from "../../utils/navigation";
 
@@ -171,13 +171,23 @@ function DocumentReviews({ reviewer }: DocumentReviewsProps) {
           </button>
 
           {mode === "done" && (
-            <button
-              type="button"
-              className="table-action table-action--dark"
-              onClick={() => printDocument(document, initiative.projectName)}
-            >
-              Download
-            </button>
+            <>
+              <button
+                type="button"
+                className="table-action table-action--dark"
+                onClick={() => void previewDocument(document, initiative.projectName)}
+              >
+                Preview
+              </button>
+
+              <button
+                type="button"
+                className="table-action table-action--dark"
+                onClick={() => void downloadDocument(document, initiative.projectName)}
+              >
+                Download
+              </button>
+            </>
           )}
         </td>
       </tr>

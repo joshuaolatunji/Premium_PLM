@@ -1,12 +1,18 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download } from "lucide-react";
+import { Download, Eye, Sparkles } from "lucide-react";
 
 import { getInitiativeById } from "../../service/InitiativeService";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
 import { getInitiativeDocuments, saveDocument, submitDocument } from "../../service/DocumentService";
+import { generateDocumentDescription, isAiAvailable } from "../../service/AiService";
 import { getCurrentUserId, getStoredUser } from "../../apicalls/authStorage";
+import type { ProductInitiative } from "../../types/initiativeTypes";
+import type { ProductDiscovery } from "../../types/discoveryTypes";
+import { priorityLabel } from "../../utils/initiativeStatus";
+import { resolvePrimaryRole } from "../../utils/roleRouting";
+import ApprovalWorkflowPanel from "../../components/approvals/ApprovalWorkflowPanel";
 import { DOCUMENT_META, EMPTY_OVERVIEW, documentTypeFromSlug } from "../../types/documentTypes";
 import type {
   DocumentOverview,
@@ -22,11 +28,14 @@ import {
   EMPTY_DOCUMENTS,
 } from "../../utils/documentStatus";
 import { richTextToPlain } from "../../utils/richText";
-import { printDocument } from "../../utils/printDocument";
+import { useDraftState } from "../../utils/useDraftState";
+import DraftRestoredNotice from "../../components/common/DraftRestoredNotice";
+import { downloadDocument, previewDocument } from "../../utils/printDocument";
 import { documentEditorPath, documentHubPath } from "../../utils/documentRoutes";
 import { capitalize } from "../../utils/text";
 import BackLink from "../../components/common/BackLink";
 import DocumentTabs from "../../components/documents/DocumentTabs";
+import DocumentPager from "../../components/documents/DocumentPager";
 import DocumentReadOnlyView from "../../components/documents/DocumentReadOnlyView";
 import RichTextEditor from "../../components/editor/RichTextEditor";
 
@@ -40,6 +49,9 @@ const OVERVIEW_FIELDS: { key: keyof DocumentOverview; label: string }[] = [
 interface DocumentFormProps {
   initiativeId: string;
   initiativeName: string;
+  // What "Generate with AI" writes from, along with the Overview.
+  initiative: ProductInitiative;
+  discovery: ProductDiscovery | null;
   type: DocumentType;
   document: ProductDocument | null;
   // Kept by the parent so "Saved" survives the form being re-created from
@@ -54,6 +66,8 @@ interface DocumentFormProps {
 function DocumentForm({
   initiativeId,
   initiativeName,
+  initiative,
+  discovery,
   type,
   document,
   statusMessage,
@@ -63,12 +77,14 @@ function DocumentForm({
   const queryClient = useQueryClient();
   const userId = getCurrentUserId() ?? "";
 
-  const [form, setForm] = useState<SaveDocumentRequest>(() => {
+  // Starts from what's on the server (or, for a new document, the PM's own
+  // name filled in). Unsaved edits are kept on this device until saved —
+  // see useDraftState.
+  const [form, setForm, draft] = useDraftState<SaveDocumentRequest>(`document:${initiativeId}:${type}`, () => {
     if (document) {
       return { overview: document.overview, description: document.description };
     }
 
-    // A new document starts with the PM's own name filled in.
     const myName = capitalize(getStoredUser()?.userName ?? "");
     return { overview: { ...EMPTY_OVERVIEW, author: myName, productManager: myName }, description: "" };
   });
@@ -86,6 +102,7 @@ function DocumentForm({
   const saveMutation = useMutation({
     mutationFn: () => saveDocument(initiativeId, type, form, userId),
     onSuccess: async () => {
+      draft.markSaved();
       setErrorMessage("");
       onStatusMessage(`${type} saved.`);
       await refresh();
@@ -103,6 +120,7 @@ function DocumentForm({
       return submitDocument(initiativeId, type);
     },
     onSuccess: async () => {
+      draft.markSaved();
       setConfirmingSubmit(false);
       setErrorMessage("");
       await refresh();
@@ -113,7 +131,48 @@ function DocumentForm({
     },
   });
 
-  const isBusy = saveMutation.isPending || submitMutation.isPending;
+  // "Generate with AI": a first draft of the Description from the initiative,
+  // the BDO's discovery notes and this Overview. Replacing existing text
+  // asks first; either way, Undo in the editor brings the old text back.
+  const [confirmingAi, setConfirmingAi] = useState(false);
+  const aiAvailable = isAiAvailable();
+
+  const aiMutation = useMutation({
+    mutationFn: () =>
+      generateDocumentDescription({
+        type,
+        initiative: {
+          projectName: initiative.projectName,
+          description: initiative.description,
+          priority: priorityLabel(initiative.priority),
+          timelineDays: initiative.timelineDays ?? null,
+        },
+        discovery: discovery ? { businessLogic: discovery.businessLogic ?? "", userFlow: discovery.userFlow ?? "" } : null,
+        overview: form.overview,
+      }),
+    onSuccess: (html) => {
+      setConfirmingAi(false);
+      setErrorMessage("");
+      updateDescription(html);
+      onStatusMessage(`${type} description drafted with AI. Read it through and edit it before saving; Undo brings back the previous text.`);
+    },
+    onError: (error) => {
+      setConfirmingAi(false);
+      setErrorMessage(error instanceof Error ? error.message : "Couldn't generate a description. Try again.");
+    },
+  });
+
+  function startAi() {
+    setErrorMessage("");
+
+    if (richTextToPlain(form.description)) {
+      setConfirmingAi(true);
+    } else {
+      aiMutation.mutate();
+    }
+  }
+
+  const isBusy = saveMutation.isPending || submitMutation.isPending || aiMutation.isPending;
 
   function updateOverview(key: keyof DocumentOverview, value: string) {
     onStatusMessage("");
@@ -135,16 +194,29 @@ function DocumentForm({
     setConfirmingSubmit(true);
   }
 
-  const returned = document?.status === "Rejected" ? document.lastDecision : null;
+  const returned = document?.status === "Rejected";
+  // Why it was returned (the API doesn't say who by yet, so reviewer is often null).
+  const decision = returned ? document?.lastDecision : null;
 
   return (
     <>
+      <DraftRestoredNotice
+        savedAt={draft.restoredAt}
+        onDiscard={draft.discard}
+        keepHint={`Save the ${type} to keep them.`}
+      />
+
       {returned && (
         <div className="document-returned-note" role="status">
           <strong>
-            Returned by the {returned.reviewer === "BDO" ? "Business Development Officer" : "Group Head"}
+            {decision?.reviewer
+              ? `Returned by the ${decision.reviewer === "BDO" ? "Business Development Officer" : "Group Head"}`
+              : "Returned for changes"}
           </strong>
-          <p>{returned.comment || "No reason was given."}</p>
+          <p>
+            {decision?.comment ||
+              "A reviewer sent this back for changes. Make the updates they asked for, then resubmit it."}
+          </p>
         </div>
       )}
 
@@ -214,7 +286,50 @@ function DocumentForm({
             value={form.description}
             onChange={updateDescription}
             placeholder={`Describe the ${DOCUMENT_META[type].name.toLowerCase()}…`}
+            disabled={aiMutation.isPending}
+            toolbarAction={
+              <button
+                type="button"
+                className="rte-ai-button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={startAi}
+                disabled={!aiAvailable || isBusy}
+                title={
+                  aiAvailable
+                    ? `Write a first draft from the initiative, the BDO's notes and the ${type} Overview`
+                    : "Generate with AI isn't set up yet"
+                }
+              >
+                <Sparkles size={16} aria-hidden="true" />
+                {aiMutation.isPending ? "Generating…" : "Generate with AI"}
+              </button>
+            }
           />
+
+          {aiMutation.isPending && (
+            <p className="ai-note" role="status">
+              Writing a first draft of the {type} description… this can take up to half a minute.
+            </p>
+          )}
+
+          {confirmingAi && (
+            <div className="ai-confirm" role="alertdialog" aria-label="Replace the description?">
+              <p>
+                <strong>Replace the current description?</strong> The AI draft replaces what's in the box
+                now. You can bring it back with Undo.
+              </p>
+
+              <div className="brd-reviews-actions">
+                <button type="button" className="button button--secondary" onClick={() => setConfirmingAi(false)}>
+                  Cancel
+                </button>
+                <button type="button" className="button button--primary" onClick={() => aiMutation.mutate()}>
+                  <Sparkles size={16} aria-hidden="true" />
+                  Replace with AI draft
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -256,16 +371,29 @@ function DocumentForm({
           </button>
 
           {document && (
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => printDocument(document, initiativeName)}
-              disabled={isBusy}
-              title={isDirty ? "Downloads the last saved version" : undefined}
-            >
-              <Download size={17} aria-hidden="true" />
-              Download {type}
-            </button>
+            <>
+              <button
+                type="button"
+                className="button button--dark"
+                onClick={() => void previewDocument(document, initiativeName)}
+                disabled={isBusy}
+                title={isDirty ? "Shows the last saved version" : undefined}
+              >
+                <Eye size={17} aria-hidden="true" />
+                Preview
+              </button>
+
+              <button
+                type="button"
+                className="button button--dark"
+                onClick={() => void downloadDocument(document, initiativeName)}
+                disabled={isBusy}
+                title={isDirty ? "Downloads the last saved version" : undefined}
+              >
+                <Download size={17} aria-hidden="true" />
+                Download {type}
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -281,6 +409,8 @@ function DocumentForm({
           {submitMutation.isPending ? "Submitting…" : returned ? "Resubmit for review" : "Submit for review"}
         </button>
       </div>
+
+      <DocumentPager current={type} pathFor={(tabType) => documentEditorPath(initiativeId, tabType)} />
 
       {confirmingSubmit && (
         <div className="modal-overlay" role="presentation" onClick={() => !isBusy && setConfirmingSubmit(false)}>
@@ -352,7 +482,9 @@ function DocumentEditor() {
   const documentsQuery = useQuery({
     queryKey: documentsQueryKey(id),
     queryFn: () => getInitiativeDocuments(initiativeId),
-    enabled: Boolean(id),
+    // Documents can only exist once the BDO's documentation is approved —
+    // asking earlier would only return 404s.
+    enabled: Boolean(id) && discoveryQuery.data?.status === "Approved",
   });
 
   const listPath = type ? documentHubPath(type) : "/dashboard/my-work";
@@ -402,10 +534,12 @@ function DocumentEditor() {
             PremiumPLM / {type}s / {initiative.projectName}
           </p>
 
-          <h1 className="dashboard-title">{DOCUMENT_META[type].name}</h1>
+          <h1 className="dashboard-title">
+            {initiative.projectName} {type}
+          </h1>
 
           <p className="dashboard-subtitle initiative-detail-badges">
-            <span>{initiative.projectName}</span>
+            <span>{DOCUMENT_META[type].name}</span>
             <span className={documentStatusBadgeClass(document?.status)}>
               {documentStatusLabel(document?.status)}
             </span>
@@ -429,6 +563,8 @@ function DocumentEditor() {
           key={`${type}-${document?.status ?? "new"}`}
           initiativeId={initiativeId}
           initiativeName={initiative.projectName}
+          initiative={initiative}
+          discovery={discoveryQuery.data ?? null}
           type={type}
           document={document}
           // Only this document's own "saved" message, not one from another tab.
@@ -441,13 +577,27 @@ function DocumentEditor() {
             <p className="initiatives-empty initiative-detail-message">
               {document.status === "Approved"
                 ? `This ${type} has been approved.`
-                : `This ${type} is ${documentStatusLabel(document.status).toLowerCase()} for review and is read-only until a decision is made.`}
+                : document.status === "Cancelled"
+                  ? `This ${type} has been cancelled.`
+                  : `This ${type} is ${documentStatusLabel(document.status).toLowerCase()} for review and is read-only until a decision is made.`}
             </p>
+
+            {document.status === "Approved" && (
+              <ApprovalWorkflowPanel
+                // Each document has its own sign-off: a fresh panel per document.
+                key={document.id}
+                document={document}
+                initiativeName={initiative.projectName}
+                canManage={resolvePrimaryRole(getStoredUser()?.roles ?? []) === "ProjectManager"}
+              />
+            )}
 
             <DocumentReadOnlyView
               document={document}
-              onDownload={() => printDocument(document, initiative.projectName)}
+              initiativeName={initiative.projectName}
             />
+
+            <DocumentPager current={type} pathFor={(tabType) => documentEditorPath(initiativeId, tabType)} />
           </>
         )
       )}

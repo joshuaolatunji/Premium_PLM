@@ -9,6 +9,7 @@ import ApprovalQueue from "../../dashboardcomponents/ApprovalQueue";
 import PriorityDistribution from "../../dashboardcomponents/PriorityDistribution";
 import AtRiskInitiatives from "../../dashboardcomponents/AtRiskInitiatives";
 import RecentGovernanceActivity from "../../dashboardcomponents/RecentGovernanceActivity";
+import DeliveryActivityPanel from "../../dashboardcomponents/DeliveryActivityPanel";
 
 import { getProductInitiatives } from "../../service/InitiativeService";
 import { getAllUsers } from "../../service/UserService";
@@ -84,7 +85,7 @@ function Dashboard() {
 
   const initiatives = initiativesQuery.data ?? [];
 
-  // PID / FRD / BRD / SWR for every initiative (mock — see DocumentService).
+  // PID / FRD / BRD / SWR for every initiative (see DocumentService).
   const documents = useInitiativeDocuments(initiatives.map((initiative) => initiative.id));
 
   // Backs the "BDO Docs Awaiting Review" stat card below.
@@ -447,6 +448,12 @@ function Dashboard() {
         <div className="dashboard-grid__main">
           <AtRiskInitiatives
             initiatives={atRiskInitiatives}
+          />
+
+          <DeliveryActivityPanel
+            initiativeName={(initiativeId) =>
+              initiatives.find((initiative) => initiative.id === initiativeId)?.projectName ?? null
+            }
           />
         </div>
 
