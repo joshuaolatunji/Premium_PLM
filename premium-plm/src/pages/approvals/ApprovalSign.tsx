@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye, PenLine } from "lucide-react";
+import { PenLine } from "lucide-react";
 
 import {
   approvalKeys,
-  fetchReviewPdf,
-  getLocalWorkflow,
+  fetchPdfToSign,
   getMyPendingApprovals,
   rejectApproval,
   signAndApprove,
 } from "../../service/ApprovalWorkflowService";
 import { getInitiativeDocuments } from "../../service/DocumentService";
+import type { PendingApproval } from "../../types/approvalTypes";
 import { openPdfInTab } from "../../service/PdfService";
 import { DOCUMENT_META } from "../../types/documentTypes";
 import { documentsQueryKey } from "../../utils/documentStatus";
@@ -21,13 +21,14 @@ import { getStoredUser } from "../../apicalls/authStorage";
 import BackLink from "../../components/common/BackLink";
 import DraftRestoredNotice from "../../components/common/DraftRestoredNotice";
 import DocumentReadOnlyView from "../../components/documents/DocumentReadOnlyView";
-import ApprovalSignOff from "../../components/approvals/ApprovalSignOff";
+import PdfCoverPreview from "../../components/documents/PdfCoverPreview";
 import SignaturePad from "../../components/approvals/SignaturePad";
 import DecisionModal from "../../components/review/DecisionModal";
 
 // An approver reads the document, then signs it (drawn or uploaded
 // signature) or rejects it with a reason. Signing passes it to the next
 // approver; the backend adds the signature beside their name on the PDF.
+// Approvers see only their own place in the sign-off, never the others.
 function ApprovalSign() {
   const { workflowId, stepId } = useParams<{ workflowId: string; stepId: string }>();
   const navigate = useNavigate();
@@ -46,7 +47,17 @@ function ApprovalSign() {
   });
 
   const item = pendingQuery.data?.find((entry) => entry.workflowId === workflowId && entry.stepId === stepId) ?? null;
-  const localWorkflow = workflowId ? getLocalWorkflow(workflowId) : null;
+
+  // Fetched once for the front-page preview, and reused when it's opened.
+  // The first approver reads the approved document; later approvers read it
+  // with the signatures so far.
+  const pdfQuery = useQuery({
+    queryKey: ["approval-pdf-to-sign", workflowId, stepId],
+    queryFn: () => fetchPdfToSign(item as PendingApproval),
+    enabled: Boolean(item),
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
 
   const documentsQuery = useQuery({
     queryKey: documentsQueryKey(item?.initiativeId),
@@ -63,7 +74,11 @@ function ApprovalSign() {
   async function finish() {
     commentDraft.discard();
     clearDraft(decisionDraftKey);
-    await queryClient.invalidateQueries({ queryKey: approvalKeys.all });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: approvalKeys.all }),
+      // The document's status names who has it next.
+      queryClient.invalidateQueries({ queryKey: documentsQueryKey(item?.initiativeId) }),
+    ]);
     navigate("/dashboard/approvals");
   }
 
@@ -84,8 +99,9 @@ function ApprovalSign() {
   function openPdf() {
     setPdfError("");
     const tab = window.open("", "_blank");
+    const loaded = pdfQuery.data;
 
-    openPdfInTab(() => fetchReviewPdf(workflowId as string), tab).catch((error: unknown) => {
+    openPdfInTab(() => (loaded ? Promise.resolve(loaded) : fetchPdfToSign(item as PendingApproval)), tab).catch((error: unknown) => {
       console.error(error);
       setPdfError("Couldn't load the PDF from the server. Try again shortly.");
     });
@@ -150,13 +166,6 @@ function ApprovalSign() {
             )}
           </p>
         </div>
-
-        <div className="dashboard-header__actions">
-          <button type="button" className="button button--dark" onClick={openPdf}>
-            <Eye size={17} aria-hidden="true" />
-            Open PDF
-          </button>
-        </div>
       </header>
 
       {pdfError && (
@@ -165,30 +174,16 @@ function ApprovalSign() {
         </p>
       )}
 
-      {localWorkflow && (
-        <section className="dashboard-panel initiative-detail-panel">
-          <div className="dashboard-panel__header">
-            <div>
-              <h2>Sign-off</h2>
-              <p>Everyone signing this {type ?? "document"}, in order. Your space is highlighted.</p>
-            </div>
-          </div>
+      <PdfCoverPreview
+        blob={pdfQuery.data}
+        isLoading={pdfQuery.isLoading}
+        isError={pdfQuery.isError}
+        title={item.initiativeName && type ? `${item.initiativeName} ${type}` : title}
+        hint="Open the PDF to read the document before signing."
+        onOpen={openPdf}
+      />
 
-          <div className="proposal-section">
-            <ApprovalSignOff steps={localWorkflow.steps} currentStepId={stepId} />
-          </div>
-        </section>
-      )}
-
-      {document ? (
-        <DocumentReadOnlyView document={document} initiativeName={item.initiativeName ?? undefined} />
-      ) : (
-        <p className="initiatives-empty initiative-detail-message">
-          {documentsQuery.isLoading
-            ? "Loading the document…"
-            : "Open the PDF to read the document before signing."}
-        </p>
-      )}
+      {document && <DocumentReadOnlyView document={document} initiativeName={item.initiativeName ?? undefined} />}
 
       <section className="dashboard-panel initiative-detail-panel">
         <div className="dashboard-panel__header">

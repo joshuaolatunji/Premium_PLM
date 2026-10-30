@@ -629,6 +629,42 @@ a {
   caret-color: var(--login-text);
 }
 
+/*EMAIL FIELD: the bank's domain is fixed at the end*/
+
+.email-input {
+  position: relative;
+}
+
+.login-form .email-input input {
+  width: 100%;
+  padding-right: 196px;
+}
+
+.email-input_domain {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+
+  transform: translateY(-50%);
+
+  color: var(--login-text-muted);
+
+  font-size: 15px;
+  white-space: nowrap;
+
+  pointer-events: none;
+}
+
+@media (max-width: 420px) {
+  .login-form .email-input input {
+    padding-right: 166px;
+  }
+
+  .email-input_domain {
+    font-size: 13px;
+  }
+}
+
 /*PASSWORD FIELD*/
 
 .password-input {
@@ -5318,6 +5354,133 @@ select:disabled {
   border-bottom: 1.5px solid #374151;
 }
 
+/* The document's front page, shown before an approver signs. The page itself
+   stays white in both themes, like paper. */
+.pdf-cover {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+
+  padding: 24px;
+}
+
+.pdf-cover_thumb {
+  position: relative;
+  flex: none;
+
+  width: 190px;
+  aspect-ratio: 210 / 297;
+  overflow: hidden;
+  padding: 0;
+
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background-color: #fff;
+  box-shadow: 0 6px 18px rgb(15 23 42 / 12%);
+
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.pdf-cover_thumb:not(:disabled):hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 26px rgb(15 23 42 / 18%);
+}
+
+.pdf-cover_thumb:focus-visible {
+  outline: 2px solid var(--color-danger);
+  outline-offset: 3px;
+}
+
+.pdf-cover_thumb canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.pdf-cover_thumb canvas.is-rendered {
+  opacity: 1;
+}
+
+.pdf-cover_placeholder {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  color: #c3c8d0;
+}
+
+.pdf-cover_badge {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+
+  border-radius: 999px;
+  background-color: var(--color-danger);
+  color: #fff;
+
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.pdf-cover_body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pdf-cover_body h2 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.pdf-cover_body p {
+  margin: 0;
+  color: var(--color-ink-secondary);
+  font-size: 14.5px;
+}
+
+.pdf-cover_body .pdf-cover_status {
+  color: var(--color-ink-muted);
+  font-size: 13px;
+}
+
+.pdf-cover_body .button {
+  margin-top: 8px;
+}
+
+@media (max-width: 640px) {
+  .pdf-cover {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pdf-cover_thumb {
+    width: 150px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdf-cover_thumb,
+  .pdf-cover_thumb canvas {
+    transition: none;
+  }
+}
+
 /* =========================
    Tickets & developer tasks
    ========================= */
@@ -5779,4 +5942,70 @@ select:disabled {
 
 .notifications-item_body {
   min-width: 0;
+}
+
+/* =========================
+   Tickets: read-only view (filled-form look)
+   ========================= */
+
+.ticket-details-row > td {
+  padding: 18px 20px 22px;
+}
+
+/* The opened ticket: a white card inside the row. */
+.ticket-details {
+  gap: 22px;
+
+  padding: 22px 24px;
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background-color: var(--color-surface);
+}
+
+.ticket-view {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Key facts side by side, each the same width. */
+.ticket-view_facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.ticket-view_facts .brd-readonly-field_value {
+  display: flex;
+  align-items: center;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-details_tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  padding-top: 18px;
+
+  border-top: 1px solid var(--color-divider);
+}
+
+.ticket-details_heading {
+  margin: 0;
+  font-size: 16px;
+}
+
+.ticket-row-actions {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+.ticket-row-actions .table-action {
+  white-space: nowrap;
 }

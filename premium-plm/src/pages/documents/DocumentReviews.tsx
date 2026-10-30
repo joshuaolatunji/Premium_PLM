@@ -9,8 +9,8 @@ import { DOCUMENT_META, documentTypeFromSlug } from "../../types/documentTypes";
 import type { DocumentReviewer, ProductDocument } from "../../types/documentTypes";
 import type { ProductInitiative } from "../../types/initiativeTypes";
 import {
-  documentStatusBadgeClass,
-  documentStatusLabel,
+  documentStatusClass,
+  documentStatusText,
   useInitiativeDocuments,
 } from "../../utils/documentStatus";
 import { documentReviewPath } from "../../utils/documentRoutes";
@@ -157,7 +157,7 @@ function DocumentReviews({ reviewer }: DocumentReviewsProps) {
         <td>{formatShortDate(document.submittedAt)}</td>
 
         <td>
-          <span className={documentStatusBadgeClass(document.status)}>{documentStatusLabel(document.status)}</span>{" "}
+          <span className={documentStatusClass(document)}>{documentStatusText(document)}</span>{" "}
           <span className="brd-version-tag">v{document.version}</span>
         </td>
 

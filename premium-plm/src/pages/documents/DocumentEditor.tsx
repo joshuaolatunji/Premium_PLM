@@ -21,8 +21,8 @@ import type {
   SaveDocumentRequest,
 } from "../../types/documentTypes";
 import {
-  documentStatusBadgeClass,
-  documentStatusLabel,
+  documentStatusClass,
+  documentStatusText,
   documentsQueryKey,
   isEditable,
   EMPTY_DOCUMENTS,
@@ -540,8 +540,8 @@ function DocumentEditor() {
 
           <p className="dashboard-subtitle initiative-detail-badges">
             <span>{DOCUMENT_META[type].name}</span>
-            <span className={documentStatusBadgeClass(document?.status)}>
-              {documentStatusLabel(document?.status)}
+            <span className={documentStatusClass(document)}>
+              {documentStatusText(document)}
             </span>
             {document && document.version > 0 && <span className="brd-version-tag">v{document.version}</span>}
           </p>
@@ -575,11 +575,13 @@ function DocumentEditor() {
         document && (
           <>
             <p className="initiatives-empty initiative-detail-message">
-              {document.status === "Approved"
-                ? `This ${type} has been approved.`
-                : document.status === "Cancelled"
-                  ? `This ${type} has been cancelled.`
-                  : `This ${type} is ${documentStatusLabel(document.status).toLowerCase()} for review and is read-only until a decision is made.`}
+              {document.signOff && !document.signOff.complete
+                ? `This ${type} has been approved and is out for sign-off.`
+                : document.status === "Approved"
+                  ? `This ${type} has been approved.`
+                  : document.status === "Cancelled"
+                    ? `This ${type} has been cancelled.`
+                    : `This ${type} is with the ${document.status === "PendingGroupHeadReview" ? "Group Head" : "BDO"} for review and is read-only until a decision is made.`}
             </p>
 
             {document.status === "Approved" && (

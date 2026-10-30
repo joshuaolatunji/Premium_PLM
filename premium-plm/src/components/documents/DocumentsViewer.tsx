@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { DOCUMENT_META, DOCUMENT_TYPES } from "../../types/documentTypes";
 import type { DocumentType, InitiativeDocuments } from "../../types/documentTypes";
-import { documentStatusBadgeClass, documentStatusLabel } from "../../utils/documentStatus";
+import { documentStatusClass, documentStatusText } from "../../utils/documentStatus";
 import DocumentReadOnlyView from "./DocumentReadOnlyView";
 
 interface DocumentsViewerProps {
@@ -39,7 +39,7 @@ function DocumentsViewer({ documents, initiativeName }: DocumentsViewerProps) {
             >
               <strong>{type}</strong>
               <span className={`document-tab_status document-tab_status--${documents[type]?.status ?? "none"}`}>
-                {documentStatusLabel(documents[type]?.status)}
+                {documentStatusText(documents[type])}
               </span>
             </button>
           ))}
@@ -48,7 +48,7 @@ function DocumentsViewer({ documents, initiativeName }: DocumentsViewerProps) {
         {document && document.version > 0 ? (
           <>
             <p className="dashboard-subtitle initiative-detail-badges">
-              <span className={documentStatusBadgeClass(document.status)}>{documentStatusLabel(document.status)}</span>
+              <span className={documentStatusClass(document)}>{documentStatusText(document)}</span>
               <span className="brd-version-tag">v{document.version}</span>
             </p>
 

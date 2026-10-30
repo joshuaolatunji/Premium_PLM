@@ -17,6 +17,7 @@ import { apiClient, ApiError } from "../apicalls/apiClient";
 import { getToken } from "../apicalls/authStorage";
 import { fetchPdfBlob } from "./PdfService";
 import { linkToInitiative, recordActivity } from "./ActivityService";
+import { localSignOffFor } from "./ApprovalWorkflowService";
 
 // Where the Group Head opens a document from an activity entry.
 function documentLink(initiativeId: string, type: DocumentType) {
@@ -63,6 +64,8 @@ const API_STATUSES = [
   "RevisionInProgress",
   "Approved",
   "Cancelled",
+  // Approved by the Group Head and out for sign-off (gaps file R26).
+  "PendingWorkflowApproval",
 ] as const;
 
 type ApiStatus = (typeof API_STATUSES)[number];
@@ -70,13 +73,18 @@ type ApiStatus = (typeof API_STATUSES)[number];
 const API_DOCUMENT_TYPES: DocumentType[] = ["BRD", "FRD", "PID", "SWR"];
 
 function readApiStatus(status: string | number): ApiStatus {
-  const name = typeof status === "number" ? API_STATUSES[status] : status;
-  return (API_STATUSES as readonly string[]).includes(name) ? (name as ApiStatus) : "Draft";
+  if (typeof status === "number") {
+    return API_STATUSES[status] ?? "Draft";
+  }
+
+  // Matched without regard to case ("pendingWorkflowApproval" too).
+  return API_STATUSES.find((name) => name.toLowerCase() === status.toLowerCase()) ?? "Draft";
 }
 
 // API status → the app's status:
 //   PendingApproval    — with the BDO (first review)
 //   PartiallyApproved  — BDO approved it; with the Group Head
+//   PendingWorkflowApproval — Group Head approved it; out for sign-off
 //   ChangesRequested / RevisionInProgress — returned to the PM to revise
 function toAppStatus(status: ApiStatus): DocumentStatus {
   switch (status) {
@@ -99,7 +107,20 @@ function toAppStatus(status: ApiStatus): DocumentStatus {
 function toAppDocument(api: ApiProductDocument): ProductDocument {
   // So a sign-off or upload on this document can be linked to its initiative.
   linkToInitiative("document", api.id, api.productInitiativeId);
-  const status = toAppStatus(readApiStatus(api.status));
+  const apiStatus = readApiStatus(api.status);
+  // Out for sign-off, the API says PendingWorkflowApproval. Until that's
+  // live it says PendingApproval, the same as "with the BDO" (gaps file
+  // R26), so the app's sign-off record tells the two apart. Who has it now
+  // comes from that record too (M13).
+  const localSignOff = localSignOffFor(api.id);
+  const signOff =
+    apiStatus === "PendingWorkflowApproval"
+      ? (localSignOff ?? { complete: false, approverName: null, approverRole: null })
+      : localSignOff;
+  const status =
+    apiStatus === "PendingWorkflowApproval" || (localSignOff && apiStatus === "PendingApproval")
+      ? "Approved"
+      : toAppStatus(apiStatus);
   const type =
     typeof api.documentType === "number" ? API_DOCUMENT_TYPES[api.documentType] : api.documentType;
 
@@ -133,6 +154,7 @@ function toAppDocument(api: ApiProductDocument): ProductDocument {
       status === "Rejected" && api.commentReview
         ? { reviewer: null, approved: false, comment: api.commentReview, decidedAt: api.updatedAt ?? api.createdAt }
         : null,
+    signOff: status === "Approved" ? signOff : null,
   };
 }
 

@@ -11,6 +11,7 @@ import type { SubmitTaskRequest } from "../../types/ticketTypes";
 import TicketBrief from "../../components/tickets/TicketBrief";
 import InitiativeContext from "../../components/tickets/InitiativeContext";
 import BackLink from "../../components/common/BackLink";
+import ReadOnlyField from "../../components/common/ReadOnlyField";
 import { formatDate, taskStatusBadgeClass, taskStatusLabel } from "../../utils/ticketStatus";
 import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
 
@@ -216,29 +217,15 @@ function DeveloperTicketWorkspace() {
           </div>
         </div>
 
-        <div className="initiative-detail-grid">
-          <div>
-            <span className="initiative-detail-grid_label">Start date</span>
-            <span className="initiative-detail-grid_value">{formatDate(task.startDate)}</span>
+        <div className="proposal-section ticket-view">
+          <div className="ticket-view_facts">
+            <ReadOnlyField label="Start date" value={formatDate(task.startDate)} />
+            <ReadOnlyField label="Target date" value={formatDate(task.targetDate)} />
+            <ReadOnlyField label="Started" value={formatDate(task.startedAt)} />
           </div>
 
-          <div>
-            <span className="initiative-detail-grid_label">Target date</span>
-            <span className="initiative-detail-grid_value">{formatDate(task.targetDate)}</span>
-          </div>
-
-          <div>
-            <span className="initiative-detail-grid_label">Started</span>
-            <span className="initiative-detail-grid_value">{formatDate(task.startedAt)}</span>
-          </div>
+          <ReadOnlyField label="What to do" value={task.description} />
         </div>
-
-        <dl className="ticket-details_grid ticket-details_grid--panel">
-          <div>
-            <dt>What to do</dt>
-            <dd>{task.description || "—"}</dd>
-          </div>
-        </dl>
       </section>
 
       {canSubmit && (

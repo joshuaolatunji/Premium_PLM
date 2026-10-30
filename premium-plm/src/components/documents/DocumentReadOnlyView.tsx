@@ -1,25 +1,9 @@
 import { Download, Eye } from "lucide-react";
 
 import RichTextContent from "../editor/RichTextContent";
+import Field from "../common/ReadOnlyField";
 import type { ProductDocument } from "../../types/documentTypes";
 import { downloadDocument, previewDocument } from "../../utils/printDocument";
-
-interface FieldProps {
-  label: string;
-  value: string;
-}
-
-// A bold label over the value in a box — the same look as the BDO
-// documentation review, so reading a document feels like reading a filled
-// form. The box grows with its text, so nothing is cut off or scrolled.
-function Field({ label, value }: FieldProps) {
-  return (
-    <div className="brd-readonly-field">
-      <span className="brd-readonly-field_label">{label}</span>
-      <div className="brd-readonly-field_value">{value || "—"}</div>
-    </div>
-  );
-}
 
 interface DocumentReadOnlyViewProps {
   document: ProductDocument;

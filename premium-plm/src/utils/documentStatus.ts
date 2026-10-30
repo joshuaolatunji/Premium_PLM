@@ -54,6 +54,28 @@ export function documentStatusBadgeClass(status: DocumentStatus | null | undefin
   }
 }
 
+// The status as shown, naming who has the document while it's out for
+// sign-off ("With Naomi Okafor (Chief Risk Officer)").
+export function documentStatusText(document: ProductDocument | null | undefined): string {
+  const signOff = document?.signOff;
+
+  if (signOff && !signOff.complete) {
+    if (!signOff.approverName) {
+      return "Out for sign-off";
+    }
+
+    return signOff.approverRole ? `With ${signOff.approverName} (${signOff.approverRole})` : `With ${signOff.approverName}`;
+  }
+
+  return documentStatusLabel(document?.status);
+}
+
+export function documentStatusClass(document: ProductDocument | null | undefined): string {
+  return document?.signOff && !document.signOff.complete
+    ? "status-badge status-badge--brd-under-review"
+    : documentStatusBadgeClass(document?.status);
+}
+
 export function isInReview(status: DocumentStatus | null | undefined): boolean {
   return status === "PendingBDOReview" || status === "PendingGroupHeadReview";
 }

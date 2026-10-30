@@ -7,7 +7,7 @@
 //   POST ticketing-requests/{id}/submit-ticket                   PM → Lead Engineer
 //   POST ticketing-requests/{ticketId}/recall-ticket             PM takes it back
 //   POST ticketing-requests/{ticketId}/accept-ticket             Lead Engineer
-//   POST ticketing-requests/{ticketId}/reject-ticket             Lead Engineer (no body)
+//   POST ticketing-requests/{ticketId}/reject-ticket             Lead Engineer, body: the reason as a JSON string
 //   GET  ticketing-requests/{ticketId}/get-ticket                one ticket
 //   POST development-requests/{ticketId}/assign-tasks-to-developers
 //   GET  ticketing-requests/my-assigned-ticket/tasks             Developer's tasks
@@ -364,10 +364,15 @@ export async function acceptTicket(ticketId: string): Promise<void> {
   logActivity(ticketId, "accepted a ticket", "success");
 }
 
-// The API no longer takes a reason (gaps file R23), so it's kept on this
-// browser for the Product Manager to see.
+// The body is the reason as a bare JSON string. The ticket response doesn't
+// return it yet (gaps file R23), so it's also kept on this browser for the
+// Product Manager to see.
 export async function rejectTicket(ticketId: string, reason: string): Promise<void> {
-  await apiClient<unknown>(`api/ticketing-requests/${ticketId}/reject-ticket`, { method: "POST", ...auth() });
+  await apiClient<unknown>(`api/ticketing-requests/${ticketId}/reject-ticket`, {
+    method: "POST",
+    body: JSON.stringify(reason),
+    ...auth(),
+  });
   setTicketStatus(ticketId, "Rejected", { rejectionReason: reason });
   logActivity(ticketId, "rejected a ticket", "danger");
 }

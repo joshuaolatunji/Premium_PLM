@@ -32,6 +32,7 @@ import { capitalize } from "../../utils/text";
 import { activeUsersWithRole } from "../../utils/userStatus";
 import { resolvePrimaryRole } from "../../utils/roleRouting";
 import BackLink from "../../components/common/BackLink";
+import { TicketFields } from "../../components/tickets/TicketBrief";
 
 type TicketForm = Omit<CreateTicketRequest, "initiativeId">;
 
@@ -46,7 +47,8 @@ const EMPTY_TICKET: TicketForm = {
   documentId: "",
 };
 
-// A ticket's details and its developer tasks, opened under its row.
+// A ticket opened under its row: what was asked for, read like a filled-in
+// form, then its developer tasks.
 function TicketDetails({ ticket, userName }: { ticket: Ticket; userName: (id: string) => string }) {
   const tasksQuery = useQuery({
     queryKey: ["ticket-tasks", ticket.id],
@@ -64,39 +66,30 @@ function TicketDetails({ ticket, userName }: { ticket: Ticket; userName: (id: st
         </div>
       )}
 
-      <dl className="ticket-details_grid">
-        <div>
-          <dt>Scope</dt>
-          <dd>{ticket.scope || "—"}</dd>
-        </div>
-        <div>
-          <dt>Functional requirements</dt>
-          <dd>{ticket.functionalRequirements || "—"}</dd>
-        </div>
-        <div>
-          <dt>Expected outcome</dt>
-          <dd>{ticket.expectedOutcome || "—"}</dd>
-        </div>
-      </dl>
+      <TicketFields ticket={ticket} leadEngineerName={userName(ticket.leadEngineerId)} />
 
-      <h3 className="ticket-details_heading">Developer tasks</h3>
+      <div className="ticket-details_tasks">
+        <h3 className="ticket-details_heading">Developer tasks</h3>
 
-      {tasks.length === 0 ? (
-        <p className="bdo-upload-empty">
-          {tasksQuery.isLoading ? "Loading tasks…" : "The Lead Engineer hasn't assigned any tasks yet."}
-        </p>
-      ) : (
-        <ul className="task-mini-list">
-          {tasks.map((task) => (
-            <li key={task.id}>
-              <span className="task-mini-list_title" title={task.title}>{task.title}</span>
-              <span>{userName(task.developerId)}</span>
-              <span>Due {formatDate(task.targetDate)}</span>
-              <span className={taskStatusBadgeClass(task.status)}>{taskStatusLabel(task.status)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+        {tasks.length === 0 ? (
+          <p className="bdo-upload-empty">
+            {tasksQuery.isLoading ? "Loading tasks…" : "The Lead Engineer hasn't assigned any tasks yet."}
+          </p>
+        ) : (
+          <ul className="task-mini-list">
+            {tasks.map((task) => (
+              <li key={task.id}>
+                <span className="task-mini-list_title" title={task.title}>
+                  {task.title}
+                </span>
+                <span>{userName(task.developerId)}</span>
+                <span>Due {formatDate(task.targetDate)}</span>
+                <span className={taskStatusBadgeClass(task.status)}>{taskStatusLabel(task.status)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
@@ -282,8 +275,8 @@ function TicketsPage() {
       />
 
       <p className="mock-data-notice">
-        This list shows the tickets created on this browser until the backend can
-        list an initiative's tickets.
+        This list shows the tickets created on this browser until the backend can list an initiative's
+        tickets (gaps file M9).
       </p>
 
       {canManage && isCreating && (
@@ -501,7 +494,11 @@ function TicketsPage() {
                       <td>
                         <div className="initiative-cell">
                           <strong title={ticket.title}>{ticket.title}</strong>
-                          <span>{ticket.scope}</span>
+                          <span>
+                            {[ticket.requestNumber, ticket.documentType, `Created ${formatDate(ticket.createdAt)}`]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
                         </div>
                       </td>
 
@@ -517,7 +514,8 @@ function TicketsPage() {
                         <span className={ticketStatusBadgeClass(ticket.status)}>{ticketStatusLabel(ticket.status)}</span>
                       </td>
 
-                      <td className="brd-reviews-actions">
+                      <td>
+                        <div className="brd-reviews-actions ticket-row-actions">
                         <button
                           type="button"
                           className="table-action table-action--dark"
@@ -552,6 +550,7 @@ function TicketsPage() {
                             {isActing(ticket.id) ? "Recalling…" : "Recall"}
                           </button>
                         )}
+                        </div>
                       </td>
                     </tr>
 

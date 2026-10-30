@@ -8,8 +8,8 @@ import { DOCUMENT_META, documentTypeFromSlug } from "../../types/documentTypes";
 import type { DocumentType, ProductDocument } from "../../types/documentTypes";
 import type { ProductInitiative } from "../../types/initiativeTypes";
 import {
-  documentStatusBadgeClass,
-  documentStatusLabel,
+  documentStatusClass,
+  documentStatusText,
   useInitiativeDocuments,
 } from "../../utils/documentStatus";
 import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
@@ -46,8 +46,8 @@ function HubRow({ initiative, type, document, bdoDocsApproved }: HubRowProps) {
 
       {document && (
         <td>
-          <span className={documentStatusBadgeClass(document.status)}>
-            {documentStatusLabel(document.status)}
+          <span className={documentStatusClass(document)}>
+            {documentStatusText(document)}
           </span>{" "}
           {document.version > 0 && <span className="brd-version-tag">v{document.version}</span>}
         </td>

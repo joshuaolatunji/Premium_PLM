@@ -41,6 +41,15 @@ export interface DocumentOverview {
   introduction: string;
 }
 
+// Where an approved document's sign-off stands, from the app's own sign-off
+// record (the API has no sign-off status — gaps file R26).
+export interface DocumentSignOff {
+  complete: boolean;
+  // The approver it's with now; null once complete.
+  approverName: string | null;
+  approverRole: string | null;
+}
+
 export interface DocumentDecision {
   // Null when the API doesn't say who decided (gaps file R2).
   reviewer: DocumentReviewer | null;
@@ -68,6 +77,8 @@ export interface ProductDocument {
   // The most recent review decision — carries the reason when rejected
   // (from the API's commentReview).
   lastDecision: DocumentDecision | null;
+  // Set once an approved document has been sent for sign-off.
+  signOff: DocumentSignOff | null;
 }
 
 export interface SaveDocumentRequest {

@@ -15,7 +15,7 @@ import {
 } from "../../utils/initiativeStatus";
 import {
   documentationProgress,
-  documentStatusLabel,
+  documentStatusText,
   isInReview,
   nextDocumentToWorkOn,
   useInitiativeDocuments,
@@ -361,7 +361,7 @@ function MyWork() {
                             <span
                               key={type}
                               className={`document-chip document-chip--${facts.documents[type]?.status ?? "none"}`}
-                              title={`${DOCUMENT_META[type].name}: ${documentStatusLabel(facts.documents[type]?.status)}`}
+                              title={`${DOCUMENT_META[type].name}: ${documentStatusText(facts.documents[type])}`}
                             >
                               {type}
                             </span>

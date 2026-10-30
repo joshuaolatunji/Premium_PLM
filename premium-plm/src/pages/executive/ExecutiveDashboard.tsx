@@ -21,7 +21,7 @@ import {
 import {
   currentTimestamp,
   daysSince,
-  documentStatusLabel,
+  documentStatusText,
   useInitiativeDocuments,
 } from "../../utils/documentStatus";
 import { formatDate } from "../../utils/ticketStatus";
@@ -223,7 +223,7 @@ function ExecutiveDashboard() {
                           <span
                             key={type}
                             className={`document-chip document-chip--${row.documents[type]?.status ?? "none"}`}
-                            title={`${DOCUMENT_META[type].name}: ${documentStatusLabel(row.documents[type]?.status)}`}
+                            title={`${DOCUMENT_META[type].name}: ${documentStatusText(row.documents[type])}`}
                           >
                             {type}
                           </span>

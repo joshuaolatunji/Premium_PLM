@@ -9,6 +9,9 @@ import { takeReturnPath, wasSignedOutByExpiry } from "../../utils/sessionReturn"
 
 import LoginLayout from "../../components/auth/LoginLayout";
 
+// Everyone signs in with a bank address, so only the part before the @ is typed.
+const EMAIL_DOMAIN = "@premiumtrustbank.com";
+
 function Login() {
     const [showPassword, setShowPassword] = useState(false);
     // Signed out because the session ran out (not a fresh visit).
@@ -16,7 +19,9 @@ function Login() {
 
     const navigate = useNavigate();
 
-    const [emailAddress, setEmailAddress] = useState("");
+    // Just "firstname.lastname"; the domain is added when signing in.
+    const [emailName, setEmailName] = useState("");
+    const emailAddress = `${emailName.trim()}${EMAIL_DOMAIN}`;
     const [password, setPassword] = useState("");
 
     const [isLoading, setIsLoading] = useState(false);
@@ -111,14 +116,26 @@ function Login() {
                     <div className="form-field">
                         <label htmlFor="email">Email address</label>
 
-                        <input
-                            type="email"
-                            value={emailAddress}
-                            onChange={(event) => setEmailAddress(event.target.value)}
-                            id="email"
-                            placeholder="firstname.lastname@premiumtrustbank.com"
-                            required
-                        />
+                        <div className="email-input">
+                            <input
+                                type="text"
+                                value={emailName}
+                                // A pasted full address keeps only the part before the @.
+                                onChange={(event) => setEmailName(event.target.value.split("@")[0])}
+                                id="email"
+                                name="username"
+                                autoComplete="username"
+                                autoCapitalize="none"
+                                spellCheck={false}
+                                placeholder="firstname.lastname"
+                                aria-describedby="email-domain"
+                                required
+                            />
+
+                            <span id="email-domain" className="email-input_domain">
+                                {EMAIL_DOMAIN}
+                            </span>
+                        </div>
                     </div>
 
                     <div className="form-field">

@@ -7,8 +7,8 @@ import { getInitiativeDocuments, reviewDocument } from "../../service/DocumentSe
 import { DOCUMENT_META, documentTypeFromSlug } from "../../types/documentTypes";
 import type { DocumentReviewer } from "../../types/documentTypes";
 import {
-  documentStatusBadgeClass,
-  documentStatusLabel,
+  documentStatusClass,
+  documentStatusText,
   documentsQueryKey,
   EMPTY_DOCUMENTS,
 } from "../../utils/documentStatus";
@@ -17,6 +17,7 @@ import BackLink from "../../components/common/BackLink";
 import DocumentTabs from "../../components/documents/DocumentTabs";
 import DocumentPager from "../../components/documents/DocumentPager";
 import DocumentReadOnlyView from "../../components/documents/DocumentReadOnlyView";
+import ApprovalWorkflowPanel from "../../components/approvals/ApprovalWorkflowPanel";
 import DecisionModal, { type Decision } from "../../components/review/DecisionModal";
 import { clearDraft } from "../../utils/useDraftState";
 import ReviewDecisionBar from "../../components/review/ReviewDecisionBar";
@@ -145,8 +146,8 @@ function DocumentReview({ reviewer }: DocumentReviewProps) {
             <span>{DOCUMENT_META[type].name}</span>
             {document && (
               <>
-                <span className={documentStatusBadgeClass(document.status)}>
-                  {documentStatusLabel(document.status)}
+                <span className={documentStatusClass(document)}>
+                  {documentStatusText(document)}
                 </span>
                 {document.version > 0 && <span className="brd-version-tag">v{document.version}</span>}
               </>
@@ -191,10 +192,17 @@ function DocumentReview({ reviewer }: DocumentReviewProps) {
         <>
           {!canDecide && (
             <p className="initiatives-empty initiative-detail-message">
-              {document.status === "Approved"
-                ? `This ${type} has been approved.`
-                : `You approved this ${type}; it's now with the Group Head.`}
+              {document.signOff && !document.signOff.complete
+                ? `This ${type} has been approved and is out for sign-off.`
+                : document.status === "Approved"
+                  ? `This ${type} has been approved.`
+                  : `You approved this ${type}; it's now with the Group Head.`}
             </p>
+          )}
+
+          {!isBdo && document.status === "Approved" && (
+            // The Group Head follows the sign-off and opens the signed PDF once it's complete.
+            <ApprovalWorkflowPanel key={document.id} document={document} initiativeName={initiative.projectName} canManage={false} />
           )}
 
           <DocumentReadOnlyView document={document} initiativeName={initiative.projectName} />

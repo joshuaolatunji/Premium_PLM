@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 
 import { DOCUMENT_META, DOCUMENT_TYPES } from "../../types/documentTypes";
 import type { DocumentType, InitiativeDocuments } from "../../types/documentTypes";
-import { documentStatusBadgeClass, documentStatusLabel } from "../../utils/documentStatus";
+import { documentStatusClass, documentStatusText } from "../../utils/documentStatus";
 import { documentEditorPath, documentReviewPath } from "../../utils/documentRoutes";
 import { backState } from "../../utils/navigation";
 
@@ -131,8 +131,8 @@ function InitiativeDocumentsPanel({
                   </td>
 
                   <td>
-                    <span className={documentStatusBadgeClass(document?.status)}>
-                      {documentStatusLabel(document?.status)}
+                    <span className={documentStatusClass(document)}>
+                      {documentStatusText(document)}
                     </span>
                   </td>
 

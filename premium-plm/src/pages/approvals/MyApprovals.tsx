@@ -4,8 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   approvalKeys,
-  fetchFinalSignedPdf,
-  fetchReviewPdf,
+  fetchPdfToSign,
+  fetchSubmittedPdf,
   getMyApprovalHistory,
   getMyPendingApprovals,
 } from "../../service/ApprovalWorkflowService";
@@ -230,7 +230,11 @@ function MyApprovals() {
                       className="table-action table-action--dark"
                       onClick={() =>
                         openPdf(() =>
-                          workflow.status === "Approved" ? fetchFinalSignedPdf(workflow.id) : fetchReviewPdf(workflow.id),
+                          // Signed: the PDF as they signed it and sent it on.
+                          // Rejected: the PDF they were asked to sign.
+                          step.status === "Signed"
+                            ? fetchSubmittedPdf(workflow.id)
+                            : fetchPdfToSign({ workflowId: workflow.id, documentId: workflow.documentId, sequence: step.sequence }),
                         )
                       }
                     >

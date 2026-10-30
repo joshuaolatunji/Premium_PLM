@@ -1,6 +1,57 @@
+import type { ReactNode } from "react";
+
 import type { Ticket } from "../../types/ticketTypes";
-import { formatDate } from "../../utils/ticketStatus";
+import { formatDate, ticketStatusBadgeClass, ticketStatusLabel } from "../../utils/ticketStatus";
 import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
+import ReadOnlyField from "../common/ReadOnlyField";
+
+interface TicketFieldsProps {
+  ticket: Ticket;
+  initiativeName?: string;
+  leadEngineerName?: string;
+}
+
+// What the Product Manager asked for, read like a filled-in form: the key
+// facts in one aligned row, then the scope, functional requirements and
+// expected outcome full width, one under the other.
+export function TicketFields({ ticket, initiativeName, leadEngineerName }: TicketFieldsProps) {
+  const facts: { label: string; value: ReactNode }[] = [
+    ...(initiativeName ? [{ label: "Initiative", value: initiativeName }] : []),
+    ...(ticket.documentType
+      ? [
+          {
+            label: "Built from",
+            value: ticket.documentVersion ? `${ticket.documentType} · version ${ticket.documentVersion}` : ticket.documentType,
+          },
+        ]
+      : []),
+    ...(leadEngineerName ? [{ label: "Lead Engineer", value: leadEngineerName }] : []),
+    {
+      label: "Priority",
+      value: <span className={priorityBadgeClass(ticket.priority)}>{priorityLabel(ticket.priority)}</span>,
+    },
+    { label: "Target date", value: formatDate(ticket.targetDate) },
+    {
+      label: "Status",
+      value: <span className={ticketStatusBadgeClass(ticket.status)}>{ticketStatusLabel(ticket.status)}</span>,
+    },
+    { label: "Created", value: formatDate(ticket.createdAt) },
+  ];
+
+  return (
+    <div className="ticket-view">
+      <div className="ticket-view_facts">
+        {facts.map((fact) => (
+          <ReadOnlyField key={fact.label} label={fact.label} value={fact.value} />
+        ))}
+      </div>
+
+      <ReadOnlyField label="Scope" value={ticket.scope} />
+      <ReadOnlyField label="Functional requirements" value={ticket.functionalRequirements} />
+      <ReadOnlyField label="Expected outcome" value={ticket.expectedOutcome} />
+    </div>
+  );
+}
 
 interface TicketBriefProps {
   ticket: Ticket;
@@ -9,7 +60,7 @@ interface TicketBriefProps {
   requestedBy?: string;
 }
 
-// What the Product Manager asked for on a ticket.
+// The ticket as its own panel, on the Lead Engineer's and Developer's pages.
 function TicketBrief({ ticket, initiativeName, requestedBy }: TicketBriefProps) {
   return (
     <section className="dashboard-panel initiative-detail-panel">
@@ -20,54 +71,9 @@ function TicketBrief({ ticket, initiativeName, requestedBy }: TicketBriefProps) 
         </div>
       </div>
 
-      <div className="initiative-detail-grid">
-        <div>
-          <span className="initiative-detail-grid_label">Initiative</span>
-          <span className="initiative-detail-grid_value">{initiativeName}</span>
-        </div>
-
-        {ticket.documentType && (
-          <div>
-            <span className="initiative-detail-grid_label">Built from</span>
-            <span className="initiative-detail-grid_value">
-              {ticket.documentType}
-              {ticket.documentVersion ? ` · version ${ticket.documentVersion}` : ""}
-            </span>
-          </div>
-        )}
-
-        <div>
-          <span className="initiative-detail-grid_label">Priority</span>
-          <span className="initiative-detail-grid_value">
-            <span className={priorityBadgeClass(ticket.priority)}>{priorityLabel(ticket.priority)}</span>
-          </span>
-        </div>
-
-        <div>
-          <span className="initiative-detail-grid_label">Target date</span>
-          <span className="initiative-detail-grid_value">{formatDate(ticket.targetDate)}</span>
-        </div>
-
-        <div>
-          <span className="initiative-detail-grid_label">Created</span>
-          <span className="initiative-detail-grid_value">{formatDate(ticket.createdAt)}</span>
-        </div>
+      <div className="proposal-section">
+        <TicketFields ticket={ticket} initiativeName={initiativeName} />
       </div>
-
-      <dl className="ticket-details_grid ticket-details_grid--panel">
-        <div>
-          <dt>Scope</dt>
-          <dd>{ticket.scope || "—"}</dd>
-        </div>
-        <div>
-          <dt>Functional requirements</dt>
-          <dd>{ticket.functionalRequirements || "—"}</dd>
-        </div>
-        <div>
-          <dt>Expected outcome</dt>
-          <dd>{ticket.expectedOutcome || "—"}</dd>
-        </div>
-      </dl>
     </section>
   );
 }

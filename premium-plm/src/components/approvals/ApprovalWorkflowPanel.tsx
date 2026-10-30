@@ -5,8 +5,6 @@ import { ArrowDown, ArrowUp, Download, Eye, Plus, Send, Trash2 } from "lucide-re
 import {
   approvalKeys,
   fetchFinalSignedPdf,
-  fetchReviewPdf,
-  fetchSubmittedPdf,
   getWorkflowForDocument,
   sendWorkflow,
   setUpWorkflow,
@@ -16,6 +14,7 @@ import { getAllUsers, isUserListForbidden } from "../../service/UserService";
 import type { PLMUser } from "../../types/userTypes";
 import type { ApprovalWorkflow, ApproverInput } from "../../types/approvalTypes";
 import type { ProductDocument } from "../../types/documentTypes";
+import { documentsQueryKey } from "../../utils/documentStatus";
 import { isUserActive } from "../../utils/userStatus";
 import { canSignOff } from "../../utils/roleRouting";
 import { formatPersonName, formatRoleName } from "../../utils/text";
@@ -92,13 +91,21 @@ function ApprovalWorkflowPanel({ document, initiativeName, canManage }: Approval
   // The API refuses the user list to some roles (gaps file R7 / M3).
   const directoryUnavailable = usersQuery.isError || (usersQuery.isSuccess && isUserListForbidden());
 
+  // The document's status names the approver it's with, so it's re-read too.
+  async function refreshAfterSending() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: approvalKeys.all }),
+      queryClient.invalidateQueries({ queryKey: documentsQueryKey(document.initiativeId) }),
+    ]);
+  }
+
   const sendMutation = useMutation({
     mutationFn: () => setUpWorkflow(document, initiativeName, rows),
     onSuccess: async () => {
       setConfirming(false);
       setErrorMessage("");
       setRows([EMPTY_ROW]);
-      await queryClient.invalidateQueries({ queryKey: approvalKeys.all });
+      await refreshAfterSending();
     },
     onError: (error) => {
       setConfirming(false);
@@ -109,7 +116,7 @@ function ApprovalWorkflowPanel({ document, initiativeName, canManage }: Approval
   // Approvers saved but not sent (sending failed) — send again.
   const resendMutation = useMutation({
     mutationFn: (workflowId: string) => sendWorkflow(workflowId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: approvalKeys.all }),
+    onSuccess: refreshAfterSending,
     onError: (error) => setErrorMessage(error instanceof Error ? error.message : "Couldn't send it. Try again."),
   });
 
@@ -244,24 +251,19 @@ function ApprovalWorkflowPanel({ document, initiativeName, canManage }: Approval
             </p>
           )}
 
-          <div className="approval-panel_actions">
-            <button type="button" className="button button--dark" onClick={() => openPdf(() => fetchSubmittedPdf(workflow.id))}>
-              <Eye size={17} aria-hidden="true" />
-              PDF as sent
-            </button>
+          {workflow.status === "Approved" && (
+            <div className="approval-panel_actions">
+              <button type="button" className="button button--dark" onClick={() => openPdf(() => fetchFinalSignedPdf(workflow.id))}>
+                <Eye size={17} aria-hidden="true" />
+                View signed PDF
+              </button>
 
-            <button type="button" className="button button--dark" onClick={() => openPdf(() => fetchReviewPdf(workflow.id))}>
-              <Eye size={17} aria-hidden="true" />
-              PDF with signatures so far
-            </button>
-
-            {workflow.status === "Approved" && (
               <button type="button" className="button button--primary" onClick={() => void downloadSigned(workflow)}>
                 <Download size={17} aria-hidden="true" />
                 Download signed {document.type}
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
           {pdfError && (
             <p className="form-error" role="alert">

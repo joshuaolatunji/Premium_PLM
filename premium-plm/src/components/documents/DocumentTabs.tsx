@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 
 import { DOCUMENT_META, DOCUMENT_TYPES } from "../../types/documentTypes";
 import type { DocumentType, InitiativeDocuments } from "../../types/documentTypes";
-import { documentStatusLabel } from "../../utils/documentStatus";
+import { documentStatusText } from "../../utils/documentStatus";
 
 interface DocumentTabsProps {
   documents: InitiativeDocuments;
@@ -26,7 +26,7 @@ function DocumentTabs({ documents, pathFor }: DocumentTabsProps) {
         >
           <strong>{type}</strong>
           <span className={`document-tab_status document-tab_status--${documents[type]?.status ?? "none"}`}>
-            {documentStatusLabel(documents[type]?.status)}
+            {documentStatusText(documents[type])}
           </span>
         </NavLink>
       ))}

@@ -6,9 +6,10 @@
 //   GET  api/document-approval-workflows/my-pending-workflow         what's waiting on me
 //   POST api/document-approval-workflows/{workflowId}/steps/{stepId}/sign-and-approve
 //   POST api/document-approval-workflows/{workflowId}/steps/{stepId}/reject-approval
-//   GET  {workflowId}/submitted-pdf-for-approval    the document as sent for sign-off
-//   GET  {workflowId}/get-approval-review-pdf       with the signatures so far
-//   GET  {workflowId}/final-signed-pdf              fully signed
+//   GET  {documentId}/preview-generated-pdf         1st approver, before signing
+//   GET  {workflowId}/submitted-pdf-for-approval    an approver, after signing
+//   GET  {workflowId}/get-approval-review-pdf       later approvers, before signing
+//   GET  {workflowId}/final-signed-pdf              PM / Group Head, fully signed
 //
 // Missing (simulated in the browser — see the gaps file): reading a
 // document's workflow and its progress (M13), every workflow for oversight
@@ -16,10 +17,10 @@
 // this app is recorded locally and kept up to date as people sign, so the
 // PM's progress view and the Executive Director's dashboard have data.
 
-import { apiClient, ApiError } from "../apicalls/apiClient";
+import { apiClient } from "../apicalls/apiClient";
 import { getCurrentUserId, getToken } from "../apicalls/authStorage";
 import { DOCUMENT_TYPES } from "../types/documentTypes";
-import type { DocumentType, ProductDocument } from "../types/documentTypes";
+import type { DocumentSignOff, DocumentType, ProductDocument } from "../types/documentTypes";
 import type {
   ApprovalStep,
   ApprovalStepStatus,
@@ -107,12 +108,34 @@ function changeWorkflow(workflowId: string, change: (workflow: ApprovalWorkflow)
 
 // The newest workflow for a document (a rejected one is replaced when the PM
 // sets it up again).
-export async function getWorkflowForDocument(documentId: string): Promise<ApprovalWorkflow | null> {
+function newestWorkflowFor(documentId: string): ApprovalWorkflow | null {
   const matches = listRows<ApprovalWorkflow>(WORKFLOWS)
     .filter((workflow) => workflow.documentId === documentId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  return simulateLatency(matches[0] ?? null);
+  return matches[0] ?? null;
+}
+
+export async function getWorkflowForDocument(documentId: string): Promise<ApprovalWorkflow | null> {
+  return simulateLatency(newestWorkflowFor(documentId));
+}
+
+// Where a document's sign-off stands, or null if it hasn't been sent for
+// sign-off (or the sign-off was rejected).
+export function localSignOffFor(documentId: string): DocumentSignOff | null {
+  const workflow = newestWorkflowFor(documentId);
+
+  if (!workflow || (workflow.status !== "InProgress" && workflow.status !== "Approved")) {
+    return null;
+  }
+
+  const current = workflow.status === "InProgress" ? workflow.steps.find((step) => step.status === "Pending") : undefined;
+
+  return {
+    complete: workflow.status === "Approved",
+    approverName: current?.approverName ?? null,
+    approverRole: current?.approverRole ?? null,
+  };
 }
 
 export async function getWorkflowsForInitiative(initiativeId: string): Promise<ApprovalWorkflow[]> {
@@ -289,60 +312,42 @@ function toPendingApprovals(record: ApiRecord, myId: string | null): PendingAppr
   return workflowId && stepId ? [describe(workflowId, stepId, null)] : [];
 }
 
-// What's waiting on the signed-in user: the API's list, plus any recorded
-// locally that it didn't include.
+// What's waiting on the signed-in user, from the API only: it returns the
+// real workflowId and stepId that sign-and-approve needs.
 export async function getMyPendingApprovals(): Promise<PendingApproval[]> {
   const myId = getCurrentUserId();
-  let live: PendingApproval[] = [];
-  let liveFailed: unknown = null;
+  const body = await apiClient<unknown>("api/document-approval-workflows/my-pending-workflow", {
+    method: "GET",
+    ...auth(),
+  });
+  // A list, a list under a key, or a single workflow/step.
+  const data = unwrapData(body);
+  let records = readList(body, ["workflows", "pendingWorkflows", "items", "results"]);
 
-  try {
-    const body = await apiClient<unknown>("api/document-approval-workflows/my-pending-workflow", {
-      method: "GET",
-      ...auth(),
-    });
-    // A list, a list under a key, or a single workflow/step.
-    const data = unwrapData(body);
-    let records = readList(body, ["workflows", "pendingWorkflows", "items", "results"]);
-
-    if (records.length === 0 && isRecord(data)) {
-      records = [data];
-    }
-
-    live = records.flatMap((record) => toPendingApprovals(record, myId));
-  } catch (error) {
-    if (!(error instanceof ApiError && error.status === 404)) {
-      liveFailed = error;
-    }
+  if (records.length === 0 && isRecord(data)) {
+    records = [data];
   }
 
-  const local: PendingApproval[] = listRows<ApprovalWorkflow>(WORKFLOWS).flatMap((workflow) =>
-    workflow.status !== "InProgress"
-      ? []
-      : workflow.steps
-          .filter((step) => step.status === "Pending" && step.approverUserId === myId)
-          .map((step) => ({
-            workflowId: workflow.id,
-            stepId: step.id,
-            documentId: workflow.documentId,
-            documentType: workflow.documentType,
-            initiativeId: workflow.initiativeId,
-            initiativeName: workflow.initiativeName,
-            approverRole: step.approverRole,
-            sequence: step.sequence,
-            totalSteps: workflow.steps.length,
-            sentAt:
-              workflow.steps.find((previous) => previous.sequence === step.sequence - 1)?.decidedAt ??
-              workflow.submittedAt,
-          })),
-  );
+  const pending = records.flatMap((record) => toPendingApprovals(record, myId));
+  pending.forEach(syncLocalStepId);
+  return pending;
+}
 
-  if (liveFailed && local.length === 0) {
-    throw liveFailed;
+// configure-workflow doesn't return step ids (gaps file R14), so the local
+// record may hold stand-in ids. The API's real id replaces it, matched by
+// position in the order, so signing updates the right step locally.
+function syncLocalStepId(item: PendingApproval) {
+  const local = getLocalWorkflow(item.workflowId);
+  const step = local?.steps.find((candidate) => candidate.sequence === item.sequence);
+
+  if (step && step.id !== item.stepId) {
+    changeWorkflow(item.workflowId, (workflow) => ({
+      ...workflow,
+      steps: workflow.steps.map((candidate) =>
+        candidate.sequence === item.sequence ? { ...candidate, id: item.stepId } : candidate,
+      ),
+    }));
   }
-
-  const seen = new Set(live.map((item) => `${item.workflowId}:${item.stepId}`));
-  return [...live, ...local.filter((item) => !seen.has(`${item.workflowId}:${item.stepId}`))];
 }
 
 export async function signAndApprove(
@@ -410,14 +415,23 @@ export async function rejectApproval(workflowId: string, stepId: string, comment
 // ---------------------------------------------------------------------------
 // PDFs (built by the backend, with the approvers' names and signatures)
 
+// The PDF an approver reads before signing: the first approver gets the
+// approved document itself; later approvers get it with the signatures so far.
+export function fetchPdfToSign(item: Pick<PendingApproval, "workflowId" | "documentId" | "sequence">): Promise<Blob> {
+  return item.sequence === 1 && item.documentId ? fetchPdfBlob(`${item.documentId}/preview-generated-pdf`) : fetchReviewPdf(item.workflowId);
+}
+
+// The document as an approver signed it and sent it on.
 export function fetchSubmittedPdf(workflowId: string): Promise<Blob> {
   return fetchPdfBlob(`${workflowId}/submitted-pdf-for-approval`);
 }
 
+// With the signatures so far, for the next approver.
 export function fetchReviewPdf(workflowId: string): Promise<Blob> {
   return fetchPdfBlob(`${workflowId}/get-approval-review-pdf`);
 }
 
+// Signed by everyone, for the Product Manager and Group Head.
 export function fetchFinalSignedPdf(workflowId: string): Promise<Blob> {
   return fetchPdfBlob(`${workflowId}/final-signed-pdf`);
 }

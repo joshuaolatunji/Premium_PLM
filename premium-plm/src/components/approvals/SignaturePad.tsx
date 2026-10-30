@@ -15,6 +15,50 @@ const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 // Uploaded signatures are scaled down to fit this box.
 const MAX_WIDTH = 600;
 const MAX_HEIGHT = 200;
+// Space kept clear inside the drawing box's edge, in CSS pixels.
+const FIT_PADDING = 12;
+
+// The pad records the pen even when it strays outside the box; only the
+// visible ink is cut off at the edge. When the pen lifts, the whole signature
+// is moved, and shrunk if it has to be, so all of it sits inside the box.
+// Returns false when it already fits.
+function fitInsideBox(pad: SignaturePadLib, width: number, height: number): boolean {
+  const strokes = pad.toData();
+  const points = strokes.flatMap((stroke) => stroke.points);
+
+  if (points.length === 0) {
+    return false;
+  }
+
+  const left = Math.min(...points.map((point) => point.x));
+  const right = Math.max(...points.map((point) => point.x));
+  const top = Math.min(...points.map((point) => point.y));
+  const bottom = Math.max(...points.map((point) => point.y));
+  const maxRight = width - FIT_PADDING;
+  const maxBottom = height - FIT_PADDING;
+
+  if (left >= FIT_PADDING && top >= FIT_PADDING && right <= maxRight && bottom <= maxBottom) {
+    return false;
+  }
+
+  const scale = Math.min(1, (maxRight - FIT_PADDING) / (right - left || 1), (maxBottom - FIT_PADDING) / (bottom - top || 1));
+  // Kept as close as possible to where it was drawn.
+  const newLeft = Math.min(Math.max(left, FIT_PADDING), maxRight - (right - left) * scale);
+  const newTop = Math.min(Math.max(top, FIT_PADDING), maxBottom - (bottom - top) * scale);
+
+  pad.fromData(
+    strokes.map((stroke) => ({
+      ...stroke,
+      points: stroke.points.map((point) => ({
+        ...point,
+        x: newLeft + (point.x - left) * scale,
+        y: newTop + (point.y - top) * scale,
+      })),
+    })),
+  );
+
+  return true;
+}
 
 // Crops a canvas to the area that has ink, with a little padding, so the
 // signature sits neatly in its space on the document.
@@ -146,6 +190,10 @@ function SignaturePad({ value, onChange, disabled = false }: SignaturePadProps) 
     padRef.current = pad;
 
     function emit() {
+      if (canvas) {
+        fitInsideBox(pad, canvas.offsetWidth, canvas.offsetHeight);
+      }
+
       const empty = pad.isEmpty();
       setHasStrokes(!empty);
       onChangeRef.current(empty || !canvas ? null : trimmedDataUrl(canvas));
