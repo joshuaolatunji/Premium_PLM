@@ -288,21 +288,19 @@ function DocumentForm({
             placeholder={`Describe the ${DOCUMENT_META[type].name.toLowerCase()}…`}
             disabled={aiMutation.isPending}
             toolbarAction={
-              <button
-                type="button"
-                className="rte-ai-button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={startAi}
-                disabled={!aiAvailable || isBusy}
-                title={
-                  aiAvailable
-                    ? `Write a first draft from the initiative, the BDO's notes and the ${type} Overview`
-                    : "Generate with AI isn't set up yet"
-                }
-              >
-                <Sparkles size={16} aria-hidden="true" />
-                {aiMutation.isPending ? "Generating…" : "Generate with AI"}
-              </button>
+              aiAvailable ? (
+                <button
+                  type="button"
+                  className="rte-ai-button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={startAi}
+                  disabled={isBusy}
+                  title={`Write a first draft from the initiative, the BDO's notes and the ${type} Overview`}
+                >
+                  <Sparkles size={16} aria-hidden="true" />
+                  {aiMutation.isPending ? "Generating…" : "Generate with AI"}
+                </button>
+              ) : undefined
             }
           />
 

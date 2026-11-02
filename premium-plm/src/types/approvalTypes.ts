@@ -62,6 +62,21 @@ export interface WorkflowSummary {
   currentApproverRole: string | null;
 }
 
+// One of the signed-in approver's past decisions.
+export interface ApprovalHistoryItem {
+  workflowId: string;
+  stepId: string;
+  documentId: string | null;
+  documentType: DocumentType | null;
+  documentVersion: number | null;
+  initiativeName: string | null;
+  sequence: number | null;
+  approverRole: string | null;
+  status: "Signed" | "Rejected";
+  decidedAt: string | null;
+  comment: string | null;
+}
+
 // The API's workflow statuses, for filtering list-all-workflows.
 export const API_WORKFLOW_STATUSES = [
   "Draft",

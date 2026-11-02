@@ -75,7 +75,7 @@ function MyApprovals() {
         <DashboardStatCard
           stat={{
             label: "Signed by you",
-            value: history.filter((row) => row.step.status === "Signed").length,
+            value: history.filter((row) => row.status === "Signed").length,
             description: "All time",
             descriptionType: "neutral",
           }}
@@ -83,7 +83,7 @@ function MyApprovals() {
         <DashboardStatCard
           stat={{
             label: "Rejected by you",
-            value: history.filter((row) => row.step.status === "Rejected").length,
+            value: history.filter((row) => row.status === "Rejected").length,
             description: "Sent back to the Product Manager",
             descriptionType: "neutral",
           }}
@@ -178,7 +178,7 @@ function MyApprovals() {
         <div className="dashboard-panel__header">
           <div>
             <h2>Your past decisions</h2>
-            <p>Recorded on this browser until the backend lists them (gaps file M15).</p>
+            <p>Documents you've signed or rejected, most recent first.</p>
           </div>
         </div>
 
@@ -203,27 +203,47 @@ function MyApprovals() {
             </thead>
 
             <tbody>
-              {history.map(({ workflow, step }) => (
-                <tr key={`${workflow.id}:${step.id}`}>
+              {historyQuery.isLoading && (
+                <tr>
+                  <td colSpan={5} className="initiatives-empty">
+                    Loading your past decisions…
+                  </td>
+                </tr>
+              )}
+
+              {historyQuery.isError && (
+                <tr>
+                  <td colSpan={5} className="initiatives-empty initiatives-empty--error">
+                    Couldn't load your past decisions. Try refreshing the page.
+                  </td>
+                </tr>
+              )}
+
+              {history.map((item) => (
+                <tr key={`${item.workflowId}:${item.stepId}`}>
                   <td>
                     <div className="initiative-cell">
-                      <strong>{workflow.documentType} · {documentName(workflow.documentType)}</strong>
-                      <span>Signed as {step.approverRole}</span>
+                      <strong title={documentName(item.documentType)}>
+                        {item.documentType ?? "Document"} · {documentName(item.documentType)}
+                        {item.documentVersion ? ` (v${item.documentVersion})` : ""}
+                      </strong>
+                      {item.approverRole && <span>Signed as {item.approverRole}</span>}
                     </div>
                   </td>
-                  <td>{workflow.initiativeName}</td>
+                  <td>{item.initiativeName ?? "—"}</td>
                   <td>
                     <span
                       className={
-                        step.status === "Signed"
+                        item.status === "Signed"
                           ? "status-badge status-badge--approved"
                           : "status-badge status-badge--overdue"
                       }
+                      title={item.status === "Rejected" && item.comment ? item.comment : undefined}
                     >
-                      {step.status === "Signed" ? "Signed" : "Rejected"}
+                      {item.status}
                     </span>
                   </td>
-                  <td>{formatDate(step.decidedAt)}</td>
+                  <td className="sign-offs_date">{item.decidedAt ? formatDate(item.decidedAt) : "—"}</td>
                   <td className="brd-reviews-actions">
                     <button
                       type="button"
@@ -232,9 +252,9 @@ function MyApprovals() {
                         openPdf(() =>
                           // Signed: the PDF as they signed it and sent it on.
                           // Rejected: the PDF they were asked to sign.
-                          step.status === "Signed"
-                            ? fetchSubmittedPdf(workflow.id)
-                            : fetchPdfToSign({ workflowId: workflow.id, documentId: workflow.documentId, sequence: step.sequence }),
+                          item.status === "Signed"
+                            ? fetchSubmittedPdf(item.workflowId)
+                            : fetchPdfToSign({ workflowId: item.workflowId, documentId: item.documentId, sequence: item.sequence }),
                         )
                       }
                     >
@@ -244,7 +264,7 @@ function MyApprovals() {
                 </tr>
               ))}
 
-              {!historyQuery.isLoading && history.length === 0 && (
+              {!historyQuery.isLoading && !historyQuery.isError && history.length === 0 && (
                 <tr>
                   <td colSpan={5} className="initiatives-empty">
                     You haven't signed or rejected anything yet.

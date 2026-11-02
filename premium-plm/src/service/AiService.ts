@@ -21,10 +21,14 @@ import { DOCUMENT_META } from "../types/documentTypes";
 import type { DocumentOverview, DocumentType } from "../types/documentTypes";
 import { unwrapData, readString, isRecord } from "../utils/apiShape";
 
+// Generate with AI is switched off for now (hidden everywhere, 2026-11-02:
+// the Gemini model kept returning 503). Set to true to bring it back.
+const AI_ENABLED = false;
+
 const AI_BACKEND_AVAILABLE = false;
 
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
-const GEMINI_MODEL = (import.meta.env.VITE_GEMINI_MODEL as string | undefined) || "gemini-2.5-flash";
+const GEMINI_MODEL = (import.meta.env.VITE_GEMINI_MODEL as string | undefined) || "gemini-3.8-flash";
 
 export interface DocumentAiContext {
   type: DocumentType;
@@ -42,7 +46,7 @@ export interface DocumentAiContext {
 }
 
 export function isAiAvailable(): boolean {
-  return AI_BACKEND_AVAILABLE || Boolean(GEMINI_KEY);
+  return AI_ENABLED && (AI_BACKEND_AVAILABLE || Boolean(GEMINI_KEY));
 }
 
 // The sections each document is expected to have.
@@ -186,7 +190,15 @@ async function generateWithGemini(context: DocumentAiContext): Promise<string> {
       throw new Error("The AI service is busy or the free quota is used up. Try again in a minute.");
     }
 
-    throw new Error(result.error?.message || `The AI service returned an error (${response.status}).`);
+    // Google's own wording (model names, links) is for developers; log it
+    // and show a short message instead.
+    console.error("Gemini error:", result.error?.message ?? response.status);
+
+    if (response.status === 404 || /no longer available|not found/i.test(result.error?.message ?? "")) {
+      throw new Error("The AI model this app uses isn't available. Ask the team to update it (VITE_GEMINI_MODEL).");
+    }
+
+    throw new Error(`The AI draft couldn't be written right now (error ${response.status}). Try again shortly.`);
   }
 
   if (result.promptFeedback?.blockReason) {

@@ -228,7 +228,7 @@ function ApprovalWorkflowPanel({ document, initiativeName, canManage }: Approval
 
       {workflow && workflow.status !== "Rejected" && (
         <div className="proposal-section">
-          <ApprovalSignOff steps={workflow.steps} />
+          <ApprovalSignOff workflowId={workflow.id} steps={workflow.steps} />
 
           {workflow.status === "Draft" && canManage && (
             <div className="approval-panel_actions">
@@ -269,11 +269,6 @@ function ApprovalWorkflowPanel({ document, initiativeName, canManage }: Approval
               {pdfError}
             </p>
           )}
-
-          <p className="mock-data-notice">
-            Progress comes from the server. Approvers' names and signatures show only on the browser that set
-            up the sign-off, until the backend returns each step (gaps file M13).
-          </p>
         </div>
       )}
 
