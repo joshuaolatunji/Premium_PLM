@@ -4,6 +4,7 @@
 //   POST api/document-approval-workflows/configure-workflow          PM picks the approvers
 //   POST api/document-approval-workflows/{workflowId}/submit-workflow  PM sends it to the first
 //   GET  api/document-approval-workflows/my-pending-workflow         what's waiting on me
+//   GET  api/document-approval-workflows/list-all-workflows          every workflow, filterable
 //   POST api/document-approval-workflows/{workflowId}/steps/{stepId}/sign-and-approve
 //   POST api/document-approval-workflows/{workflowId}/steps/{stepId}/reject-approval
 //   GET  {documentId}/preview-generated-pdf         1st approver, before signing
@@ -11,11 +12,10 @@
 //   GET  {workflowId}/get-approval-review-pdf       later approvers, before signing
 //   GET  {workflowId}/final-signed-pdf              PM / Group Head, fully signed
 //
-// Missing (simulated in the browser — see the gaps file): reading a
-// document's workflow and its progress (M13), every workflow for oversight
-// (M14) and an approver's past sign-offs (M15). Each workflow set up through
-// this app is recorded locally and kept up to date as people sign, so the
-// PM's progress view and the Executive Director's dashboard have data.
+// Missing (see the gaps file): each step's detail for a workflow (M13) and
+// an approver's past sign-offs (M15). Workflows set up through this app are
+// also recorded locally, so the PM's panel can show approvers' names and
+// signatures; their progress always comes from list-all-workflows.
 
 import { apiClient } from "../apicalls/apiClient";
 import { getCurrentUserId, getToken } from "../apicalls/authStorage";
@@ -26,7 +26,9 @@ import type {
   ApprovalStepStatus,
   ApprovalWorkflow,
   ApproverInput,
+  ApprovalWorkflowStatus,
   PendingApproval,
+  WorkflowSummary,
 } from "../types/approvalTypes";
 import {
   isRecord,
@@ -43,7 +45,8 @@ import type { ApiRecord } from "../utils/apiShape";
 import { listRows, makeLocalId, readRow, simulateLatency, updateRow, writeRow } from "../mocks/localStore";
 import { fetchPdfBlob } from "./PdfService";
 import { initiativeOf, linkToInitiative, recordActivity } from "./ActivityService";
-import { toApiRoleName } from "../utils/text";
+import { getAllUsers } from "./UserService";
+import { formatPersonName, formatRoleName, toApiRoleName } from "../utils/text";
 
 const WORKFLOWS = "approval-workflows";
 
@@ -55,15 +58,15 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+// The API's ApprovalStepStatus: Pending (not their turn yet), AwaitingAction
+// (their turn), Approved, Rejected, Skipped.
 function toStepStatus(value: unknown): ApprovalStepStatus | null {
   const key = statusKey(value);
 
-  if (["pending", "awaiting", "awaitingapproval", "current", "inreview", "inprogress", "active"].includes(key)) {
-    return "Pending";
-  }
-  if (["approved", "signed", "completed", "done"].includes(key)) return "Signed";
-  if (["rejected", "declined"].includes(key)) return "Rejected";
-  if (["waiting", "notstarted", "queued", "draft"].includes(key)) return "Waiting";
+  if (key === "awaitingaction") return "Pending";
+  if (key === "approved") return "Signed";
+  if (key === "rejected") return "Rejected";
+  if (key === "pending" || key === "skipped") return "Waiting";
 
   return null;
 }
@@ -106,47 +109,236 @@ function changeWorkflow(workflowId: string, change: (workflow: ApprovalWorkflow)
   updateRow<ApprovalWorkflow>(WORKFLOWS, workflowId, change);
 }
 
-// The newest workflow for a document (a rejected one is replaced when the PM
-// sets it up again).
-function newestWorkflowFor(documentId: string): ApprovalWorkflow | null {
-  const matches = listRows<ApprovalWorkflow>(WORKFLOWS)
-    .filter((workflow) => workflow.documentId === documentId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+// ---------------------------------------------------------------------------
+// Workflow list (list-all-workflows)
 
-  return matches[0] ?? null;
+function toWorkflowStatus(value: unknown): ApprovalWorkflowStatus {
+  switch (statusKey(value)) {
+    case "approved":
+      return "Approved";
+    case "rejected":
+    case "cancelled":
+      return "Rejected";
+    case "draft":
+    case "preparingsubmission":
+      return "Draft";
+    default:
+      // PendingApproval, InProgress
+      return "InProgress";
+  }
 }
 
-export async function getWorkflowForDocument(documentId: string): Promise<ApprovalWorkflow | null> {
-  return simulateLatency(newestWorkflowFor(documentId));
-}
+function toWorkflowSummary(record: ApiRecord): WorkflowSummary | null {
+  const id = readString(record, "workflowId", "id");
+  const documentId = readString(record, "documentProductId");
 
-// Where a document's sign-off stands, or null if it hasn't been sent for
-// sign-off (or the sign-off was rejected).
-export function localSignOffFor(documentId: string): DocumentSignOff | null {
-  const workflow = newestWorkflowFor(documentId);
-
-  if (!workflow || (workflow.status !== "InProgress" && workflow.status !== "Approved")) {
+  if (!id || !documentId) {
     return null;
   }
 
-  const current = workflow.status === "InProgress" ? workflow.steps.find((step) => step.status === "Pending") : undefined;
-
   return {
-    complete: workflow.status === "Approved",
-    approverName: current?.approverName ?? null,
-    approverRole: current?.approverRole ?? null,
+    id,
+    documentId,
+    documentType: toDocumentType(record.documentType),
+    initiativeId: readString(record, "productInitiativeId") ?? "",
+    initiativeName: readString(record, "initiativeName"),
+    status: toWorkflowStatus(record.status),
+    createdByUserId: readString(record, "projectManagerId") ?? "",
+    createdAt: readString(record, "createdAt") ?? "",
+    submittedAt: readString(record, "submittedAt"),
+    totalSteps: readNumber(record, "totalSteps") ?? 0,
+    signedSteps: readNumber(record, "approvedSteps") ?? 0,
+    currentSequence: readNumber(record, "currentSequence"),
+    currentApproverUserId: readString(record, "currentApproverUserId"),
+    currentApproverRole: readString(record, "currentApproverRole"),
   };
 }
 
-export async function getWorkflowsForInitiative(initiativeId: string): Promise<ApprovalWorkflow[]> {
-  return simulateLatency(listRows<ApprovalWorkflow>(WORKFLOWS).filter((workflow) => workflow.initiativeId === initiativeId));
+// The same list asked for twice on one page (a document's status and its
+// sign-off panel) is requested once.
+const recentLists = new Map<string, { at: number; result: Promise<WorkflowSummary[]> }>();
+const LIST_REUSE_MS = 5000;
+
+// Every workflow matching the filters, newest first (all pages).
+export function listWorkflows(
+  filters: { initiativeId?: string; documentType?: DocumentType } = {},
+): Promise<WorkflowSummary[]> {
+  const key = `${filters.initiativeId ?? ""}:${filters.documentType ?? ""}`;
+  const recent = recentLists.get(key);
+
+  if (recent && Date.now() - recent.at < LIST_REUSE_MS) {
+    return recent.result;
+  }
+
+  const result = fetchWorkflowList(filters);
+  recentLists.set(key, { at: Date.now(), result });
+  result.catch(() => recentLists.delete(key));
+  return result;
 }
 
-// M14 — every workflow, newest first, for the Executive Director's oversight.
-export async function getAllWorkflows(): Promise<ApprovalWorkflow[]> {
-  return simulateLatency(
-    listRows<ApprovalWorkflow>(WORKFLOWS).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+async function fetchWorkflowList(filters: { initiativeId?: string; documentType?: DocumentType }): Promise<WorkflowSummary[]> {
+  const workflows: WorkflowSummary[] = [];
+
+  for (let page = 1; page <= 50; page += 1) {
+    const params = new URLSearchParams({ PageNumber: String(page), PageSize: "100" });
+
+    if (filters.initiativeId) params.set("InitiativeId", filters.initiativeId);
+    if (filters.documentType) params.set("DocumentType", filters.documentType);
+
+    const body = await apiClient<unknown>(`api/document-approval-workflows/list-all-workflows?${params}`, {
+      method: "GET",
+      ...auth(),
+    });
+    const data = unwrapData(body);
+    const rows = isRecord(data) ? (readArray(data, "workflows", "items") ?? []) : [];
+
+    workflows.push(...rows.map(toWorkflowSummary).filter((row): row is WorkflowSummary => row !== null));
+
+    if (!isRecord(data) || data.hasNextPage !== true) {
+      break;
+    }
+  }
+
+  return workflows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+// User id → full name, read once per session. Empty for roles the API
+// refuses the user list to (gaps file R7); they see the approver's title.
+let userNames: Promise<Map<string, string>> | null = null;
+
+function approverNames(): Promise<Map<string, string>> {
+  userNames ??= getAllUsers()
+    .then((users) => new Map(users.map((user) => [user.userId, formatPersonName(user)])))
+    .catch(() => {
+      userNames = null;
+      return new Map<string, string>();
+    });
+
+  return userNames;
+}
+
+// The full name of the approver whose turn it is, if known.
+async function currentApproverName(summary: WorkflowSummary): Promise<string | null> {
+  if (!summary.currentApproverUserId) {
+    return null;
+  }
+
+  const fromList = (await approverNames()).get(summary.currentApproverUserId);
+  const fromLocal = getLocalWorkflow(summary.id)?.steps.find(
+    (step) => step.approverUserId === summary.currentApproverUserId,
+  )?.approverName;
+
+  return fromList ?? fromLocal ?? null;
+}
+
+// Where each document's newest sign-off stands, by document id, for the
+// "With Naomi Okafor (Risk Officer)" status. One request per initiative.
+// Without an initiative, covers every initiative in one list request.
+export async function getSignOffs(
+  initiativeId?: string,
+  documentType?: DocumentType,
+): Promise<Map<string, DocumentSignOff>> {
+  const workflows = await listWorkflows({ initiativeId, documentType });
+  const newest = new Map<string, WorkflowSummary>();
+
+  workflows.forEach((workflow) => {
+    if (!newest.has(workflow.documentId)) {
+      newest.set(workflow.documentId, workflow);
+    }
+  });
+
+  const entries = await Promise.all(
+    [...newest.values()]
+      .filter((workflow) => workflow.status === "InProgress" || workflow.status === "Approved")
+      .map(async (workflow): Promise<[string, DocumentSignOff]> => [
+        workflow.documentId,
+        {
+          complete: workflow.status === "Approved",
+          approverName: workflow.status === "InProgress" ? await currentApproverName(workflow) : null,
+          approverRole:
+            workflow.status === "InProgress" && workflow.currentApproverRole
+              ? formatRoleName(workflow.currentApproverRole)
+              : null,
+        },
+      ]),
   );
+
+  return new Map(entries);
+}
+
+// A step's status from the workflow's progress: everyone before the
+// current approver has signed.
+function stepStatusFrom(
+  summary: WorkflowSummary,
+  sequence: number,
+  localStatus: ApprovalStepStatus | undefined,
+): ApprovalStepStatus {
+  if (summary.status === "Approved" || sequence <= summary.signedSteps) {
+    return "Signed";
+  }
+
+  if (summary.status === "Rejected") {
+    return localStatus === "Rejected" || sequence === summary.signedSteps + 1 ? "Rejected" : "Waiting";
+  }
+
+  return summary.status === "InProgress" && sequence === (summary.currentSequence ?? summary.signedSteps + 1)
+    ? "Pending"
+    : "Waiting";
+}
+
+// The document's newest workflow. Its progress comes from the API; the
+// approvers' names and signatures come from the local record when this
+// browser set it up (each step's detail isn't available, gaps file M13).
+export async function getWorkflowForDocument(document: ProductDocument): Promise<ApprovalWorkflow | null> {
+  const summary = (await listWorkflows({ initiativeId: document.initiativeId, documentType: document.type })).find(
+    (workflow) => workflow.documentId === document.id,
+  );
+
+  if (!summary) {
+    return null;
+  }
+
+  const local = getLocalWorkflow(summary.id);
+  const name = await currentApproverName(summary);
+  const total = summary.totalSteps || local?.steps.length || 0;
+
+  const steps: ApprovalStep[] = Array.from({ length: total }, (_, index) => {
+    const sequence = index + 1;
+    const localStep = local?.steps.find((step) => step.sequence === sequence);
+    const isCurrent = sequence === summary.currentSequence;
+
+    return {
+      id: localStep?.id ?? `${summary.id}:${sequence}`,
+      sequence,
+      approverUserId: localStep?.approverUserId ?? (isCurrent ? (summary.currentApproverUserId ?? "") : ""),
+      approverName: localStep?.approverName ?? (isCurrent && name ? name : `Approver ${sequence}`),
+      approverRole:
+        localStep?.approverRole ??
+        (isCurrent && summary.currentApproverRole ? formatRoleName(summary.currentApproverRole) : ""),
+      status: stepStatusFrom(summary, sequence, localStep?.status),
+      decidedAt: localStep?.decidedAt ?? null,
+      comment: localStep?.comment ?? null,
+      signatureImage: localStep?.signatureImage ?? null,
+    };
+  });
+
+  return {
+    id: summary.id,
+    documentId: summary.documentId,
+    documentType: summary.documentType ?? document.type,
+    initiativeId: summary.initiativeId || document.initiativeId,
+    initiativeName: summary.initiativeName ?? local?.initiativeName ?? "",
+    status: summary.status,
+    steps,
+    createdByUserId: summary.createdByUserId,
+    createdAt: summary.createdAt,
+    submittedAt: summary.submittedAt,
+  };
+}
+
+// Every workflow, newest first, for the Executive Director's oversight.
+export function getAllWorkflows(): Promise<WorkflowSummary[]> {
+  return listWorkflows();
 }
 
 export function getLocalWorkflow(workflowId: string): ApprovalWorkflow | null {
@@ -236,6 +428,7 @@ export async function setUpWorkflow(
 // Sends a configured workflow to its first approver. Separate so it can be
 // retried if configuring worked but sending didn't.
 export async function sendWorkflow(workflowId: string): Promise<void> {
+  recentLists.clear();
   await apiClient<unknown>(`api/document-approval-workflows/${workflowId}/submit-workflow`, {
     method: "POST",
     ...auth(),
@@ -361,6 +554,7 @@ export async function signAndApprove(
     ...auth(),
     body: JSON.stringify({ signatureImageBase64: toBase64(signatureDataUrl), comment: comment || null }),
   });
+  recentLists.clear();
 
   changeWorkflow(workflowId, (workflow) => {
     const signedAt = nowIso();
@@ -393,6 +587,7 @@ export async function rejectApproval(workflowId: string, stepId: string, comment
     ...auth(),
     body: JSON.stringify({ comment }),
   });
+  recentLists.clear();
 
   changeWorkflow(workflowId, (workflow) => ({
     ...workflow,

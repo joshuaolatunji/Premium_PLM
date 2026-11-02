@@ -58,15 +58,6 @@ export function getLandingRouteForRoles(roles: string[]): string {
   return workspaceFor(roles)?.path ?? APPROVER_PATH;
 }
 
-// Developers and Lead Engineers are never on a document sign-off workflow:
-// developers only do the work, and the Lead Engineer's only approval is of
-// that work. Everyone else can be picked by a Product Manager to sign.
-const NON_SIGNING_ROLES = ["Developer", "LeadEngineer"];
-
-export function canSignOff(roles: string[]): boolean {
-  return !normalizeRoles(roles).some((role) => NON_SIGNING_ROLES.includes(role));
-}
-
 // Whether a user's roles include `role`, counting a renamed role (see
 // ROLE_ALIASES) as the same role.
 export function hasRole(roles: string[], role: string): boolean {

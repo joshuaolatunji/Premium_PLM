@@ -402,7 +402,7 @@ export async function addDiscoveryWorkflowLink(
 ): Promise<void> {
   const token = getToken();
 
-  await apiClient<unknown>(`api/product-discovery/${discoveryId}/add-workflow-links`, {
+  await apiClient<unknown>(`api/product-discovery/${discoveryId}/add-workflow-link`, {
     method: "POST",
     token: token ?? undefined,
     body: JSON.stringify({ ...payload, url: withHttpScheme(payload.url) }),

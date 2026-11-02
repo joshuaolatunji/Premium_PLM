@@ -24,7 +24,6 @@ import DeveloperTicketWorkspace from "../pages/developer/DeveloperTicketWorkspac
 import ExecutiveDashboard from "../pages/executive/ExecutiveDashboard";
 import MyApprovals from "../pages/approvals/MyApprovals";
 import ApprovalSign from "../pages/approvals/ApprovalSign";
-import SignOffOnly from "../pages/approvals/SignOffOnly";
 import AdminUsers from "../pages/admin/AdminUsers";
 import AdminCategories from "../pages/admin/AdminCategories";
 import AuditTrail from "../pages/audit/AuditTrail";
@@ -169,11 +168,11 @@ const router = createBrowserRouter([
             // Sign-off: anyone a Product Manager picks as an approver.
             {
                 path: "approvals",
-                element: <SignOffOnly><MyApprovals /></SignOffOnly>,
+                element: <MyApprovals />,
             },
             {
                 path: "approvals/:workflowId/:stepId",
-                element: <SignOffOnly><ApprovalSign /></SignOffOnly>,
+                element: <ApprovalSign />,
             },
             {
                 path: "admin/users",

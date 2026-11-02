@@ -16,7 +16,6 @@ import type { ApprovalWorkflow, ApproverInput } from "../../types/approvalTypes"
 import type { ProductDocument } from "../../types/documentTypes";
 import { documentsQueryKey } from "../../utils/documentStatus";
 import { isUserActive } from "../../utils/userStatus";
-import { canSignOff } from "../../utils/roleRouting";
 import { formatPersonName, formatRoleName } from "../../utils/text";
 import { useDraftState } from "../../utils/useDraftState";
 import DraftRestoredNotice from "../common/DraftRestoredNotice";
@@ -76,7 +75,7 @@ function ApprovalWorkflowPanel({ document, initiativeName, canManage }: Approval
 
   const workflowQuery = useQuery({
     queryKey: approvalKeys.forDocument(document.id),
-    queryFn: () => getWorkflowForDocument(document.id),
+    queryFn: () => getWorkflowForDocument(document),
   });
 
   const usersQuery = useQuery({
@@ -85,8 +84,8 @@ function ApprovalWorkflowPanel({ document, initiativeName, canManage }: Approval
     enabled: canManage,
   });
 
-  // Only people who can be on a sign-off (not Developers or Lead Engineers).
-  const directory = (usersQuery.data ?? []).filter((user) => isUserActive(user) && canSignOff(user.role));
+  // Anyone active can be picked to sign, whatever their role.
+  const directory = (usersQuery.data ?? []).filter(isUserActive);
   const sortedDirectory = sortByName(directory);
   // The API refuses the user list to some roles (gaps file R7 / M3).
   const directoryUnavailable = usersQuery.isError || (usersQuery.isSuccess && isUserListForbidden());
@@ -272,8 +271,8 @@ function ApprovalWorkflowPanel({ document, initiativeName, canManage }: Approval
           )}
 
           <p className="mock-data-notice">
-            Signing progress shown here is recorded on this browser until the backend can return a
-            document's workflow (gaps file M13). The PDFs come from the server.
+            Progress comes from the server. Approvers' names and signatures show only on the browser that set
+            up the sign-off, until the backend returns each step (gaps file M13).
           </p>
         </div>
       )}

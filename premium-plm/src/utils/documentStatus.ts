@@ -1,6 +1,7 @@
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { getInitiativeDocuments } from "../service/DocumentService";
+import { getSignOffs } from "../service/ApprovalWorkflowService";
 import { getDiscoveryByInitiativeId } from "../service/ProductDiscoveryService";
 import { DOCUMENT_TYPES } from "../types/documentTypes";
 import type {
@@ -17,6 +18,9 @@ export const EMPTY_DOCUMENTS: InitiativeDocuments = { PID: null, FRD: null, BRD:
 export function documentsQueryKey(initiativeId: string | null | undefined) {
   return ["product-documents", initiativeId];
 }
+
+// What the tabs know about each document; one left out shows no status.
+export type KnownDocuments = Partial<Record<DocumentType, ProductDocument | null>>;
 
 export function documentStatusLabel(status: DocumentStatus | null | undefined): string {
   switch (status) {
@@ -61,7 +65,7 @@ export function documentStatusText(document: ProductDocument | null | undefined)
 
   if (signOff && !signOff.complete) {
     if (!signOff.approverName) {
-      return "Out for sign-off";
+      return signOff.approverRole ? `With ${signOff.approverRole}` : "Out for sign-off";
     }
 
     return signOff.approverRole ? `With ${signOff.approverName} (${signOff.approverRole})` : `With ${signOff.approverName}`;
@@ -116,16 +120,48 @@ export function useInitiativeDocuments(initiativeIds: string[]) {
     })),
   });
 
+  // The documents without the approvers' names, so the list shows as soon as
+  // the documents arrive. Its own key (under documentsQueryKey, so the same
+  // invalidations refresh it) keeps it apart from the document pages' copy.
   const queries = useQueries({
     queries: initiativeIds.map((initiativeId, index) => ({
-      queryKey: documentsQueryKey(initiativeId),
-      queryFn: () => getInitiativeDocuments(initiativeId),
+      queryKey: [...documentsQueryKey(initiativeId), "list"],
+      queryFn: () => getInitiativeDocuments(initiativeId, { withApprover: false }),
       enabled: Boolean(initiativeId) && discoveryQueries[index]?.data?.status === "Approved",
     })),
   });
 
+  // Then, only if a document is out for sign-off, one request for who has
+  // each one, across every initiative.
+  const anyInSignOff = queries.some((query) =>
+    DOCUMENT_TYPES.some((type) => query.data?.[type]?.signOff && !query.data[type]?.signOff?.complete),
+  );
+  const signOffsQuery = useQuery({
+    queryKey: ["approval-workflows", "sign-offs"],
+    queryFn: () => getSignOffs(),
+    enabled: anyInSignOff,
+    retry: false,
+  });
+
+  function documentsFor(index: number): InitiativeDocuments {
+    const documents = queries[index]?.data ?? EMPTY_DOCUMENTS;
+    const signOffs = signOffsQuery.data;
+
+    if (!signOffs) {
+      return documents;
+    }
+
+    return Object.fromEntries(
+      DOCUMENT_TYPES.map((type) => {
+        const document = documents[type];
+        const signOff = document?.signOff ? signOffs.get(document.id) : undefined;
+        return [type, document && signOff ? { ...document, signOff } : document];
+      }),
+    ) as InitiativeDocuments;
+  }
+
   return {
-    documentsFor: (index: number): InitiativeDocuments => queries[index]?.data ?? EMPTY_DOCUMENTS,
+    documentsFor,
     // The BDO documentation's status ("Approved", "Rejected"…), or "" before it exists.
     discoveryStatusFor: (index: number): string => discoveryQueries[index]?.data?.status ?? "",
     isLoading:

@@ -4496,6 +4496,15 @@ select:disabled {
   border-color: var(--color-border-strong);
 }
 
+/* Status only, not a link (the approval page). */
+.document-tab--static {
+  cursor: default;
+}
+
+.document-tab--static:not(.document-tab--active):hover {
+  border-color: var(--color-border);
+}
+
 .document-tab--active {
   border-color: var(--premium-red);
   box-shadow: 0 0 0 1px var(--premium-red);

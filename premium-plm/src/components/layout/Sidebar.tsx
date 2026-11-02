@@ -59,9 +59,8 @@ function navLinkClass({ isActive }: { isActive: boolean }) {
   return isActive ? "sidebar_link sidebar_link--active" : "sidebar_link";
 }
 
-// Everyone who can be picked by a Product Manager to sign off a document
-// (all roles except Developer and Lead Engineer — see canSignOff) gets a
-// way to the documents waiting for their signature.
+// Anyone can be picked by a Product Manager to sign off a document, so
+// every role gets a way to the documents waiting for their signature.
 function ApprovalsLink() {
   return (
     <NavLink to="/dashboard/approvals" className={navLinkClass}>
@@ -169,6 +168,8 @@ function SuperAdminNav() {
                 <Tags size={16} />
                 <span>Categories</span>
             </NavLink>
+
+            <ApprovalsLink />
         </>
     );
 }
@@ -247,6 +248,8 @@ function LeadEngineerNav() {
                 <span>Tickets</span>
             </NavLink>
 
+            <ApprovalsLink />
+
             <NavLink to="/dashboard/notifications" className={navLinkClass}>
                 <Bell size={16} />
                 <span>Notifications</span>
@@ -266,6 +269,8 @@ function DeveloperNav() {
                 <Code2 size={16} />
                 <span>Tasks</span>
             </NavLink>
+
+            <ApprovalsLink />
 
             <NavLink to="/dashboard/notifications" className={navLinkClass}>
                 <Bell size={16} />

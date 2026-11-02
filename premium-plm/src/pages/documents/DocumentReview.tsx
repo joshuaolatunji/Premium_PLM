@@ -46,6 +46,7 @@ function DocumentReview({ reviewer }: DocumentReviewProps) {
     enabled: Boolean(id),
   });
 
+  // All four at once, so every document's stage shows on opening.
   const documentsQuery = useQuery({
     queryKey: documentsQueryKey(id),
     queryFn: () => getInitiativeDocuments(initiativeId),

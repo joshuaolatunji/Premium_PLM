@@ -10,22 +10,22 @@ import {
   rejectApproval,
   signAndApprove,
 } from "../../service/ApprovalWorkflowService";
-import { getInitiativeDocuments } from "../../service/DocumentService";
 import type { PendingApproval } from "../../types/approvalTypes";
 import { openPdfInTab } from "../../service/PdfService";
 import { DOCUMENT_META } from "../../types/documentTypes";
 import { documentsQueryKey } from "../../utils/documentStatus";
+import { getInitiativeDocuments } from "../../service/DocumentService";
+import DocumentTabs from "../../components/documents/DocumentTabs";
 import { clearDraft, useDraftState } from "../../utils/useDraftState";
 import { capitalize } from "../../utils/text";
 import { getStoredUser } from "../../apicalls/authStorage";
 import BackLink from "../../components/common/BackLink";
 import DraftRestoredNotice from "../../components/common/DraftRestoredNotice";
-import DocumentReadOnlyView from "../../components/documents/DocumentReadOnlyView";
 import PdfCoverPreview from "../../components/documents/PdfCoverPreview";
 import SignaturePad from "../../components/approvals/SignaturePad";
 import DecisionModal from "../../components/review/DecisionModal";
 
-// An approver reads the document, then signs it (drawn or uploaded
+// An approver reads the document as a PDF, then signs it (drawn or uploaded
 // signature) or rejects it with a reason. Signing passes it to the next
 // approver; the backend adds the signature beside their name on the PDF.
 // Approvers see only their own place in the sign-off, never the others.
@@ -59,16 +59,16 @@ function ApprovalSign() {
     staleTime: 5 * 60_000,
   });
 
+  // All four of the initiative's documents, so the approver sees each one's
+  // stage. Some approver roles may not be allowed to read documents; the
+  // strip is then left out and the PDF still works.
   const documentsQuery = useQuery({
     queryKey: documentsQueryKey(item?.initiativeId),
     queryFn: () => getInitiativeDocuments(item?.initiativeId as string),
     enabled: Boolean(item?.initiativeId),
-    // Approvers outside the delivery team may not be allowed to read
-    // documents directly; the PDF still works, so don't retry.
     retry: false,
   });
 
-  const document = item?.documentType ? (documentsQuery.data?.[item.documentType] ?? null) : null;
   const decisionDraftKey = `decision:approval:${stepId}`;
 
   async function finish() {
@@ -174,6 +174,8 @@ function ApprovalSign() {
         </p>
       )}
 
+      {documentsQuery.data && <DocumentTabs documents={documentsQuery.data} current={item.documentType} />}
+
       <PdfCoverPreview
         blob={pdfQuery.data}
         isLoading={pdfQuery.isLoading}
@@ -182,8 +184,6 @@ function ApprovalSign() {
         hint="Open the PDF to read the document before signing."
         onOpen={openPdf}
       />
-
-      {document && <DocumentReadOnlyView document={document} initiativeName={item.initiativeName ?? undefined} />}
 
       <section className="dashboard-panel initiative-detail-panel">
         <div className="dashboard-panel__header">

@@ -9,7 +9,7 @@ import DashboardStatCard from "../../dashboardcomponents/DashboardStatCard";
 import ApprovalQueue from "../../dashboardcomponents/ApprovalQueue";
 import type { ApprovalQueueItem } from "../../types/dashboardTypes";
 import { DOCUMENT_META, DOCUMENT_TYPES } from "../../types/documentTypes";
-import type { ApprovalWorkflow } from "../../types/approvalTypes";
+import type { WorkflowSummary } from "../../types/approvalTypes";
 import {
   currentStageFor,
   deriveStatus,
@@ -43,7 +43,7 @@ function ExecutiveDashboard() {
     queryFn: getMyPendingApprovals,
   });
 
-  // M14 — simulated from the workflows recorded on this browser.
+  // Every sign-off workflow (list-all-workflows).
   const workflowsQuery = useQuery({
     queryKey: approvalKeys.all,
     queryFn: getAllWorkflows,
@@ -59,11 +59,11 @@ function ExecutiveDashboard() {
     const documents = documentsFor(index);
     const initiativeWorkflows = workflows.filter((workflow) => workflow.initiativeId === initiative.id);
     // The newest workflow per document type.
-    const latest = new Map<string, ApprovalWorkflow>();
+    const latest = new Map<string, WorkflowSummary>();
 
     initiativeWorkflows.forEach((workflow) => {
-      if (!latest.has(workflow.documentType)) {
-        latest.set(workflow.documentType, workflow);
+      if (!latest.has(workflow.documentId)) {
+        latest.set(workflow.documentId, workflow);
       }
     });
 
@@ -270,10 +270,6 @@ function ExecutiveDashboard() {
           </table>
         </div>
 
-        <p className="mock-data-notice">
-          "Signed off" counts the sign-offs recorded on this browser until the backend can list workflows
-          (gaps file M14).
-        </p>
       </section>
     </div>
   );

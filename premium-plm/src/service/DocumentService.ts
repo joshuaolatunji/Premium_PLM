@@ -17,7 +17,7 @@ import { apiClient, ApiError } from "../apicalls/apiClient";
 import { getToken } from "../apicalls/authStorage";
 import { fetchPdfBlob } from "./PdfService";
 import { linkToInitiative, recordActivity } from "./ActivityService";
-import { localSignOffFor } from "./ApprovalWorkflowService";
+import { getSignOffs } from "./ApprovalWorkflowService";
 
 // Where the Group Head opens a document from an activity entry.
 function documentLink(initiativeId: string, type: DocumentType) {
@@ -27,6 +27,7 @@ import type { ApiResponse } from "../types/apiTypes";
 import { DOCUMENT_TYPES } from "../types/documentTypes";
 import type {
   DocumentReviewer,
+  DocumentSignOff,
   DocumentStatus,
   DocumentType,
   InitiativeDocuments,
@@ -64,13 +65,20 @@ const API_STATUSES = [
   "RevisionInProgress",
   "Approved",
   "Cancelled",
-  // Approved by the Group Head and out for sign-off (gaps file R26).
+  // Approved by the Group Head and out for sign-off.
   "PendingWorkflowApproval",
+  // Out for sign-off, and at least one approver has signed (R28).
+  "PartiallyWorkflowApproved",
 ] as const;
 
 type ApiStatus = (typeof API_STATUSES)[number];
 
 const API_DOCUMENT_TYPES: DocumentType[] = ["BRD", "FRD", "PID", "SWR"];
+
+// Both sign-off statuses: the document is with a sign-off approver.
+function isInSignOff(status: ApiStatus): boolean {
+  return status === "PendingWorkflowApproval" || status === "PartiallyWorkflowApproved";
+}
 
 function readApiStatus(status: string | number): ApiStatus {
   if (typeof status === "number") {
@@ -84,7 +92,8 @@ function readApiStatus(status: string | number): ApiStatus {
 // API status → the app's status:
 //   PendingApproval    — with the BDO (first review)
 //   PartiallyApproved  — BDO approved it; with the Group Head
-//   PendingWorkflowApproval — Group Head approved it; out for sign-off
+//   PendingWorkflowApproval / PartiallyWorkflowApproved — Group Head approved
+//     it; out for sign-off (before / after the first approver signs)
 //   ChangesRequested / RevisionInProgress — returned to the PM to revise
 function toAppStatus(status: ApiStatus): DocumentStatus {
   switch (status) {
@@ -104,23 +113,16 @@ function toAppStatus(status: ApiStatus): DocumentStatus {
   }
 }
 
-function toAppDocument(api: ApiProductDocument): ProductDocument {
+// `signOff` says who has the document while it's out for sign-off; it comes
+// from the workflow list (see withSignOffs).
+function toAppDocument(api: ApiProductDocument, signOff: DocumentSignOff | null = null): ProductDocument {
   // So a sign-off or upload on this document can be linked to its initiative.
   linkToInitiative("document", api.id, api.productInitiativeId);
   const apiStatus = readApiStatus(api.status);
-  // Out for sign-off, the API says PendingWorkflowApproval. Until that's
-  // live it says PendingApproval, the same as "with the BDO" (gaps file
-  // R26), so the app's sign-off record tells the two apart. Who has it now
-  // comes from that record too (M13).
-  const localSignOff = localSignOffFor(api.id);
-  const signOff =
-    apiStatus === "PendingWorkflowApproval"
-      ? (localSignOff ?? { complete: false, approverName: null, approverRole: null })
-      : localSignOff;
-  const status =
-    apiStatus === "PendingWorkflowApproval" || (localSignOff && apiStatus === "PendingApproval")
-      ? "Approved"
-      : toAppStatus(apiStatus);
+  // Out for sign-off (either sign-off status) counts as approved: the Group
+  // Head has approved it, and the sign-off says who has it now.
+  const inSignOff = isInSignOff(apiStatus);
+  const status = inSignOff ? "Approved" : toAppStatus(apiStatus);
   const type =
     typeof api.documentType === "number" ? API_DOCUMENT_TYPES[api.documentType] : api.documentType;
 
@@ -154,7 +156,7 @@ function toAppDocument(api: ApiProductDocument): ProductDocument {
       status === "Rejected" && api.commentReview
         ? { reviewer: null, approved: false, comment: api.commentReview, decidedAt: api.updatedAt ?? api.createdAt }
         : null,
-    signOff: status === "Approved" ? signOff : null,
+    signOff: inSignOff ? (signOff ?? { complete: false, approverName: null, approverRole: null }) : null,
   };
 }
 
@@ -202,11 +204,41 @@ async function requireApiDocument(initiativeId: string, type: DocumentType): Pro
 
 // All four documents for an initiative (null where one hasn't been started),
 // fetched in parallel.
-export async function getInitiativeDocuments(initiativeId: string): Promise<InitiativeDocuments> {
+// One document of an initiative, or null if it hasn't been started. Pages
+// Who has each document that's out for sign-off. Only asked when one is, in
+// a single workflow-list request; if it fails, the status just reads "Out for
+// sign-off".
+async function withSignOffs(
+  initiativeId: string,
+  records: (ApiProductDocument | null)[],
+): Promise<Map<string, DocumentSignOff>> {
+  if (!records.some((record) => record && isInSignOff(readApiStatus(record.status)))) {
+    return new Map();
+  }
+
+  try {
+    return await getSignOffs(initiativeId);
+  } catch (error) {
+    console.error(error);
+    return new Map();
+  }
+}
+
+// `withApprover: false` skips looking up who has a document out for sign-off
+// (its status then reads "Out for sign-off"). Lists of many initiatives use
+// that and add the names afterwards, so they aren't held up.
+export async function getInitiativeDocuments(
+  initiativeId: string,
+  { withApprover = true }: { withApprover?: boolean } = {},
+): Promise<InitiativeDocuments> {
   const records = await Promise.all(DOCUMENT_TYPES.map((type) => fetchApiDocument(initiativeId, type)));
+  const signOffs = withApprover ? await withSignOffs(initiativeId, records) : new Map<string, DocumentSignOff>();
 
   return Object.fromEntries(
-    DOCUMENT_TYPES.map((type, index) => [type, records[index] ? toAppDocument(records[index]!) : null]),
+    DOCUMENT_TYPES.map((type, index) => {
+      const record = records[index];
+      return [type, record ? toAppDocument(record, signOffs.get(record.id)) : null];
+    }),
   ) as InitiativeDocuments;
 }
 

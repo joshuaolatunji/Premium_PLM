@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { getInitiativeDocuments } from "../../service/DocumentService";
 import {
   getDiscoveryAttachments,
   getDiscoveryByInitiativeId,
@@ -9,7 +8,6 @@ import {
   openDiscoveryAttachment,
 } from "../../service/ProductDiscoveryService";
 import { ApiError } from "../../apicalls/apiClient";
-import { documentsQueryKey, EMPTY_DOCUMENTS } from "../../utils/documentStatus";
 import DocumentsViewer from "../documents/DocumentsViewer";
 
 interface InitiativeContextProps {
@@ -26,14 +24,6 @@ function InitiativeContext({ initiativeId, initiativeName }: InitiativeContextPr
   const discoveryQuery = useQuery({
     queryKey: ["product-discovery", initiativeId],
     queryFn: () => getDiscoveryByInitiativeId(initiativeId),
-  });
-
-  const documentsQuery = useQuery({
-    queryKey: documentsQueryKey(initiativeId),
-    queryFn: () => getInitiativeDocuments(initiativeId),
-    // Documents can only exist once the BDO's documentation is approved —
-    // asking earlier would only return 404s.
-    enabled: discoveryQuery.data?.status === "Approved",
   });
 
   const discoveryId = discoveryQuery.data?.id ?? null;
@@ -73,7 +63,12 @@ function InitiativeContext({ initiativeId, initiativeName }: InitiativeContextPr
 
   return (
     <>
-      <DocumentsViewer documents={documentsQuery.data ?? EMPTY_DOCUMENTS} initiativeName={initiativeName} />
+      <DocumentsViewer
+        initiativeId={initiativeId}
+        initiativeName={initiativeName}
+        // Documents can only exist once the BDO's documentation is approved.
+        enabled={discoveryQuery.data?.status === "Approved"}
+      />
 
       <section className="dashboard-panel initiative-detail-panel">
         <div className="dashboard-panel__header">

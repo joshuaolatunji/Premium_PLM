@@ -479,11 +479,13 @@ function DocumentEditor() {
     enabled: Boolean(id),
   });
 
+  // All four documents at once, so the PM sees every document's stage on
+  // opening (the one exception to loading only the document being worked
+  // on). Documents can only exist once the BDO's documentation is approved —
+  // asking earlier would only return 404s.
   const documentsQuery = useQuery({
     queryKey: documentsQueryKey(id),
     queryFn: () => getInitiativeDocuments(initiativeId),
-    // Documents can only exist once the BDO's documentation is approved —
-    // asking earlier would only return 404s.
     enabled: Boolean(id) && discoveryQuery.data?.status === "Approved",
   });
 

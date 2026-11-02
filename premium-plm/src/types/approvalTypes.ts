@@ -38,6 +38,25 @@ export interface ApprovalWorkflow {
   submittedAt: string | null;
 }
 
+// One workflow from list-all-workflows: where it stands, without the steps.
+export interface WorkflowSummary {
+  id: string;
+  documentId: string;
+  documentType: DocumentType | null;
+  initiativeId: string;
+  initiativeName: string | null;
+  status: ApprovalWorkflowStatus;
+  createdByUserId: string;
+  createdAt: string;
+  submittedAt: string | null;
+  totalSteps: number;
+  signedSteps: number;
+  // The approver whose turn it is, while it's in progress.
+  currentSequence: number | null;
+  currentApproverUserId: string | null;
+  currentApproverRole: string | null;
+}
+
 // One document waiting for the signed-in approver.
 export interface PendingApproval {
   workflowId: string;

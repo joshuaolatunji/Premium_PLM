@@ -1,20 +1,33 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+
+import { getInitiativeDocuments } from "../../service/DocumentService";
 
 import { DOCUMENT_META, DOCUMENT_TYPES } from "../../types/documentTypes";
-import type { DocumentType, InitiativeDocuments } from "../../types/documentTypes";
-import { documentStatusClass, documentStatusText } from "../../utils/documentStatus";
+import type { DocumentType } from "../../types/documentTypes";
+import { documentStatusClass, documentStatusText, documentsQueryKey, EMPTY_DOCUMENTS } from "../../utils/documentStatus";
 import DocumentReadOnlyView from "./DocumentReadOnlyView";
 
 interface DocumentsViewerProps {
-  documents: InitiativeDocuments;
+  initiativeId: string;
   initiativeName: string;
+  // False until documents can exist (the BDO's documentation is approved).
+  enabled: boolean;
 }
 
 // Read-only PID / FRD / BRD / SWR switcher for people who only read the
-// documents (the engineers' ticket workspaces). Opens on the BRD.
-function DocumentsViewer({ documents, initiativeName }: DocumentsViewerProps) {
+// documents (the engineers' ticket workspaces). Opens on the BRD; all four
+// load at once so each one's stage shows straight away.
+function DocumentsViewer({ initiativeId, initiativeName, enabled }: DocumentsViewerProps) {
   const [selected, setSelected] = useState<DocumentType>("BRD");
+  const documentsQuery = useQuery({
+    queryKey: documentsQueryKey(initiativeId),
+    queryFn: () => getInitiativeDocuments(initiativeId),
+    enabled,
+  });
+  const documents = documentsQuery.data ?? EMPTY_DOCUMENTS;
   const document = documents[selected];
+  const { isLoading, isError } = documentsQuery;
 
   return (
     <section className="dashboard-panel initiative-detail-panel">
@@ -38,14 +51,20 @@ function DocumentsViewer({ documents, initiativeName }: DocumentsViewerProps) {
               title={DOCUMENT_META[type].name}
             >
               <strong>{type}</strong>
-              <span className={`document-tab_status document-tab_status--${documents[type]?.status ?? "none"}`}>
-                {documentStatusText(documents[type])}
-              </span>
+              {documentsQuery.isSuccess && (
+                <span className={`document-tab_status document-tab_status--${documents[type]?.status ?? "none"}`}>
+                  {documentStatusText(documents[type])}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
-        {document && document.version > 0 ? (
+        {isLoading ? (
+          <p className="initiatives-empty">Loading {selected}…</p>
+        ) : isError ? (
+          <p className="initiatives-empty initiatives-empty--error">Couldn't load the {selected}. Try refreshing the page.</p>
+        ) : document && document.version > 0 ? (
           <>
             <p className="dashboard-subtitle initiative-detail-badges">
               <span className={documentStatusClass(document)}>{documentStatusText(document)}</span>
