@@ -20,6 +20,7 @@ import { formatPersonName, formatRoleName } from "../../utils/text";
 import { useDraftState } from "../../utils/useDraftState";
 import DraftRestoredNotice from "../common/DraftRestoredNotice";
 import ApprovalSignOff from "./ApprovalSignOff";
+import { SIGN_OFF_PANEL_ID } from "./SignOffPrompt";
 
 const EMPTY_ROW: ApproverInput = { userId: "", name: "", role: "" };
 
@@ -191,7 +192,7 @@ function ApprovalWorkflowPanel({ document, initiativeName, canManage }: Approval
   const rejectedStep = workflow?.status === "Rejected" ? workflow.steps.find((step) => step.status === "Rejected") : null;
 
   return (
-    <section className="dashboard-panel initiative-detail-panel approval-panel">
+    <section id={SIGN_OFF_PANEL_ID} className="dashboard-panel initiative-detail-panel approval-panel">
       <div className="dashboard-panel__header">
         <div>
           <h2>Approval &amp; sign-off</h2>

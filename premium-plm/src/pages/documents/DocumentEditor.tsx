@@ -13,6 +13,7 @@ import type { ProductDiscovery } from "../../types/discoveryTypes";
 import { priorityLabel } from "../../utils/initiativeStatus";
 import { resolvePrimaryRole } from "../../utils/roleRouting";
 import ApprovalWorkflowPanel from "../../components/approvals/ApprovalWorkflowPanel";
+import SignOffPrompt from "../../components/approvals/SignOffPrompt";
 import { DOCUMENT_META, EMPTY_OVERVIEW, documentTypeFromSlug } from "../../types/documentTypes";
 import type {
   DocumentOverview,
@@ -459,8 +460,24 @@ function DocumentForm({
 // PM's page for one initiative's PID / FRD / BRD / SWR. Editable while it's
 // a draft or has been returned; read-only while it's with a reviewer or
 // once approved.
+// Why the document can't be edited right now.
+function ReadOnlyMessage({ type, document }: { type: DocumentType; document: ProductDocument }) {
+  return (
+    <p className="initiatives-empty initiative-detail-message">
+      {document.signOff && !document.signOff.complete
+        ? `This ${type} has been approved and is out for sign-off.`
+        : document.status === "Approved"
+          ? `This ${type} has been approved.`
+          : document.status === "Cancelled"
+            ? `This ${type} has been cancelled.`
+            : `This ${type} is with the ${document.status === "PendingGroupHeadReview" ? "Group Head" : "BDO"} for review and is read-only until a decision is made.`}
+    </p>
+  );
+}
+
 function DocumentEditor() {
   const { id, docType } = useParams<{ id: string; docType: string }>();
+  const isProjectManager = resolvePrimaryRole(getStoredUser()?.roles ?? []) === "ProjectManager";
   const [statusMessage, setStatusMessage] = useState("");
   const type = documentTypeFromSlug(docType);
   const initiativeId = id as string;
@@ -574,15 +591,12 @@ function DocumentEditor() {
       ) : (
         document && (
           <>
-            <p className="initiatives-empty initiative-detail-message">
-              {document.signOff && !document.signOff.complete
-                ? `This ${type} has been approved and is out for sign-off.`
-                : document.status === "Approved"
-                  ? `This ${type} has been approved.`
-                  : document.status === "Cancelled"
-                    ? `This ${type} has been cancelled.`
-                    : `This ${type} is with the ${document.status === "PendingGroupHeadReview" ? "Group Head" : "BDO"} for review and is read-only until a decision is made.`}
-            </p>
+            {/* The PM gets a prompt to set up sign-off once it's approved. */}
+            {document.status === "Approved" && !document.signOff && isProjectManager ? (
+              <SignOffPrompt document={document} fallback={<ReadOnlyMessage type={type} document={document} />} />
+            ) : (
+              <ReadOnlyMessage type={type} document={document} />
+            )}
 
             {document.status === "Approved" && (
               <ApprovalWorkflowPanel
@@ -590,7 +604,7 @@ function DocumentEditor() {
                 key={document.id}
                 document={document}
                 initiativeName={initiative.projectName}
-                canManage={resolvePrimaryRole(getStoredUser()?.roles ?? []) === "ProjectManager"}
+                canManage={isProjectManager}
               />
             )}
 

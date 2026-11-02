@@ -406,7 +406,27 @@ export async function fetchSignatureImage(workflowId: string, stepId: string): P
   return value.startsWith("data:") ? value : `data:image/png;base64,${value}`;
 }
 
-// The document's newest workflow, with each approver from the API.
+// A step's status from the workflow's progress: everyone before the
+// current approver has signed.
+function stepStatusFrom(summary: WorkflowSummary, sequence: number): ApprovalStepStatus {
+  if (summary.status === "Approved" || sequence <= summary.signedSteps) {
+    return "Signed";
+  }
+
+  if (summary.status === "Rejected") {
+    return sequence === summary.signedSteps + 1 ? "Rejected" : "Waiting";
+  }
+
+  return summary.status === "InProgress" && sequence === (summary.currentSequence ?? summary.signedSteps + 1)
+    ? "Pending"
+    : "Waiting";
+}
+
+// The document's newest workflow, one card per approver. The number of
+// approvers and where it stands come from list-all-workflows; each
+// approver's name, title, date and comment from sign-offs. If sign-offs
+// leaves a step out (or fails), that step still shows, with the name from
+// the user list or the record kept when the PM set it up.
 export async function getWorkflowForDocument(document: ProductDocument): Promise<ApprovalWorkflow | null> {
   const summary = (await listWorkflows({ initiativeId: document.initiativeId, documentType: document.type })).find(
     (workflow) => workflow.documentId === document.id,
@@ -416,14 +436,50 @@ export async function getWorkflowForDocument(document: ProductDocument): Promise
     return null;
   }
 
-  const steps = await getWorkflowSteps(summary.id);
+  const [apiSteps, currentName] = await Promise.all([
+    getWorkflowSteps(summary.id).catch((error: unknown) => {
+      console.error(error);
+      return [] as ApprovalStep[];
+    }),
+    currentApproverName(summary),
+  ]);
+  const local = getLocalWorkflow(summary.id);
+  const total = Math.max(summary.totalSteps, apiSteps.length, local?.steps.length ?? 0);
+
+  const steps: ApprovalStep[] = Array.from({ length: total }, (_, index) => {
+    const sequence = index + 1;
+    const apiStep = apiSteps.find((step) => step.sequence === sequence);
+    const localStep = local?.steps.find((step) => step.sequence === sequence);
+    const isCurrent = sequence === summary.currentSequence;
+    const status = stepStatusFrom(summary, sequence);
+
+    if (apiStep) {
+      // Where the API's step status and the workflow's progress differ, the
+      // furthest along wins (a step can be signed before the list catches up).
+      return { ...apiStep, status: apiStep.status === "Waiting" ? status : apiStep.status };
+    }
+
+    return {
+      id: localStep?.id ?? `${summary.id}:${sequence}`,
+      sequence,
+      approverUserId: localStep?.approverUserId ?? (isCurrent ? (summary.currentApproverUserId ?? "") : ""),
+      approverName: localStep?.approverName ?? (isCurrent && currentName ? currentName : `Approver ${sequence}`),
+      approverRole:
+        localStep?.approverRole ??
+        (isCurrent && summary.currentApproverRole ? formatRoleName(summary.currentApproverRole) : ""),
+      status,
+      decidedAt: localStep?.decidedAt ?? null,
+      comment: localStep?.comment ?? null,
+      signatureImage: null,
+    };
+  });
 
   return {
     id: summary.id,
     documentId: summary.documentId,
     documentType: summary.documentType ?? document.type,
     initiativeId: summary.initiativeId || document.initiativeId,
-    initiativeName: summary.initiativeName ?? "",
+    initiativeName: summary.initiativeName ?? local?.initiativeName ?? "",
     status: summary.status,
     steps,
     createdByUserId: summary.createdByUserId,
