@@ -46,15 +46,52 @@ export interface WorkflowSummary {
   initiativeId: string;
   initiativeName: string | null;
   status: ApprovalWorkflowStatus;
+  // The API's own status name (e.g. "PendingApproval", "Cancelled"), which
+  // the app's status above groups together.
+  apiStatus: string;
+  documentVersion: number | null;
   createdByUserId: string;
   createdAt: string;
   submittedAt: string | null;
+  completedAt: string | null;
   totalSteps: number;
   signedSteps: number;
   // The approver whose turn it is, while it's in progress.
   currentSequence: number | null;
   currentApproverUserId: string | null;
   currentApproverRole: string | null;
+}
+
+// The API's workflow statuses, for filtering list-all-workflows.
+export const API_WORKFLOW_STATUSES = [
+  "Draft",
+  "PreparingSubmission",
+  "PendingApproval",
+  "InProgress",
+  "Approved",
+  "Rejected",
+  "Cancelled",
+] as const;
+
+export type ApiWorkflowStatus = (typeof API_WORKFLOW_STATUSES)[number];
+
+export interface WorkflowFilters {
+  status?: ApiWorkflowStatus;
+  documentType?: DocumentType;
+  initiativeId?: string;
+  // yyyy-mm-dd, both days included.
+  fromDate?: string;
+  toDate?: string;
+}
+
+// One page of list-all-workflows, with the current approver's name.
+export interface WorkflowPage {
+  workflows: (WorkflowSummary & { currentApproverName: string | null })[];
+  pageNumber: number;
+  totalPages: number;
+  totalCount: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
 }
 
 // One document waiting for the signed-in approver.

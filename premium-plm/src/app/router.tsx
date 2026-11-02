@@ -24,6 +24,7 @@ import DeveloperTicketWorkspace from "../pages/developer/DeveloperTicketWorkspac
 import ExecutiveDashboard from "../pages/executive/ExecutiveDashboard";
 import MyApprovals from "../pages/approvals/MyApprovals";
 import ApprovalSign from "../pages/approvals/ApprovalSign";
+import SignOffs from "../pages/approvals/SignOffs";
 import AdminUsers from "../pages/admin/AdminUsers";
 import AdminCategories from "../pages/admin/AdminCategories";
 import AuditTrail from "../pages/audit/AuditTrail";
@@ -173,6 +174,11 @@ const router = createBrowserRouter([
             {
                 path: "approvals/:workflowId/:stepId",
                 element: <ApprovalSign />,
+            },
+            {
+                // Every sign-off workflow, filterable (PM and Group Head).
+                path: "sign-offs",
+                element: <SignOffs />,
             },
             {
                 path: "admin/users",

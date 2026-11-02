@@ -7,6 +7,7 @@ import {
   FileCheck,
   FileText,
   FileCog,
+  FileSignature,
   Flag,
   Gauge,
   HardHat,
@@ -68,6 +69,16 @@ function ApprovalsLink() {
       <span>Approvals</span>
     </NavLink>
   );
+}
+
+// Every sign-off workflow, for the PM (who sets them up) and the Group Head.
+function SignOffsLink() {
+    return (
+        <NavLink to="/dashboard/sign-offs" className={navLinkClass}>
+            <FileSignature size={16} />
+            <span>Sign-offs</span>
+        </NavLink>
+    );
 }
 
 function ExecutiveDirectorNav() {
@@ -135,6 +146,8 @@ function GroupHeadNav() {
                 <History size={16} />
                 <span>Audit Trail</span>
             </NavLink>
+
+            <SignOffsLink />
 
             <ApprovalsLink />
 
@@ -225,6 +238,8 @@ function ProjectManagerNav() {
                 <Ticket size={16} />
                 <span>Tickets</span>
             </NavLink>
+
+            <SignOffsLink />
 
             <ApprovalsLink />
 

@@ -28,6 +28,8 @@ import type {
   ApproverInput,
   ApprovalWorkflowStatus,
   PendingApproval,
+  WorkflowFilters,
+  WorkflowPage,
   WorkflowSummary,
 } from "../types/approvalTypes";
 import {
@@ -143,9 +145,12 @@ function toWorkflowSummary(record: ApiRecord): WorkflowSummary | null {
     initiativeId: readString(record, "productInitiativeId") ?? "",
     initiativeName: readString(record, "initiativeName"),
     status: toWorkflowStatus(record.status),
+    apiStatus: readString(record, "status") ?? "",
+    documentVersion: readNumber(record, "documentVersion"),
     createdByUserId: readString(record, "projectManagerId") ?? "",
     createdAt: readString(record, "createdAt") ?? "",
     submittedAt: readString(record, "submittedAt"),
+    completedAt: readString(record, "completedAt"),
     totalSteps: readNumber(record, "totalSteps") ?? 0,
     signedSteps: readNumber(record, "approvedSteps") ?? 0,
     currentSequence: readNumber(record, "currentSequence"),
@@ -200,6 +205,48 @@ async function fetchWorkflowList(filters: { initiativeId?: string; documentType?
   }
 
   return workflows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+// One page of workflows, filtered by the server, for the Sign-offs page.
+export async function getWorkflowPage(
+  filters: WorkflowFilters,
+  pageNumber: number,
+  pageSize = 20,
+): Promise<WorkflowPage> {
+  const params = new URLSearchParams({ PageNumber: String(pageNumber), PageSize: String(pageSize) });
+
+  if (filters.status) params.set("Status", filters.status);
+  if (filters.documentType) params.set("DocumentType", filters.documentType);
+  if (filters.initiativeId) params.set("InitiativeId", filters.initiativeId);
+  // Whole days: from the start of the first to the end of the last.
+  if (filters.fromDate) params.set("FromDate", `${filters.fromDate}T00:00:00`);
+  if (filters.toDate) params.set("ToDate", `${filters.toDate}T23:59:59`);
+
+  const body = await apiClient<unknown>(`api/document-approval-workflows/list-all-workflows?${params}`, {
+    method: "GET",
+    ...auth(),
+  });
+  const data = unwrapData(body);
+  const page: ApiRecord = isRecord(data) ? data : {};
+  const rows = (readArray(page, "workflows", "items") ?? [])
+    .map(toWorkflowSummary)
+    .filter((row): row is WorkflowSummary => row !== null);
+
+  const workflows = await Promise.all(
+    rows.map(async (row) => ({
+      ...row,
+      currentApproverName: row.status === "InProgress" ? await currentApproverName(row) : null,
+    })),
+  );
+
+  return {
+    workflows,
+    pageNumber: readNumber(page, "pageNumber") ?? pageNumber,
+    totalPages: readNumber(page, "totalPages") ?? 1,
+    totalCount: readNumber(page, "totalCount") ?? workflows.length,
+    hasPreviousPage: page.hasPreviousPage === true,
+    hasNextPage: page.hasNextPage === true,
+  };
 }
 
 // User id → full name, read once per session. Empty for roles the API
@@ -637,4 +684,5 @@ export const approvalKeys = {
   forDocument: (documentId: string | null | undefined) => ["approval-workflows", "document", documentId] as const,
   pending: ["approval-workflows", "my-pending"] as const,
   history: ["approval-workflows", "my-history"] as const,
+  page: (filters: WorkflowFilters, pageNumber: number) => ["approval-workflows", "page", filters, pageNumber] as const,
 };
