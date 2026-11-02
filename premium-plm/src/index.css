@@ -1610,8 +1610,10 @@ a {
     padding: 36px 40px 64px;
   }
 
+  /* As many even columns as there are cards (each at least 200px), so
+     three cards fill the row instead of three narrow ones in six slots. */
   .dashboard-stats {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 20px;
   }
 }

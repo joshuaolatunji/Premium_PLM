@@ -3,13 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { getProductInitiatives } from "../../service/InitiativeService";
-import { approvalKeys, getAllWorkflows, getMyPendingApprovals } from "../../service/ApprovalWorkflowService";
+import { approvalKeys, getMyPendingApprovals } from "../../service/ApprovalWorkflowService";
 import { ApiError } from "../../apicalls/apiClient";
 import DashboardStatCard from "../../dashboardcomponents/DashboardStatCard";
 import ApprovalQueue from "../../dashboardcomponents/ApprovalQueue";
 import type { ApprovalQueueItem } from "../../types/dashboardTypes";
 import { DOCUMENT_META, DOCUMENT_TYPES } from "../../types/documentTypes";
-import type { WorkflowSummary } from "../../types/approvalTypes";
 import {
   currentStageFor,
   deriveStatus,
@@ -27,8 +26,9 @@ import {
 import { formatDate } from "../../utils/ticketStatus";
 
 // The Executive Director's oversight: how every initiative is progressing
-// through documentation, sign-off and delivery — and anything waiting for
-// their own signature. Read-only apart from signing.
+// through documentation and delivery, and anything waiting for their own
+// signature. Read-only apart from signing. Sign-off workflows aren't shown:
+// the ED doesn't need them (only the PM and Group Head follow those).
 function ExecutiveDashboard() {
   const navigate = useNavigate();
   const now = currentTimestamp();
@@ -43,29 +43,13 @@ function ExecutiveDashboard() {
     queryFn: getMyPendingApprovals,
   });
 
-  // Every sign-off workflow (list-all-workflows).
-  const workflowsQuery = useQuery({
-    queryKey: approvalKeys.all,
-    queryFn: getAllWorkflows,
-  });
-
   const initiatives = useMemo(() => initiativesQuery.data ?? [], [initiativesQuery.data]);
   const { documentsFor, discoveryStatusFor, isLoading: documentsLoading } = useInitiativeDocuments(
     initiatives.map((initiative) => initiative.id),
   );
-  const workflows = workflowsQuery.data ?? [];
 
   const rows = initiatives.map((initiative, index) => {
     const documents = documentsFor(index);
-    const initiativeWorkflows = workflows.filter((workflow) => workflow.initiativeId === initiative.id);
-    // The newest workflow per document type.
-    const latest = new Map<string, WorkflowSummary>();
-
-    initiativeWorkflows.forEach((workflow) => {
-      if (!latest.has(workflow.documentId)) {
-        latest.set(workflow.documentId, workflow);
-      }
-    });
 
     return {
       initiative,
@@ -73,8 +57,6 @@ function ExecutiveDashboard() {
       stage: currentStageFor(discoveryStatusFor(index), documents),
       timeline: deriveStatus(initiative),
       approvedDocuments: DOCUMENT_TYPES.filter((type) => documents[type]?.status === "Approved").length,
-      signedDocuments: [...latest.values()].filter((workflow) => workflow.status === "Approved").length,
-      signingDocuments: [...latest.values()].filter((workflow) => workflow.status === "InProgress").length,
     };
   });
 
@@ -98,7 +80,7 @@ function ExecutiveDashboard() {
 
   const atRisk = rows.filter((row) => row.timeline.status === "at-risk" || row.timeline.status === "overdue").length;
   const inDelivery = rows.filter((row) => row.stage === "Product Development").length;
-  const fullySigned = rows.reduce((total, row) => total + row.signedDocuments, 0);
+  const approvedDocuments = rows.reduce((total, row) => total + row.approvedDocuments, 0);
   const forbidden = initiativesQuery.error instanceof ApiError && initiativesQuery.error.status === 403;
 
   return (
@@ -134,9 +116,9 @@ function ExecutiveDashboard() {
         />
         <DashboardStatCard
           stat={{
-            label: "Documents fully signed",
-            value: fullySigned,
-            description: `${rows.reduce((total, row) => total + row.signingDocuments, 0)} collecting signatures`,
+            label: "Documents approved",
+            value: approvedDocuments,
+            description: `of ${initiatives.length * DOCUMENT_TYPES.length} across all initiatives`,
             descriptionType: "neutral",
           }}
         />
@@ -161,7 +143,7 @@ function ExecutiveDashboard() {
         <div className="dashboard-panel__header">
           <div>
             <h2>Portfolio progress</h2>
-            <p>Documentation, sign-off and timeline for each initiative.</p>
+            <p>Documentation and timeline for each initiative.</p>
           </div>
         </div>
 
@@ -173,7 +155,6 @@ function ExecutiveDashboard() {
                 <th>Priority</th>
                 <th>Stage</th>
                 <th>Documents</th>
-                <th>Signed off</th>
                 <th>Timeline</th>
                 <th>
                   <span className="sr-only">Action</span>
@@ -184,7 +165,7 @@ function ExecutiveDashboard() {
             <tbody>
               {(initiativesQuery.isLoading || documentsLoading) && (
                 <tr>
-                  <td colSpan={7} className="initiatives-empty">
+                  <td colSpan={6} className="initiatives-empty">
                     Loading the portfolio…
                   </td>
                 </tr>
@@ -192,7 +173,7 @@ function ExecutiveDashboard() {
 
               {initiativesQuery.isError && (
                 <tr>
-                  <td colSpan={7} className="initiatives-empty initiatives-empty--error">
+                  <td colSpan={6} className="initiatives-empty initiatives-empty--error">
                     {forbidden
                       ? "Your role can't read the initiative list yet (gaps file M20)."
                       : "Couldn't load the initiatives. Try refreshing the page."}
@@ -231,10 +212,6 @@ function ExecutiveDashboard() {
                       </div>
                     </td>
                     <td>
-                      {row.signedDocuments} of 4
-                      {row.signingDocuments > 0 && <span className="cell-note"> · {row.signingDocuments} signing</span>}
-                    </td>
-                    <td>
                       <span className={`status-badge status-badge--${row.timeline.status}`}>
                         {STATUS_LABEL[row.timeline.status]}
                       </span>
@@ -261,7 +238,7 @@ function ExecutiveDashboard() {
 
               {!initiativesQuery.isLoading && !initiativesQuery.isError && rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="initiatives-empty">
+                  <td colSpan={6} className="initiatives-empty">
                     No initiatives yet.
                   </td>
                 </tr>

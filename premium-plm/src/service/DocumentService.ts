@@ -17,7 +17,7 @@ import { apiClient, ApiError } from "../apicalls/apiClient";
 import { getToken } from "../apicalls/authStorage";
 import { fetchPdfBlob } from "./PdfService";
 import { linkToInitiative, recordActivity } from "./ActivityService";
-import { getSignOffs } from "./ApprovalWorkflowService";
+import { canListWorkflows, getSignOffs } from "./ApprovalWorkflowService";
 
 // Where the Group Head opens a document from an activity entry.
 function documentLink(initiativeId: string, type: DocumentType) {
@@ -212,7 +212,7 @@ async function withSignOffs(
   initiativeId: string,
   records: (ApiProductDocument | null)[],
 ): Promise<Map<string, DocumentSignOff>> {
-  if (!records.some((record) => record && isInSignOff(readApiStatus(record.status)))) {
+  if (!canListWorkflows() || !records.some((record) => record && isInSignOff(readApiStatus(record.status)))) {
     return new Map();
   }
 

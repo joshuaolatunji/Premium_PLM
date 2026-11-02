@@ -7,9 +7,8 @@
 //   GET  api/document-approval-workflows/list-all-workflows          every workflow, filterable
 //   POST api/document-approval-workflows/{workflowId}/steps/{stepId}/sign-and-approve
 //   POST api/document-approval-workflows/{workflowId}/steps/{stepId}/reject-approval
-//   GET  {documentId}/preview-generated-pdf         1st approver, before signing
-//   GET  {workflowId}/submitted-pdf-for-approval    an approver, after signing
-//   GET  {workflowId}/get-approval-review-pdf       later approvers, before signing
+//   GET  {workflowId}/submitted-pdf-for-approval    1st approver, before signing
+//   GET  {workflowId}/get-approval-review-pdf       every approver after signing, and later approvers before
 //   GET  {workflowId}/final-signed-pdf              PM / Group Head, fully signed
 //
 //   GET  api/document-approval-workflows/{workflowId}/sign-offs      each approver on a workflow
@@ -20,7 +19,8 @@
 // activity log.
 
 import { API_BASE_URL, apiClient } from "../apicalls/apiClient";
-import { getCurrentUserId, getToken } from "../apicalls/authStorage";
+import { getCurrentUserId, getStoredUser, getToken } from "../apicalls/authStorage";
+import { hasRole } from "../utils/roleRouting";
 import { DOCUMENT_TYPES } from "../types/documentTypes";
 import type { DocumentSignOff, DocumentType, ProductDocument } from "../types/documentTypes";
 import type {
@@ -167,10 +167,22 @@ function toWorkflowSummary(record: ApiRecord): WorkflowSummary | null {
 const recentLists = new Map<string, { at: number; result: Promise<WorkflowSummary[]> }>();
 const LIST_REUSE_MS = 5000;
 
+// list-all-workflows is for the Product Manager and the Group Head only.
+// Nobody else calls it (it would only be refused), so their pages make no
+// request and show what they can without it.
+export function canListWorkflows(): boolean {
+  const roles = getStoredUser()?.roles ?? [];
+  return hasRole(roles, "ProjectManager") || hasRole(roles, "GroupHead");
+}
+
 // Every workflow matching the filters, newest first (all pages).
 export function listWorkflows(
   filters: { initiativeId?: string; documentType?: DocumentType } = {},
 ): Promise<WorkflowSummary[]> {
+  if (!canListWorkflows()) {
+    return Promise.resolve([]);
+  }
+
   const key = `${filters.initiativeId ?? ""}:${filters.documentType ?? ""}`;
   const recent = recentLists.get(key);
 
@@ -488,18 +500,12 @@ export async function getWorkflowForDocument(document: ProductDocument): Promise
   };
 }
 
-// Every workflow, newest first, for the Executive Director's oversight.
-export function getAllWorkflows(): Promise<WorkflowSummary[]> {
-  return listWorkflows();
-}
-
 export function getLocalWorkflow(workflowId: string): ApprovalWorkflow | null {
   return readRow<ApprovalWorkflow>(WORKFLOWS, workflowId);
 }
 
 // The signed-in approver's past decisions (historical-approval), newest
-// first. The rows don't say which document or initiative (gaps file M15),
-// so those come from the workflow list, in one request.
+// first. The rows don't say which document or initiative (gaps file M15).
 export async function getMyApprovalHistory(): Promise<ApprovalHistoryItem[]> {
   const body = await apiClient<unknown>("api/document-approval-workflows/historical-approval", {
     method: "GET",
@@ -509,29 +515,20 @@ export async function getMyApprovalHistory(): Promise<ApprovalHistoryItem[]> {
     .map((row) => ({ row, status: toStepStatus(row.status) }))
     .filter(({ status }) => status === "Signed" || status === "Rejected");
 
-  if (rows.length === 0) {
-    return [];
-  }
-
-  const workflows = new Map(
-    (await listWorkflows().catch((): WorkflowSummary[] => [])).map((workflow) => [workflow.id, workflow]),
-  );
-
   return rows
     .map(({ row, status }): ApprovalHistoryItem | null => {
       const workflowId = readString(row, "workflowId");
       const stepId = readString(row, "stepId", "id");
-      const workflow = workflowId ? workflows.get(workflowId) : undefined;
       const role = readString(row, "approverRole");
 
       return workflowId && stepId
         ? {
             workflowId,
             stepId,
-            documentId: readString(row, "documentProductId") ?? workflow?.documentId ?? null,
-            documentType: workflow?.documentType ?? null,
+            documentId: readString(row, "documentProductId"),
+            documentType: toDocumentType(row.documentType),
             documentVersion: readNumber(row, "documentVersion"),
-            initiativeName: workflow?.initiativeName ?? null,
+            initiativeName: readString(row, "initiativeName", "projectName"),
             sequence: readNumber(row, "sequence"),
             approverRole: role ? formatRoleName(role) : null,
             status: status === "Signed" ? "Signed" : "Rejected",
@@ -798,17 +795,20 @@ export async function rejectApproval(workflowId: string, stepId: string, comment
 // PDFs (built by the backend, with the approvers' names and signatures)
 
 // The PDF an approver reads before signing: the first approver gets the
-// approved document itself; later approvers get it with the signatures so far.
-export function fetchPdfToSign(item: Pick<PendingApproval, "workflowId" | "documentId" | "sequence">): Promise<Blob> {
-  return item.sequence === 1 && item.documentId ? fetchPdfBlob(`${item.documentId}/preview-generated-pdf`) : fetchReviewPdf(item.workflowId);
+// document as sent for sign-off; later approvers get it with the signatures
+// so far.
+export function fetchPdfToSign(item: Pick<PendingApproval, "workflowId" | "sequence">): Promise<Blob> {
+  return item.sequence === 1 ? fetchSubmittedPdf(item.workflowId) : fetchReviewPdf(item.workflowId);
 }
 
-// The document as an approver signed it and sent it on.
-export function fetchSubmittedPdf(workflowId: string): Promise<Blob> {
+// The document as sent for sign-off — only for the first approver, before
+// signing.
+function fetchSubmittedPdf(workflowId: string): Promise<Blob> {
   return fetchPdfBlob(`${workflowId}/submitted-pdf-for-approval`);
 }
 
-// With the signatures so far, for the next approver.
+// With the signatures so far: what every approver sees after signing, and
+// what later approvers read before signing.
 export function fetchReviewPdf(workflowId: string): Promise<Blob> {
   return fetchPdfBlob(`${workflowId}/get-approval-review-pdf`);
 }

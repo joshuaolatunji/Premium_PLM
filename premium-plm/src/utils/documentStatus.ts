@@ -1,7 +1,7 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { getInitiativeDocuments } from "../service/DocumentService";
-import { getSignOffs } from "../service/ApprovalWorkflowService";
+import { canListWorkflows, getSignOffs } from "../service/ApprovalWorkflowService";
 import { getDiscoveryByInitiativeId } from "../service/ProductDiscoveryService";
 import { DOCUMENT_TYPES } from "../types/documentTypes";
 import type {
@@ -139,7 +139,8 @@ export function useInitiativeDocuments(initiativeIds: string[]) {
   const signOffsQuery = useQuery({
     queryKey: ["approval-workflows", "sign-offs"],
     queryFn: () => getSignOffs(),
-    enabled: anyInSignOff,
+    // Only the PM and Group Head may read the workflow list.
+    enabled: anyInSignOff && canListWorkflows(),
     retry: false,
   });
 

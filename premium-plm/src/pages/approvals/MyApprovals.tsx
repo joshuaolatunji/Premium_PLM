@@ -4,8 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   approvalKeys,
-  fetchPdfToSign,
-  fetchSubmittedPdf,
+  fetchReviewPdf,
   getMyApprovalHistory,
   getMyPendingApprovals,
 } from "../../service/ApprovalWorkflowService";
@@ -223,8 +222,8 @@ function MyApprovals() {
                 <tr key={`${item.workflowId}:${item.stepId}`}>
                   <td>
                     <div className="initiative-cell">
-                      <strong title={documentName(item.documentType)}>
-                        {item.documentType ?? "Document"} · {documentName(item.documentType)}
+                      <strong title={item.documentType ? documentName(item.documentType) : undefined}>
+                        {item.documentType ? `${item.documentType} · ${documentName(item.documentType)}` : "Document"}
                         {item.documentVersion ? ` (v${item.documentVersion})` : ""}
                       </strong>
                       {item.approverRole && <span>Signed as {item.approverRole}</span>}
@@ -249,13 +248,8 @@ function MyApprovals() {
                       type="button"
                       className="table-action table-action--dark"
                       onClick={() =>
-                        openPdf(() =>
-                          // Signed: the PDF as they signed it and sent it on.
-                          // Rejected: the PDF they were asked to sign.
-                          item.status === "Signed"
-                            ? fetchSubmittedPdf(item.workflowId)
-                            : fetchPdfToSign({ workflowId: item.workflowId, documentId: item.documentId, sequence: item.sequence }),
-                        )
+                        // The document with the signatures so far.
+                        openPdf(() => fetchReviewPdf(item.workflowId))
                       }
                     >
                       View PDF
