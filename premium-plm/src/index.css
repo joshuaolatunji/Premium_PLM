@@ -6023,24 +6023,32 @@ select:disabled {
    Sign-offs page
    ========================= */
 
+/* The filters sit in a card above the table, on an even grid, so every
+   box lines up and shares one height. */
 .sign-offs-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-3);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  align-items: end;
+  gap: 16px;
 
   margin-bottom: var(--space-5);
+  padding: 18px 20px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background-color: var(--color-surface);
 }
 
 .sign-offs-filters_field {
   display: flex;
   flex-direction: column;
   gap: 6px;
+
+  min-width: 0;
 }
 
-.sign-offs-filters_field--wide select {
-  min-width: 220px;
-  max-width: 320px;
+.sign-offs-filters_field--wide {
+  grid-column: span 2;
 }
 
 .sign-offs-filters_field label {
@@ -6050,23 +6058,74 @@ select:disabled {
   font-weight: 700;
 }
 
+/* One height for every box, with the text centred in it. The select's
+   height grows from its padding (a styleable select puts its text at the
+   top of a fixed height), so both are sized the same way. */
 .sign-offs-filters_field select,
 .sign-offs-filters_field input {
-  height: 38px;
-  padding: 0 10px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
 
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-1);
+  border-radius: 8px;
 
   color: var(--color-ink);
   background-color: var(--color-surface);
 
   font: inherit;
   font-size: 14px;
+  line-height: 40px;
+
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .sign-offs-filters_field select {
   padding-right: 40px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@supports (appearance: base-select) {
+  .sign-offs-filters_field select {
+    display: flex;
+    align-items: center;
+
+    height: 42px;
+    padding-block: 0;
+    line-height: 1.4;
+  }
+}
+
+.sign-offs-filters_field select:hover,
+.sign-offs-filters_field input:hover {
+  border-color: var(--color-ink-muted);
+}
+
+.sign-offs-filters_field select:focus,
+.sign-offs-filters_field input:focus {
+  outline: none;
+  border-color: var(--premium-red);
+  box-shadow: 0 0 0 3px var(--premium-tint);
+}
+
+.sign-offs-filters_field input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.sign-offs-filters_field input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+.sign-offs-filters .button {
+  justify-self: start;
+  height: 42px;
 }
 
 .sign-offs_count,
@@ -6088,10 +6147,13 @@ select:disabled {
 }
 
 @media (max-width: 640px) {
-  .sign-offs-filters_field,
-  .sign-offs-filters_field--wide select {
-    width: 100%;
-    max-width: none;
+  .sign-offs-filters {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .sign-offs-filters_field--wide {
+    grid-column: auto;
   }
 
   .sign-offs-pager span {
