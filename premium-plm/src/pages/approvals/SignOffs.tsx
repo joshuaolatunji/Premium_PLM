@@ -13,7 +13,7 @@ import { resolvePrimaryRole } from "../../utils/roleRouting";
 import { documentEditorPath, documentReviewPath } from "../../utils/documentRoutes";
 import { backState } from "../../utils/navigation";
 import { formatDate } from "../../utils/ticketStatus";
-import { formatRoleName } from "../../utils/text";
+
 
 type Row = WorkflowPage["workflows"][number];
 
@@ -55,14 +55,11 @@ function withText(row: Row): string {
     return "—";
   }
 
-  // "RiskOfficer" from the API reads as "Risk Officer".
-  const role = row.currentApproverRole ? formatRoleName(row.currentApproverRole) : null;
-
-  if (row.currentApproverName && role) {
-    return `${row.currentApproverName} (${role})`;
+  if (row.currentApproverName && row.currentApproverRole) {
+    return `${row.currentApproverName} (${row.currentApproverRole})`;
   }
 
-  return row.currentApproverName ?? role ?? "—";
+  return row.currentApproverName ?? row.currentApproverRole ?? "—";
 }
 
 function dateText(value: string | null): string {
