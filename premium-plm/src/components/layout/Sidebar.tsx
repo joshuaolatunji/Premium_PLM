@@ -14,6 +14,7 @@ import {
   History,
   LayoutDashboard,
   ListOrdered,
+  NotebookPen,
   Presentation,
   Signature,
   Tags,
@@ -23,8 +24,11 @@ import {
 } from "lucide-react";
 
 import UserAvatar from "../ui/UserAvatar"
+import LogoutButton from "./LogoutButton";
 import { getStoredUser } from "../../apicalls/authStorage";
 import { resolvePrimaryRole } from "../../utils/roleRouting";
+import { SHOW_INITIATIVES } from "../../config/features";
+import PreviewBadge from "../memos/PreviewBadge";
 import { capitalize, formatRoleName } from "../../utils/text";
 import { documentHubPath, documentReviewsPath } from "../../utils/documentRoutes";
 import type { DocumentReviewer, DocumentType } from "../../types/documentTypes";
@@ -71,6 +75,17 @@ function ApprovalsLink() {
   );
 }
 
+// Memos: every role writes, follows and signs them.
+function MemosLink() {
+    return (
+        <NavLink to="/dashboard/memos" className={navLinkClass}>
+            <NotebookPen size={16} />
+            <span>Memos</span>
+            <PreviewBadge className="preview-badge--sidebar" />
+        </NavLink>
+    );
+}
+
 // Every sign-off workflow, for the PM (who sets them up) and the Group Head.
 function SignOffsLink() {
     return (
@@ -93,6 +108,8 @@ function ExecutiveDirectorNav() {
                 <span>Overview</span>
             </NavLink>
 
+            <MemosLink />
+
             <NavLink to="/dashboard/initiatives" className={navLinkClass}>
                 <Gauge size={16} />
                 <span>Initiatives</span>
@@ -111,6 +128,8 @@ function ApproverNav() {
             </p>
 
             <ApprovalsLink />
+
+            <MemosLink />
         </>
     );
 }
@@ -126,6 +145,8 @@ function GroupHeadNav() {
                 <LayoutDashboard size={16} />
                 <span>Dashboard</span>
             </NavLink>
+
+            <MemosLink />
 
             <NavLink to="/dashboard/initiatives" className={navLinkClass}>
                 <Gauge size={16} />
@@ -177,6 +198,8 @@ function SuperAdminNav() {
                 <span>Users</span>
             </NavLink>
 
+            <MemosLink />
+
             <NavLink to="/dashboard/admin/categories" className={navLinkClass}>
                 <Tags size={16} />
                 <span>Categories</span>
@@ -198,6 +221,8 @@ function BdoNav() {
                 <Briefcase size={16} />
                 <span>Dashboard</span>
             </NavLink>
+
+            <MemosLink />
 
             <DocumentReviewLinks reviewer="BDO" />
 
@@ -222,6 +247,8 @@ function ProjectManagerNav() {
                 <LayoutDashboard size={16} />
                 <span>Dashboard</span>
             </NavLink>
+
+            <MemosLink />
 
             {NAV_DOCUMENTS.map((type) => {
                 const Icon = DOCUMENT_ICONS[type];
@@ -263,6 +290,8 @@ function LeadEngineerNav() {
                 <span>Tickets</span>
             </NavLink>
 
+            <MemosLink />
+
             <ApprovalsLink />
 
             <NavLink to="/dashboard/notifications" className={navLinkClass}>
@@ -285,7 +314,41 @@ function DeveloperNav() {
                 <span>Tasks</span>
             </NavLink>
 
+            <MemosLink />
+
             <ApprovalsLink />
+
+            <NavLink to="/dashboard/notifications" className={navLinkClass}>
+                <Bell size={16} />
+                <span>Notifications</span>
+            </NavLink>
+        </>
+    );
+}
+
+// While initiatives are hidden (config/features.ts), every role gets the
+// same short nav: the memo dashboard, Memos and Notifications, plus Users
+// for the Super Admin.
+function MemosOnlyNav({ isSuperAdmin }: { isSuperAdmin: boolean }) {
+    return (
+        <>
+            <p className="sidebar_section-title">
+                Workspace
+            </p>
+
+            <NavLink to="/dashboard" end className={navLinkClass}>
+                <LayoutDashboard size={16} />
+                <span>Dashboard</span>
+            </NavLink>
+
+            {isSuperAdmin && (
+                <NavLink to="/dashboard/admin/users" className={navLinkClass}>
+                    <Users size={16} />
+                    <span>Users</span>
+                </NavLink>
+            )}
+
+            <MemosLink />
 
             <NavLink to="/dashboard/notifications" className={navLinkClass}>
                 <Bell size={16} />
@@ -351,37 +414,42 @@ function Sidebar({ open, onClose }: SidebarProps) {
                     breakpoint (the drawer is already "closed" there), and
                     closes the drawer on mobile once a destination is picked. */}
                 <nav className="sidebar_navigation" onClick={onClose}>
-                    {primaryRole === "SuperAdmin" && <SuperAdminNav />}
-                    {primaryRole === "Executives" && <ExecutiveDirectorNav />}
-                    {primaryRole === "Approver" && <ApproverNav />}
-                    {primaryRole === "BusinessDevelopmentOfficer" && <BdoNav />}
-                    {primaryRole === "ProjectManager" && <ProjectManagerNav />}
-                    {primaryRole === "LeadEngineer" && <LeadEngineerNav />}
-                    {primaryRole === "Developer" && <DeveloperNav />}
-                    {primaryRole === "GroupHead" && <GroupHeadNav />}
+                    {!SHOW_INITIATIVES && <MemosOnlyNav isSuperAdmin={primaryRole === "SuperAdmin"} />}
+                    {SHOW_INITIATIVES && primaryRole === "SuperAdmin" && <SuperAdminNav />}
+                    {SHOW_INITIATIVES && primaryRole === "Executives" && <ExecutiveDirectorNav />}
+                    {SHOW_INITIATIVES && primaryRole === "Approver" && <ApproverNav />}
+                    {SHOW_INITIATIVES && primaryRole === "BusinessDevelopmentOfficer" && <BdoNav />}
+                    {SHOW_INITIATIVES && primaryRole === "ProjectManager" && <ProjectManagerNav />}
+                    {SHOW_INITIATIVES && primaryRole === "LeadEngineer" && <LeadEngineerNav />}
+                    {SHOW_INITIATIVES && primaryRole === "Developer" && <DeveloperNav />}
+                    {SHOW_INITIATIVES && primaryRole === "GroupHead" && <GroupHeadNav />}
                 </nav>
 
 
-                <button
-                    type="button"
-                    className="sidebar_footer"
-                    onClick={() => navigate("/dashboard/profile")}
-                >
-                    <div className="sidebar_avatar">
-                        <UserAvatar name={displayName} />
-                    </div>
+                <div className="sidebar_footer-row">
+                    <button
+                        type="button"
+                        className="sidebar_footer"
+                        onClick={() => navigate("/dashboard/profile")}
+                        data-tooltip="Open profile"
+                    >
+                        <div className="sidebar_avatar">
+                            <UserAvatar name={displayName} />
+                        </div>
 
-                    <div>
-                        <p className="sidebar_user-name">
-                            <strong>{displayName}</strong>
-                        </p>
+                        <div>
+                            <p className="sidebar_user-name">
+                                <strong>{displayName}</strong>
+                            </p>
 
-                        <p className="sidebar_user-role">
-                            <span>{roles.length > 0 ? roles.map(formatRoleName).join(" · ") : "—"}</span>
-                        </p>
-                    </div>
+                            <p className="sidebar_user-role">
+                                <span>{roles.length > 0 ? roles.map(formatRoleName).join(" · ") : "—"}</span>
+                            </p>
+                        </div>
+                    </button>
 
-                </button>
+                    <LogoutButton className="sidebar_logout" />
+                </div>
 
 
 

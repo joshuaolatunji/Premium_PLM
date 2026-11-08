@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Download, Eye, Plus, Send, Trash2 } from "lucide-react";
+import { Download, Eye, Plus, Send } from "lucide-react";
 
 import {
   approvalKeys,
@@ -11,34 +11,16 @@ import {
 } from "../../service/ApprovalWorkflowService";
 import { downloadBlob, openPdfInTab } from "../../service/PdfService";
 import { getAllUsers, isUserListForbidden } from "../../service/UserService";
-import type { PLMUser } from "../../types/userTypes";
 import type { ApprovalWorkflow, ApproverInput } from "../../types/approvalTypes";
 import type { ProductDocument } from "../../types/documentTypes";
 import { documentsQueryKey } from "../../utils/documentStatus";
 import { isUserActive } from "../../utils/userStatus";
-import { formatPersonName, formatRoleName } from "../../utils/text";
 import { useDraftState } from "../../utils/useDraftState";
 import DraftRestoredNotice from "../common/DraftRestoredNotice";
 import ApprovalSignOff from "./ApprovalSignOff";
+import ApproverRowsEditor from "./ApproverRowsEditor";
+import { EMPTY_APPROVER, approverLevel, approverRowsError } from "../../utils/approvers";
 import { SIGN_OFF_PANEL_ID } from "./SignOffPrompt";
-
-const EMPTY_ROW: ApproverInput = { userId: "", name: "", role: "" };
-
-// 1 → "1st approver", 2 → "2nd approver"…
-function approverLevel(position: number): string {
-  const suffix =
-    position % 100 >= 11 && position % 100 <= 13
-      ? "th"
-      : (({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[position % 10] ?? "th");
-
-  return `${position}${suffix} approver`;
-}
-
-// The people to choose from, by full name, A–Z. Their role shows beside
-// the dropdown once chosen, so it isn't repeated in the list.
-function sortByName(users: PLMUser[]): PLMUser[] {
-  return [...users].sort((a, b) => formatPersonName(a).localeCompare(formatPersonName(b)));
-}
 
 function workflowSummary(workflow: ApprovalWorkflow): string {
   const signed = workflow.steps.filter((step) => step.status === "Signed").length;
@@ -72,7 +54,7 @@ function ApprovalWorkflowPanel({ document, initiativeName, canManage }: Approval
   const [errorMessage, setErrorMessage] = useState("");
   const [pdfError, setPdfError] = useState("");
 
-  const [rows, setRows, rowsDraft] = useDraftState<ApproverInput[]>(`approval-setup:v2:${document.type}:${document.id}`, [EMPTY_ROW]);
+  const [rows, setRows, rowsDraft] = useDraftState<ApproverInput[]>(`approval-setup:v2:${document.type}:${document.id}`, [EMPTY_APPROVER]);
 
   const workflowQuery = useQuery({
     queryKey: approvalKeys.forDocument(document.id),
@@ -87,7 +69,6 @@ function ApprovalWorkflowPanel({ document, initiativeName, canManage }: Approval
 
   // Anyone active can be picked to sign, whatever their role.
   const directory = (usersQuery.data ?? []).filter(isUserActive);
-  const sortedDirectory = sortByName(directory);
   // The API refuses the user list to some roles (gaps file R7 / M3).
   const directoryUnavailable = usersQuery.isError || (usersQuery.isSuccess && isUserListForbidden());
 
@@ -104,7 +85,7 @@ function ApprovalWorkflowPanel({ document, initiativeName, canManage }: Approval
     onSuccess: async () => {
       setConfirming(false);
       setErrorMessage("");
-      setRows([EMPTY_ROW]);
+      setRows([EMPTY_APPROVER]);
       await refreshAfterSending();
     },
     onError: (error) => {
@@ -120,50 +101,10 @@ function ApprovalWorkflowPanel({ document, initiativeName, canManage }: Approval
     onError: (error) => setErrorMessage(error instanceof Error ? error.message : "Couldn't send it. Try again."),
   });
 
-  function updateRow(index: number, change: Partial<ApproverInput>) {
-    setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...change } : row)));
-  }
-
-  function chooseUser(index: number, userId: string) {
-    const user = directory.find((entry) => entry.userId === userId);
-
-    // Their role is their title on the sign-off, e.g. "Risk Officer".
-    updateRow(index, {
-      userId,
-      name: user ? formatPersonName(user) : "",
-      role: user?.role[0] ? formatRoleName(user.role[0]) : "",
-    });
-  }
-
-  function moveRow(index: number, offset: -1 | 1) {
-    setRows((current) => {
-      const next = [...current];
-      const [row] = next.splice(index, 1);
-      next.splice(index + offset, 0, row);
-      return next;
-    });
-  }
-
   function startSend() {
-    const filled = rows.filter((row) => row.userId.trim());
-
-    if (filled.length === 0) {
-      setErrorMessage("Add at least one approver.");
-      return;
-    }
-
-    if (rows.some((row) => !row.userId)) {
-      setErrorMessage("Choose a person for every approval level, or remove the empty ones.");
-      return;
-    }
-
-    if (new Set(rows.map((row) => row.userId.trim())).size !== rows.length) {
-      setErrorMessage("Each person can only appear once.");
-      return;
-    }
-
-    setErrorMessage("");
-    setConfirming(true);
+    const problem = approverRowsError(rows);
+    setErrorMessage(problem ?? "");
+    setConfirming(!problem);
   }
 
   function openPdf(load: () => Promise<Blob>) {
@@ -296,82 +237,13 @@ function ApprovalWorkflowPanel({ document, initiativeName, canManage }: Approval
             </div>
           )}
 
-          <ol className="approver-list">
-            {rows.map((row, index) => (
-              <li key={index} className="approver-row">
-                <span className="approver-row_level">
-                  <span className="approver-row_number">{index + 1}</span>
-                  {approverLevel(index + 1)}
-                  {rows.length > 1 && index === rows.length - 1 && <em>Final</em>}
-                </span>
-
-                <div className="form-field">
-                  <label htmlFor={`approver-user-${index}`} className="sr-only">
-                    {approverLevel(index + 1)}
-                  </label>
-                  <select
-                    className="approver-picker"
-                    id={`approver-user-${index}`}
-                    value={row.userId}
-                    onChange={(event) => chooseUser(index, event.target.value)}
-                    disabled={usersQuery.isLoading || directoryUnavailable}
-                  >
-                    <option value="" disabled>
-                      {usersQuery.isLoading ? "Loading staff…" : "Select a person"}
-                    </option>
-
-                    {sortedDirectory.map((user) => (
-                      <option
-                        key={user.userId}
-                        value={user.userId}
-                        // Each person can only sign once.
-                        disabled={rows.some((other, otherIndex) => otherIndex !== index && other.userId === user.userId)}
-                      >
-                        {formatPersonName(user)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <span className={row.role ? "approver-row_role" : "approver-row_role approver-row_role--empty"}>
-                  {row.role || "No one chosen"}
-                </span>
-
-                <div className="approver-row_tools">
-                  <button
-                    type="button"
-                    className="icon-button"
-                    onClick={() => moveRow(index, -1)}
-                    disabled={index === 0}
-                    aria-label={`Move ${approverLevel(index + 1)} up`}
-                    title="Sign earlier"
-                  >
-                    <ArrowUp size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    onClick={() => moveRow(index, 1)}
-                    disabled={index === rows.length - 1}
-                    aria-label={`Move ${approverLevel(index + 1)} down`}
-                    title="Sign later"
-                  >
-                    <ArrowDown size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-button icon-button--danger"
-                    onClick={() => setRows((current) => current.filter((_, rowIndex) => rowIndex !== index))}
-                    disabled={rows.length === 1}
-                    aria-label={`Remove ${approverLevel(index + 1)}`}
-                    title="Remove"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ol>
+          <ApproverRowsEditor
+            rows={rows}
+            setRows={setRows}
+            users={directory}
+            usersLoading={usersQuery.isLoading}
+            disabled={directoryUnavailable}
+          />
 
           {errorMessage && (
             <p className="form-error" role="alert">
@@ -383,7 +255,7 @@ function ApprovalWorkflowPanel({ document, initiativeName, canManage }: Approval
             <button
               type="button"
               className="button button--dark"
-              onClick={() => setRows((current) => [...current, EMPTY_ROW])}
+              onClick={() => setRows((current) => [...current, EMPTY_APPROVER])}
               disabled={directoryUnavailable}
             >
               <Plus size={17} aria-hidden="true" />

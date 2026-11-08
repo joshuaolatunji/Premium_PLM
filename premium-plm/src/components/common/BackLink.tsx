@@ -21,8 +21,11 @@ function BackLink({ fallbackTo, fallbackLabel }: BackLinkProps) {
   const location = useLocation();
 
   // React Router gives the very first entry of a session the key "default";
-  // anything reached by navigating within the app has its own key.
-  const hasInAppHistory = location.key !== "default";
+  // anything reached by navigating within the app has its own key. A page
+  // reached by signing in replaces the login page, so it has its own key
+  // too, and there's only somewhere to go back to if the tab has an earlier
+  // page (it doesn't when the user signed in on a fresh tab).
+  const hasInAppHistory = location.key !== "default" && window.history.length > 1;
   const passedLabel = (location.state as BackState | null)?.backLabel;
 
   const label = hasInAppHistory ? (passedLabel ?? "Back") : fallbackLabel;

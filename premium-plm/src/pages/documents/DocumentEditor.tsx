@@ -14,6 +14,7 @@ import { priorityLabel } from "../../utils/initiativeStatus";
 import { resolvePrimaryRole } from "../../utils/roleRouting";
 import ApprovalWorkflowPanel from "../../components/approvals/ApprovalWorkflowPanel";
 import SignOffPrompt from "../../components/approvals/SignOffPrompt";
+import CreateMemoButton from "../../components/memos/CreateMemoButton";
 import { DOCUMENT_META, EMPTY_OVERVIEW, documentTypeFromSlug } from "../../types/documentTypes";
 import type {
   DocumentOverview,
@@ -562,6 +563,13 @@ function DocumentEditor() {
             </span>
             {document && document.version > 0 && <span className="brd-version-tag">v{document.version}</span>}
           </p>
+        </div>
+
+        <div className="dashboard-header__actions">
+          <CreateMemoButton
+            initiativeId={initiativeId}
+            backLabel={`Back to ${initiative.projectName} ${type}`}
+          />
         </div>
       </header>
 

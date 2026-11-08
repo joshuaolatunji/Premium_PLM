@@ -22,6 +22,7 @@ import BackLink from "../../components/common/BackLink";
 import { backState } from "../../utils/navigation";
 import { documentsQueryKey, EMPTY_DOCUMENTS } from "../../utils/documentStatus";
 import InitiativeDocumentsPanel from "../../components/documents/InitiativeDocumentsPanel";
+import InitiativeMemosPanel from "../../components/memos/InitiativeMemosPanel";
 
 function formatDate(value: string | null) {
   if (!value) {
@@ -223,6 +224,8 @@ function InitiativeDetail() {
           }
         />
       )}
+
+      <InitiativeMemosPanel initiativeId={initiative.id} initiativeName={initiative.projectName} />
 
       <section className="dashboard-panel">
         <div className="dashboard-panel__header">

@@ -18,6 +18,7 @@ import DocumentTabs from "../../components/documents/DocumentTabs";
 import DocumentPager from "../../components/documents/DocumentPager";
 import DocumentReadOnlyView from "../../components/documents/DocumentReadOnlyView";
 import ApprovalWorkflowPanel from "../../components/approvals/ApprovalWorkflowPanel";
+import CreateMemoButton from "../../components/memos/CreateMemoButton";
 import DecisionModal, { type Decision } from "../../components/review/DecisionModal";
 import { clearDraft } from "../../utils/useDraftState";
 import ReviewDecisionBar from "../../components/review/ReviewDecisionBar";
@@ -156,33 +157,40 @@ function DocumentReview({ reviewer }: DocumentReviewProps) {
           </p>
         </div>
 
-        {canDecide && (
-          <div className="dashboard-header__actions">
-            <button
-              type="button"
-              className="button button--secondary brd-reject-button"
-              onClick={() => {
-                setErrorMessage("");
-                setPendingDecision("reject");
-              }}
-              disabled={decisionMutation.isPending}
-            >
-              Reject
-            </button>
+        <div className="dashboard-header__actions">
+          <CreateMemoButton
+            initiativeId={initiativeId}
+            backLabel={`Back to ${initiative.projectName} ${type}`}
+          />
 
-            <button
-              type="button"
-              className="button button--primary"
-              onClick={() => {
-                setErrorMessage("");
-                setPendingDecision("approve");
-              }}
-              disabled={decisionMutation.isPending}
-            >
-              Approve
-            </button>
-          </div>
-        )}
+          {canDecide && (
+            <>
+              <button
+                type="button"
+                className="button button--secondary brd-reject-button"
+                onClick={() => {
+                  setErrorMessage("");
+                  setPendingDecision("reject");
+                }}
+                disabled={decisionMutation.isPending}
+              >
+                Reject
+              </button>
+
+              <button
+                type="button"
+                className="button button--primary"
+                onClick={() => {
+                  setErrorMessage("");
+                  setPendingDecision("approve");
+                }}
+                disabled={decisionMutation.isPending}
+              >
+                Approve
+              </button>
+            </>
+          )}
+        </div>
       </header>
 
       <DocumentTabs documents={documents} pathFor={(tabType) => documentReviewPath(reviewer, tabType, initiativeId)} />

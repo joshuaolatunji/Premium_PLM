@@ -1,3 +1,5 @@
+import { FOCUS_HOME, SHOW_INITIATIVES } from "../config/features";
+
 // The workspace a user gets, from their role. Each is an API role name
 // (exactly as get_all_roles returns it), except "Approver": the app's own
 // name for everyone whose only job here is signing off documents the
@@ -55,7 +57,15 @@ export function resolvePrimaryRole(roles: string[]): PrimaryRole {
 }
 
 export function getLandingRouteForRoles(roles: string[]): string {
-  return workspaceFor(roles)?.path ?? APPROVER_PATH;
+  const workspace = workspaceFor(roles);
+
+  // While initiatives are hidden (config/features.ts), everyone starts on
+  // the memo dashboard.
+  if (!SHOW_INITIATIVES) {
+    return FOCUS_HOME;
+  }
+
+  return workspace?.path ?? APPROVER_PATH;
 }
 
 // Whether a user's roles include `role`, counting a renamed role (see

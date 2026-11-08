@@ -21,6 +21,7 @@ import DashboardStatCard from "../../dashboardcomponents/DashboardStatCard";
 import ApprovalQueue from "../../dashboardcomponents/ApprovalQueue";
 import type { ApprovalQueueItem, DashboardStat } from "../../types/dashboardTypes";
 
+import MemoStatCards from "../../components/memos/MemoStatCards";
 // "NotStarted" is our own placeholder for "no discovery record exists
 // yet" (the real API has no concept of it). "Submitted", "Resubmitted",
 // and "Rejected" are confirmed live; "Approved" follows the same pattern
@@ -277,6 +278,7 @@ function BdoDashboard() {
               onClick={() => setCardFilter((current) => (current === key ? null : key))}
             />
           ))}
+          <MemoStatCards />
         </section>
       )}
 

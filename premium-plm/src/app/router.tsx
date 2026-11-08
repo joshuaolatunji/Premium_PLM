@@ -25,15 +25,26 @@ import ExecutiveDashboard from "../pages/executive/ExecutiveDashboard";
 import MyApprovals from "../pages/approvals/MyApprovals";
 import ApprovalSign from "../pages/approvals/ApprovalSign";
 import SignOffs from "../pages/approvals/SignOffs";
+import Memos from "../pages/memos/Memos";
+import MemoPage from "../pages/memos/MemoPage";
 import AdminUsers from "../pages/admin/AdminUsers";
+import AdminNewUser from "../pages/admin/AdminNewUser";
 import AdminCategories from "../pages/admin/AdminCategories";
 import AuditTrail from "../pages/audit/AuditTrail";
 import Profile from "../pages/profile/Profile";
 import AppShell from "../components/layout/AppShell";
 import {Navigate} from "react-router-dom"
+import type {ReactNode} from "react";
+import {FOCUS_HOME, SHOW_DOCUMENTS, SHOW_ENGINEERING, SHOW_INITIATIVE_CORE, SHOW_OVERSIGHT} from "../config/features";
 // import ChangeTemporaryPassword from "../pages/auth/ChangeTemporaryPassword"
 
 // const loginRoute = {element: <Login />}
+
+// A page from one of the initiative phases (config/features.ts). While its
+// phase is off, its address sends people to the memo dashboard instead.
+function inPhase(on: boolean, page: ReactNode) {
+    return on ? page : <Navigate to={FOCUS_HOME} replace />;
+}
 
 const router = createBrowserRouter([
     {
@@ -56,65 +67,65 @@ const router = createBrowserRouter([
             },
             {
                 path: "initiatives",
-                element: <Initiatives />,
+                element: inPhase(SHOW_INITIATIVE_CORE, <Initiatives />),
             },
             {
                 // Static "new" segment outranks the ":id" route below.
                 path: "initiatives/new",
-                element: <CreateInitiative />,
+                element: inPhase(SHOW_INITIATIVE_CORE, <CreateInitiative />),
             },
             {
                 path: "initiatives/:id",
-                element: <InitiativeDetail />,
+                element: inPhase(SHOW_INITIATIVE_CORE, <InitiativeDetail />),
             },
             {
                 path: "priorities",
-                element: <Priorities />,
+                element: inPhase(SHOW_INITIATIVE_CORE, <Priorities />),
             },
             {
                 path: "my-work",
-                element: <MyWork />,
+                element: inPhase(SHOW_INITIATIVE_CORE, <MyWork />),
             },
             {
                 path: "my-tickets",
-                element: <MyTickets />,
+                element: inPhase(SHOW_ENGINEERING, <MyTickets />),
             },
             {
                 path: "initiatives/:id/tickets",
-                element: <TicketsPage />,
+                element: inPhase(SHOW_ENGINEERING, <TicketsPage />),
             },
             {
                 path: "bdo-reviews",
-                element: <BdoDocReviews />,
+                element: inPhase(SHOW_DOCUMENTS, <BdoDocReviews />),
             },
             {
                 path: "bdo-reviews/:id",
-                element: <BdoDocReview />,
+                element: inPhase(SHOW_DOCUMENTS, <BdoDocReview />),
             },
             // PID / FRD / BRD / SWR — one set of pages for all four.
             {
                 path: "documents/:docType",
-                element: <DocumentHub />,
+                element: inPhase(SHOW_DOCUMENTS, <DocumentHub />),
             },
             {
                 path: "initiatives/:id/documents/:docType",
-                element: <DocumentEditor />,
+                element: inPhase(SHOW_DOCUMENTS, <DocumentEditor />),
             },
             {
                 path: "document-reviews/:docType",
-                element: <DocumentReviews reviewer="GroupHead" />,
+                element: inPhase(SHOW_DOCUMENTS, <DocumentReviews reviewer="GroupHead" />),
             },
             {
                 path: "document-reviews/:docType/:id",
-                element: <DocumentReview reviewer="GroupHead" />,
+                element: inPhase(SHOW_DOCUMENTS, <DocumentReview reviewer="GroupHead" />),
             },
             {
                 path: "bdo-document-reviews/:docType",
-                element: <DocumentReviews reviewer="BDO" />,
+                element: inPhase(SHOW_DOCUMENTS, <DocumentReviews reviewer="BDO" />),
             },
             {
                 path: "bdo-document-reviews/:docType/:id",
-                element: <DocumentReview reviewer="BDO" />,
+                element: inPhase(SHOW_DOCUMENTS, <DocumentReview reviewer="BDO" />),
             },
             // Old BRD addresses (bookmarks) → the new BRD pages.
             {
@@ -135,27 +146,27 @@ const router = createBrowserRouter([
             },
             {
                 path: "bdo",
-                element: <BdoDashboard />,
+                element: inPhase(SHOW_DOCUMENTS, <BdoDashboard />),
             },
             {
                 path: "bdo/:initiativeId",
-                element: <BdoInitiativeWorkspace />,
+                element: inPhase(SHOW_DOCUMENTS, <BdoInitiativeWorkspace />),
             },
             {
                 path: "lead-engineer",
-                element: <LeadEngineerDashboard />,
+                element: inPhase(SHOW_ENGINEERING, <LeadEngineerDashboard />),
             },
             {
                 path: "lead-engineer/tickets/:ticketId",
-                element: <TicketWorkspace />,
+                element: inPhase(SHOW_ENGINEERING, <TicketWorkspace />),
             },
             {
                 path: "developer",
-                element: <DeveloperDashboard />,
+                element: inPhase(SHOW_ENGINEERING, <DeveloperDashboard />),
             },
             {
                 path: "developer/tasks/:taskId",
-                element: <DeveloperTicketWorkspace />,
+                element: inPhase(SHOW_ENGINEERING, <DeveloperTicketWorkspace />),
             },
             // Old ticket-based addresses — developers now work per task.
             {
@@ -164,33 +175,51 @@ const router = createBrowserRouter([
             },
             {
                 path: "executive",
-                element: <ExecutiveDashboard />,
+                element: inPhase(SHOW_OVERSIGHT, <ExecutiveDashboard />),
             },
             // Sign-off: anyone a Product Manager picks as an approver.
             {
                 path: "approvals",
-                element: <MyApprovals />,
+                element: inPhase(SHOW_DOCUMENTS, <MyApprovals />),
             },
             {
                 path: "approvals/:workflowId/:stepId",
-                element: <ApprovalSign />,
+                element: inPhase(SHOW_DOCUMENTS, <ApprovalSign />),
             },
             {
                 // Every sign-off workflow, filterable (PM and Group Head).
                 path: "sign-offs",
-                element: <SignOffs />,
+                element: inPhase(SHOW_DOCUMENTS, <SignOffs />),
+            },
+            {
+                // Every user: standalone memos, and memos on initiatives.
+                path: "memos",
+                element: <Memos />,
+            },
+            {
+                // Static "new" segment outranks ":memoId".
+                path: "memos/new",
+                element: <MemoPage />,
+            },
+            {
+                path: "memos/:memoId",
+                element: <MemoPage />,
             },
             {
                 path: "admin/users",
                 element: <AdminUsers />,
             },
             {
+                path: "admin/users/new",
+                element: <AdminNewUser />,
+            },
+            {
                 path: "admin/categories",
-                element: <AdminCategories />,
+                element: inPhase(SHOW_OVERSIGHT, <AdminCategories />),
             },
             {
                 path: "audit-trail",
-                element: <AuditTrail />,
+                element: inPhase(SHOW_OVERSIGHT, <AuditTrail />),
             },
             {
                 path: "profile",

@@ -1,18 +1,27 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
+import { X } from "lucide-react";
 
 import { getInitiativeById } from "../../service/InitiativeService";
 import { getTasksForTicket, getTicketsForLeadEngineer } from "../../service/TicketService";
 import { getCurrentUserId } from "../../apicalls/authStorage";
 import DashboardStatCard from "../../dashboardcomponents/DashboardStatCard";
+import type { DashboardStat } from "../../types/dashboardTypes";
 import { formatDate, ticketStatusBadgeClass, ticketStatusLabel } from "../../utils/ticketStatus";
 import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
+
+import MemoStatCards from "../../components/memos/MemoStatCards";
+
+// Each card filters the ticket list to the tickets it counts; clicking it
+// again (or "Clear filter") shows them all.
+type CardFilter = "new" | "building" | "to-review" | "completed";
 
 // The Lead Engineer's tickets: new ones to accept or reject, the ones being
 // built (and the developer work waiting for their review), and finished ones.
 function LeadEngineerDashboard() {
   const navigate = useNavigate();
+  const [cardFilter, setCardFilter] = useState<CardFilter | null>(null);
   const currentUserId = getCurrentUserId();
 
   // M8 — from the local record until the API can list a Lead Engineer's tickets.
@@ -54,10 +63,64 @@ function LeadEngineerDashboard() {
     };
   });
 
-  const newTickets = rows.filter((row) => row.ticket.status === "WithLeadEngineer").length;
-  const building = rows.filter((row) => row.ticket.status === "Accepted" || row.ticket.status === "InProgress").length;
+  function matches(row: (typeof rows)[number], filter: CardFilter): boolean {
+    switch (filter) {
+      case "new":
+        return row.ticket.status === "WithLeadEngineer";
+      case "building":
+        return row.ticket.status === "Accepted" || row.ticket.status === "InProgress";
+      case "to-review":
+        return row.toReview > 0;
+      case "completed":
+        return row.ticket.status === "Completed";
+    }
+  }
+
+  const newTickets = rows.filter((row) => matches(row, "new")).length;
+  // Counts the tasks to review, while the filter shows their tickets.
   const toReview = rows.reduce((total, row) => total + row.toReview, 0);
-  const completed = rows.filter((row) => row.ticket.status === "Completed").length;
+
+  const statCards: { key: CardFilter; stat: DashboardStat }[] = [
+    {
+      key: "new",
+      stat: {
+        label: "New tickets",
+        value: newTickets,
+        description: newTickets > 0 ? "Accept or reject them" : "Nothing new",
+        descriptionType: newTickets > 0 ? "warning" : "neutral",
+      },
+    },
+    {
+      key: "building",
+      stat: {
+        label: "In progress",
+        value: rows.filter((row) => matches(row, "building")).length,
+        description: "Accepted and being built",
+        descriptionType: "neutral",
+      },
+    },
+    {
+      key: "to-review",
+      stat: {
+        label: "Work to review",
+        value: toReview,
+        description: toReview > 0 ? "Developer tasks submitted to you" : "Nothing submitted",
+        descriptionType: toReview > 0 ? "warning" : "neutral",
+      },
+    },
+    {
+      key: "completed",
+      stat: {
+        label: "Completed",
+        value: rows.filter((row) => matches(row, "completed")).length,
+        description: "Tickets you've closed",
+        descriptionType: "success",
+      },
+    },
+  ];
+
+  const activeCardLabel = statCards.find((card) => card.key === cardFilter)?.stat.label ?? null;
+  const shownRows = cardFilter ? rows.filter((row) => matches(row, cardFilter)) : rows;
 
   return (
     <div className="dashboard-page">
@@ -74,38 +137,15 @@ function LeadEngineerDashboard() {
       </header>
 
       <section className="dashboard-stats" aria-label="Your tickets">
-        <DashboardStatCard
-          stat={{
-            label: "New tickets",
-            value: newTickets,
-            description: newTickets > 0 ? "Accept or reject them" : "Nothing new",
-            descriptionType: newTickets > 0 ? "warning" : "neutral",
-          }}
-        />
-        <DashboardStatCard
-          stat={{
-            label: "In progress",
-            value: building,
-            description: "Accepted and being built",
-            descriptionType: "neutral",
-          }}
-        />
-        <DashboardStatCard
-          stat={{
-            label: "Work to review",
-            value: toReview,
-            description: toReview > 0 ? "Developer tasks submitted to you" : "Nothing submitted",
-            descriptionType: toReview > 0 ? "warning" : "neutral",
-          }}
-        />
-        <DashboardStatCard
-          stat={{
-            label: "Completed",
-            value: completed,
-            description: "Tickets you've closed",
-            descriptionType: "success",
-          }}
-        />
+        {statCards.map(({ key, stat }) => (
+          <DashboardStatCard
+            key={key}
+            stat={stat}
+            isActive={cardFilter === key}
+            onClick={() => setCardFilter((current) => (current === key ? null : key))}
+          />
+        ))}
+        <MemoStatCards />
       </section>
 
       <p className="mock-data-notice">
@@ -114,6 +154,20 @@ function LeadEngineerDashboard() {
       </p>
 
       <section className="dashboard-panel">
+        <div className="dashboard-panel__header">
+          <div>
+            <h2>Your tickets</h2>
+            <p>{activeCardLabel ? `Filtered by "${activeCardLabel}".` : "Every ticket sent to you, and its developer tasks."}</p>
+          </div>
+
+          {activeCardLabel && (
+            <button type="button" className="text-button" onClick={() => setCardFilter(null)}>
+              Clear filter
+              <X size={15} />
+            </button>
+          )}
+        </div>
+
         <div className="portfolio-table-wrapper">
           <table className="portfolio-table">
             <thead>
@@ -147,7 +201,7 @@ function LeadEngineerDashboard() {
                 </tr>
               )}
 
-              {rows.map(({ ticket, tasks, toReview: submitted, approved }) => (
+              {shownRows.map(({ ticket, tasks, toReview: submitted, approved }) => (
                 <tr key={ticket.id}>
                   <td>
                     <div className="initiative-cell">
@@ -191,10 +245,10 @@ function LeadEngineerDashboard() {
                 </tr>
               ))}
 
-              {!ticketsQuery.isLoading && !ticketsQuery.isError && tickets.length === 0 && (
+              {!ticketsQuery.isLoading && !ticketsQuery.isError && shownRows.length === 0 && (
                 <tr>
                   <td colSpan={7} className="initiatives-empty">
-                    No tickets have been sent to you yet.
+                    {cardFilter ? "No tickets match this filter." : "No tickets have been sent to you yet."}
                   </td>
                 </tr>
               )}

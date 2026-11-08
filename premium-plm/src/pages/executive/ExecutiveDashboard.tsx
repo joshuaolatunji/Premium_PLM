@@ -1,13 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { X } from "lucide-react";
 
 import { getProductInitiatives } from "../../service/InitiativeService";
 import { approvalKeys, getMyPendingApprovals } from "../../service/ApprovalWorkflowService";
 import { ApiError } from "../../apicalls/apiClient";
 import DashboardStatCard from "../../dashboardcomponents/DashboardStatCard";
 import ApprovalQueue from "../../dashboardcomponents/ApprovalQueue";
-import type { ApprovalQueueItem } from "../../types/dashboardTypes";
+import type { ApprovalQueueItem, DashboardStat } from "../../types/dashboardTypes";
 import { DOCUMENT_META, DOCUMENT_TYPES } from "../../types/documentTypes";
 import {
   currentStageFor,
@@ -17,14 +18,15 @@ import {
   stageBadgeClass,
   STATUS_LABEL,
 } from "../../utils/initiativeStatus";
-import {
-  currentTimestamp,
-  daysSince,
-  documentStatusText,
-  useInitiativeDocuments,
-} from "../../utils/documentStatus";
+import { currentTimestamp, daysSince, documentStatusText, useInitiativeDocuments } from "../../utils/documentStatus";
 import { formatDate } from "../../utils/ticketStatus";
 
+import MemoStatCards from "../../components/memos/MemoStatCards";
+
+// Each card filters the page: the first three narrow the portfolio (and hide
+// the signature queue), "Awaiting your signature" shows only the queue.
+// Clicking a card again (or "Clear filter") shows everything.
+type CardFilter = "all" | "at-risk" | "documents-approved" | "signature";
 // The Executive Director's oversight: how every initiative is progressing
 // through documentation and delivery, and anything waiting for their own
 // signature. Read-only apart from signing. Sign-off workflows aren't shown:
@@ -32,6 +34,7 @@ import { formatDate } from "../../utils/ticketStatus";
 function ExecutiveDashboard() {
   const navigate = useNavigate();
   const now = currentTimestamp();
+  const [cardFilter, setCardFilter] = useState<CardFilter | null>(null);
 
   const initiativesQuery = useQuery({
     queryKey: ["product-initiatives"],
@@ -44,9 +47,11 @@ function ExecutiveDashboard() {
   });
 
   const initiatives = useMemo(() => initiativesQuery.data ?? [], [initiativesQuery.data]);
-  const { documentsFor, discoveryStatusFor, isLoading: documentsLoading } = useInitiativeDocuments(
-    initiatives.map((initiative) => initiative.id),
-  );
+  const {
+    documentsFor,
+    discoveryStatusFor,
+    isLoading: documentsLoading,
+  } = useInitiativeDocuments(initiatives.map((initiative) => initiative.id));
 
   const rows = initiatives.map((initiative, index) => {
     const documents = documentsFor(index);
@@ -78,9 +83,57 @@ function ExecutiveDashboard() {
     };
   });
 
-  const atRisk = rows.filter((row) => row.timeline.status === "at-risk" || row.timeline.status === "overdue").length;
+  const isAtRisk = (row: (typeof rows)[number]) =>
+    row.timeline.status === "at-risk" || row.timeline.status === "overdue";
+  const atRisk = rows.filter(isAtRisk).length;
   const inDelivery = rows.filter((row) => row.stage === "Product Development").length;
   const approvedDocuments = rows.reduce((total, row) => total + row.approvedDocuments, 0);
+
+  const statCards: { key: CardFilter; stat: DashboardStat }[] = [
+    {
+      key: "all",
+      stat: {
+        label: "Initiatives",
+        value: initiatives.length,
+        description: `${inDelivery} in product development`,
+        descriptionType: "neutral",
+      },
+    },
+    {
+      key: "at-risk",
+      stat: {
+        label: "At risk or overdue",
+        value: atRisk,
+        description: atRisk > 0 ? "Final 20% of the timeline, or past it" : "Everything on track",
+        descriptionType: atRisk > 0 ? "danger" : "success",
+      },
+    },
+    {
+      key: "documents-approved",
+      stat: {
+        label: "Documents approved",
+        value: approvedDocuments,
+        description: `of ${initiatives.length * DOCUMENT_TYPES.length} across all initiatives`,
+        descriptionType: "neutral",
+      },
+    },
+    {
+      key: "signature",
+      stat: {
+        label: "Awaiting your signature",
+        value: pending.length,
+        description: pending.length > 0 ? "Oldest first" : "Nothing waiting",
+        descriptionType: pending.length > 0 ? "warning" : "success",
+      },
+    },
+  ];
+
+  const activeCardLabel = statCards.find((card) => card.key === cardFilter)?.stat.label ?? null;
+  const showQueue = !cardFilter || cardFilter === "signature";
+  const showPortfolio = cardFilter !== "signature";
+  const shownRows = rows.filter((row) =>
+    cardFilter === "at-risk" ? isAtRisk(row) : cardFilter === "documents-approved" ? row.approvedDocuments > 0 : true,
+  );
   const forbidden = initiativesQuery.error instanceof ApiError && initiativesQuery.error.status === 403;
 
   return (
@@ -98,156 +151,145 @@ function ExecutiveDashboard() {
       </header>
 
       <section className="dashboard-stats" aria-label="Portfolio summary">
-        <DashboardStatCard
-          stat={{
-            label: "Initiatives",
-            value: initiatives.length,
-            description: `${inDelivery} in product development`,
-            descriptionType: "neutral",
-          }}
-        />
-        <DashboardStatCard
-          stat={{
-            label: "At risk or overdue",
-            value: atRisk,
-            description: atRisk > 0 ? "Final 20% of the timeline, or past it" : "Everything on track",
-            descriptionType: atRisk > 0 ? "danger" : "success",
-          }}
-        />
-        <DashboardStatCard
-          stat={{
-            label: "Documents approved",
-            value: approvedDocuments,
-            description: `of ${initiatives.length * DOCUMENT_TYPES.length} across all initiatives`,
-            descriptionType: "neutral",
-          }}
-        />
-        <DashboardStatCard
-          stat={{
-            label: "Awaiting your signature",
-            value: pending.length,
-            description: pending.length > 0 ? "See the queue below" : "Nothing waiting",
-            descriptionType: pending.length > 0 ? "warning" : "success",
-          }}
-          onClick={() => navigate("/dashboard/approvals")}
-        />
+        {statCards.map(({ key, stat }) => (
+          <DashboardStatCard
+            key={key}
+            stat={stat}
+            isActive={cardFilter === key}
+            onClick={() => setCardFilter((current) => (current === key ? null : key))}
+          />
+        ))}
+        <MemoStatCards />
       </section>
 
-      <ApprovalQueue
-        items={queueItems}
-        onReview={(item) => navigate(item.reviewPath)}
-        description="Documents waiting for your signature, oldest first."
-      />
+      {activeCardLabel && (
+        <p className="dashboard-filter-note">
+          Filtered by "{activeCardLabel}".
+          <button type="button" className="text-button" onClick={() => setCardFilter(null)}>
+            Clear filter
+            <X size={15} />
+          </button>
+        </p>
+      )}
 
-      <section className="dashboard-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <h2>Portfolio progress</h2>
-            <p>Documentation and timeline for each initiative.</p>
+      {showQueue && (
+        <ApprovalQueue
+          items={queueItems}
+          onReview={(item) => navigate(item.reviewPath)}
+          description="Documents waiting for your signature, oldest first."
+        />
+      )}
+
+      {showPortfolio && (
+        <section className="dashboard-panel">
+          <div className="dashboard-panel__header">
+            <div>
+              <h2>Portfolio progress</h2>
+              <p>Documentation and timeline for each initiative.</p>
+            </div>
           </div>
-        </div>
 
-        <div className="portfolio-table-wrapper">
-          <table className="portfolio-table">
-            <thead>
-              <tr>
-                <th>Initiative</th>
-                <th>Priority</th>
-                <th>Stage</th>
-                <th>Documents</th>
-                <th>Timeline</th>
-                <th>
-                  <span className="sr-only">Action</span>
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {(initiativesQuery.isLoading || documentsLoading) && (
+          <div className="portfolio-table-wrapper">
+            <table className="portfolio-table">
+              <thead>
                 <tr>
-                  <td colSpan={6} className="initiatives-empty">
-                    Loading the portfolio…
-                  </td>
+                  <th>Initiative</th>
+                  <th>Priority</th>
+                  <th>Stage</th>
+                  <th>Documents</th>
+                  <th>Timeline</th>
+                  <th>
+                    <span className="sr-only">Action</span>
+                  </th>
                 </tr>
-              )}
+              </thead>
 
-              {initiativesQuery.isError && (
-                <tr>
-                  <td colSpan={6} className="initiatives-empty initiatives-empty--error">
-                    {forbidden
-                      ? "Your role can't read the initiative list yet (gaps file M20)."
-                      : "Couldn't load the initiatives. Try refreshing the page."}
-                  </td>
-                </tr>
-              )}
-
-              {!initiativesQuery.isLoading &&
-                rows.map((row) => (
-                  <tr key={row.initiative.id}>
-                    <td>
-                      <div className="initiative-cell">
-                        <strong title={row.initiative.projectName}>{row.initiative.projectName}</strong>
-                        <span>{row.initiative.description}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className={priorityBadgeClass(row.initiative.priority)}>
-                        {priorityLabel(row.initiative.priority)}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={stageBadgeClass(row.stage)}>{row.stage}</span>
-                    </td>
-                    <td>
-                      <div className="document-chips" aria-label={`${row.approvedDocuments} of 4 documents approved`}>
-                        {DOCUMENT_TYPES.map((type) => (
-                          <span
-                            key={type}
-                            className={`document-chip document-chip--${row.documents[type]?.status ?? "none"}`}
-                            title={`${DOCUMENT_META[type].name}: ${documentStatusText(row.documents[type])}`}
-                          >
-                            {type}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`status-badge status-badge--${row.timeline.status}`}>
-                        {STATUS_LABEL[row.timeline.status]}
-                      </span>
-                      {row.timeline.daysLeft !== null && (
-                        <span className="cell-note">
-                          {" "}
-                          {row.timeline.daysLeft < 0
-                            ? `${Math.abs(row.timeline.daysLeft)}d over`
-                            : `${row.timeline.daysLeft}d left`}
-                        </span>
-                      )}
-                    </td>
-                    <td className="brd-reviews-actions">
-                      <button
-                        type="button"
-                        className="table-action table-action--dark"
-                        onClick={() => navigate(`/dashboard/initiatives/${row.initiative.id}`)}
-                      >
-                        View initiative
-                      </button>
+              <tbody>
+                {(initiativesQuery.isLoading || documentsLoading) && (
+                  <tr>
+                    <td colSpan={6} className="initiatives-empty">
+                      Loading the portfolio…
                     </td>
                   </tr>
-                ))}
+                )}
 
-              {!initiativesQuery.isLoading && !initiativesQuery.isError && rows.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="initiatives-empty">
-                    No initiatives yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                {initiativesQuery.isError && (
+                  <tr>
+                    <td colSpan={6} className="initiatives-empty initiatives-empty--error">
+                      {forbidden
+                        ? "Your role can't read the initiative list yet (gaps file M20)."
+                        : "Couldn't load the initiatives. Try refreshing the page."}
+                    </td>
+                  </tr>
+                )}
 
-      </section>
+                {!initiativesQuery.isLoading &&
+                  shownRows.map((row) => (
+                    <tr key={row.initiative.id}>
+                      <td>
+                        <div className="initiative-cell">
+                          <strong title={row.initiative.projectName}>{row.initiative.projectName}</strong>
+                          <span>{row.initiative.description}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className={priorityBadgeClass(row.initiative.priority)}>
+                          {priorityLabel(row.initiative.priority)}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={stageBadgeClass(row.stage)}>{row.stage}</span>
+                      </td>
+                      <td>
+                        <div className="document-chips" aria-label={`${row.approvedDocuments} of 4 documents approved`}>
+                          {DOCUMENT_TYPES.map((type) => (
+                            <span
+                              key={type}
+                              className={`document-chip document-chip--${row.documents[type]?.status ?? "none"}`}
+                              title={`${DOCUMENT_META[type].name}: ${documentStatusText(row.documents[type])}`}
+                            >
+                              {type}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`status-badge status-badge--${row.timeline.status}`}>
+                          {STATUS_LABEL[row.timeline.status]}
+                        </span>
+                        {row.timeline.daysLeft !== null && (
+                          <span className="cell-note">
+                            {" "}
+                            {row.timeline.daysLeft < 0
+                              ? `${Math.abs(row.timeline.daysLeft)}d over`
+                              : `${row.timeline.daysLeft}d left`}
+                          </span>
+                        )}
+                      </td>
+                      <td className="brd-reviews-actions">
+                        <button
+                          type="button"
+                          className="table-action table-action--dark"
+                          onClick={() => navigate(`/dashboard/initiatives/${row.initiative.id}`)}
+                        >
+                          View initiative
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+
+                {!initiativesQuery.isLoading && !initiativesQuery.isError && shownRows.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="initiatives-empty">
+                      {cardFilter ? "No initiatives match this filter." : "No initiatives yet."}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

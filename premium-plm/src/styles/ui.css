@@ -1,0 +1,61 @@
+/* Bridge between the app's design tokens (tokens.css) and the variables the
+   shadcn-registry components in components/ui expect (Rare UI, React Bits,
+   Animate UI, SmoothUI, UI Arc, Kokonut, Interior, OOOh). They read
+   bg-primary, border-border, text-muted-foreground and so on; each of those
+   points at a PremiumTrust token here, so the components wear the bank's red
+   and surfaces and follow the light / dark switch with no extra work. */
+
+/* Their dark: classes follow the app's own switch (<html data-theme="dark">)
+   rather than the operating system. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --radius: 0.625rem;
+
+  --background: var(--color-surface);
+  --foreground: var(--color-ink);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-ink);
+  --popover: var(--color-surface);
+  --popover-foreground: var(--color-ink);
+  --primary: var(--premium-red);
+  --primary-foreground: #ffffff;
+  --secondary: var(--color-surface-alt);
+  --secondary-foreground: var(--color-ink);
+  --muted: var(--color-surface-alt);
+  --muted-foreground: var(--color-ink-muted);
+  --accent: var(--color-surface-hover);
+  --accent-foreground: var(--color-ink);
+  --destructive: var(--color-danger-solid);
+  --destructive-foreground: #ffffff;
+  --border: var(--color-border);
+  --input: var(--color-border-strong);
+  --ring: var(--premium-red);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}

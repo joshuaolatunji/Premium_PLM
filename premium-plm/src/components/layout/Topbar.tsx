@@ -4,9 +4,11 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import UserAvatar from "../ui/UserAvatar";
 import ThemeToggle from "../common/ThemeToggle";
+import LogoutButton from "./LogoutButton";
 import { getStoredUser } from "../../apicalls/authStorage";
 import { capitalize, formatRoleName } from "../../utils/text";
 import { getUnreadCount } from "../../service/NotificationService";
+import { SHOW_INITIATIVES } from "../../config/features";
 
 interface TopbarProps {
     // Opens the sidebar drawer below its breakpoint; the button this calls
@@ -51,6 +53,8 @@ function Topbar({ onMenuClick }: TopbarProps) {
             </div>
 
             <div className="topbar_actions">
+                {/* Searches initiatives, so it's hidden with them (config/features.ts). */}
+                {SHOW_INITIATIVES && (
                 <form
                     className="topbar_search"
                     role="search"
@@ -75,13 +79,16 @@ function Topbar({ onMenuClick }: TopbarProps) {
                     aria-label="Search initiatives" />
 
                 </form>
+                )}
 
                 <ThemeToggle className="topbar_theme-toggle" />
 
                 <button
+                    type="button"
                     className="topbar_notification"
                     onClick={() => navigate("/dashboard/notifications")}
                     aria-label="Notifications"
+                    data-tooltip={unreadCount > 0 ? `${unreadCount} unread` : "Notifications"}
                 >
                     <Bell size={18} />
                     {unreadCount > 0 && (
@@ -95,6 +102,7 @@ function Topbar({ onMenuClick }: TopbarProps) {
                     type="button"
                     className="topbar_user"
                     onClick={() => navigate("/dashboard/profile")}
+                    data-tooltip="Open profile"
                 >
                     <div className="topbar_avatar">
                         <UserAvatar name={displayName} size="md"/>
@@ -111,8 +119,7 @@ function Topbar({ onMenuClick }: TopbarProps) {
                     </div>
                 </button>
 
-
-
+                <LogoutButton className="topbar_logout" />
             </div>
 
 

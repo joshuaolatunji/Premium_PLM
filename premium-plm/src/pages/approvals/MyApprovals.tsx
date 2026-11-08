@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { X } from "lucide-react";
 
 import {
   approvalKeys,
@@ -10,10 +11,18 @@ import {
 } from "../../service/ApprovalWorkflowService";
 import { openPdfInTab } from "../../service/PdfService";
 import DashboardStatCard from "../../dashboardcomponents/DashboardStatCard";
+import type { DashboardStat } from "../../types/dashboardTypes";
 import { DOCUMENT_META } from "../../types/documentTypes";
 import type { DocumentType } from "../../types/documentTypes";
 import { currentTimestamp, daysSince } from "../../utils/documentStatus";
 import { formatDate } from "../../utils/ticketStatus";
+
+import MemoStatCards from "../../components/memos/MemoStatCards";
+
+// Each card filters the page: "Awaiting your signature" shows only that
+// queue, "Signed" and "Rejected" only those past decisions. Clicking a card
+// again (or "Clear filter") shows everything.
+type CardFilter = "pending" | "Signed" | "Rejected";
 
 function documentName(type: DocumentType | null) {
   return type ? DOCUMENT_META[type].name : "Document";
@@ -25,6 +34,7 @@ function documentName(type: DocumentType | null) {
 function MyApprovals() {
   const navigate = useNavigate();
   const [pdfError, setPdfError] = useState("");
+  const [cardFilter, setCardFilter] = useState<CardFilter | null>(null);
 
   const pendingQuery = useQuery({
     queryKey: approvalKeys.pending,
@@ -39,6 +49,37 @@ function MyApprovals() {
   const pending = pendingQuery.data ?? [];
   const history = historyQuery.data ?? [];
   const now = currentTimestamp();
+
+  const signed = history.filter((row) => row.status === "Signed").length;
+  const statCards: { key: CardFilter; stat: DashboardStat }[] = [
+    {
+      key: "pending",
+      stat: {
+        label: "Awaiting your signature",
+        value: pending.length,
+        description: pending.length > 0 ? "Oldest first" : "Nothing waiting",
+        descriptionType: pending.length > 0 ? "warning" : "success",
+      },
+    },
+    {
+      key: "Signed",
+      stat: { label: "Signed by you", value: signed, description: "All time", descriptionType: "neutral" },
+    },
+    {
+      key: "Rejected",
+      stat: {
+        label: "Rejected by you",
+        value: history.length - signed,
+        description: "Sent back to the Product Manager",
+        descriptionType: "neutral",
+      },
+    },
+  ];
+
+  const activeCardLabel = statCards.find((card) => card.key === cardFilter)?.stat.label ?? null;
+  const showPending = !cardFilter || cardFilter === "pending";
+  const shownHistory =
+    cardFilter && cardFilter !== "pending" ? history.filter((row) => row.status === cardFilter) : history;
 
   function openPdf(load: () => Promise<Blob>) {
     setPdfError("");
@@ -63,212 +104,211 @@ function MyApprovals() {
       </header>
 
       <section className="dashboard-stats" aria-label="Approvals summary">
-        <DashboardStatCard
-          stat={{
-            label: "Awaiting your signature",
-            value: pending.length,
-            description: pending.length > 0 ? "Oldest first below" : "Nothing waiting",
-            descriptionType: pending.length > 0 ? "warning" : "success",
-          }}
-        />
-        <DashboardStatCard
-          stat={{
-            label: "Signed by you",
-            value: history.filter((row) => row.status === "Signed").length,
-            description: "All time",
-            descriptionType: "neutral",
-          }}
-        />
-        <DashboardStatCard
-          stat={{
-            label: "Rejected by you",
-            value: history.filter((row) => row.status === "Rejected").length,
-            description: "Sent back to the Product Manager",
-            descriptionType: "neutral",
-          }}
-        />
+        {statCards.map(({ key, stat }) => (
+          <DashboardStatCard
+            key={key}
+            stat={stat}
+            isActive={cardFilter === key}
+            onClick={() => setCardFilter((current) => (current === key ? null : key))}
+          />
+        ))}
+        <MemoStatCards />
       </section>
 
-      <section className="dashboard-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <h2>Awaiting your signature</h2>
-            <p>Each document reaches you once everyone before you in the order has signed.</p>
+      {activeCardLabel && (
+        <p className="dashboard-filter-note">
+          Filtered by "{activeCardLabel}".
+          <button type="button" className="text-button" onClick={() => setCardFilter(null)}>
+            Clear filter
+            <X size={15} />
+          </button>
+        </p>
+      )}
+
+      {showPending && (
+        <section className="dashboard-panel">
+          <div className="dashboard-panel__header">
+            <div>
+              <h2>Awaiting your signature</h2>
+              <p>Each document reaches you once everyone before you in the order has signed.</p>
+            </div>
           </div>
-        </div>
 
-        <div className="portfolio-table-wrapper">
-          <table className="portfolio-table">
-            <thead>
-              <tr>
-                <th>Document</th>
-                <th>Initiative</th>
-                <th>Signing as</th>
-                <th>Your turn</th>
-                <th>Waiting</th>
-                <th>
-                  <span className="sr-only">Action</span>
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {pendingQuery.isLoading && (
+          <div className="portfolio-table-wrapper">
+            <table className="portfolio-table">
+              <thead>
                 <tr>
-                  <td colSpan={6} className="initiatives-empty">
-                    Loading your approvals…
-                  </td>
+                  <th>Document</th>
+                  <th>Initiative</th>
+                  <th>Signing as</th>
+                  <th>Your turn</th>
+                  <th>Waiting</th>
+                  <th>
+                    <span className="sr-only">Action</span>
+                  </th>
                 </tr>
-              )}
+              </thead>
 
-              {pendingQuery.isError && (
+              <tbody>
+                {pendingQuery.isLoading && (
+                  <tr>
+                    <td colSpan={6} className="initiatives-empty">
+                      Loading your approvals…
+                    </td>
+                  </tr>
+                )}
+
+                {pendingQuery.isError && (
+                  <tr>
+                    <td colSpan={6} className="initiatives-empty initiatives-empty--error">
+                      Couldn't load your approvals. Try refreshing the page.
+                    </td>
+                  </tr>
+                )}
+
+                {[...pending]
+                  .sort((a, b) => (a.sentAt ?? "").localeCompare(b.sentAt ?? ""))
+                  .map((item) => (
+                    <tr key={`${item.workflowId}:${item.stepId}`}>
+                      <td>
+                        <div className="initiative-cell">
+                          <strong title={documentName(item.documentType)}>
+                            {item.documentType ?? "Document"} · {documentName(item.documentType)}
+                          </strong>
+                          <span>Approved by the Group Head</span>
+                        </div>
+                      </td>
+                      <td>{item.initiativeName ?? "—"}</td>
+                      <td>{item.approverRole ?? "—"}</td>
+                      <td>{item.sequence && item.totalSteps ? `${item.sequence} of ${item.totalSteps}` : "—"}</td>
+                      <td>
+                        {item.sentAt
+                          ? `${daysSince(item.sentAt, now)} day${daysSince(item.sentAt, now) === 1 ? "" : "s"}`
+                          : "—"}
+                      </td>
+                      <td className="brd-reviews-actions">
+                        <button
+                          type="button"
+                          className="table-action table-action--premium"
+                          onClick={() => navigate(`/dashboard/approvals/${item.workflowId}/${item.stepId}`)}
+                        >
+                          Review &amp; sign
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+
+                {!pendingQuery.isLoading && !pendingQuery.isError && pending.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="initiatives-empty">
+                      Nothing is waiting for your signature.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {cardFilter !== "pending" && (
+        <section className="dashboard-panel">
+          <div className="dashboard-panel__header">
+            <div>
+              <h2>Your past decisions</h2>
+              <p>Documents you've signed or rejected, most recent first.</p>
+            </div>
+          </div>
+
+          {pdfError && (
+            <p className="form-error" role="alert">
+              {pdfError}
+            </p>
+          )}
+
+          <div className="portfolio-table-wrapper">
+            <table className="portfolio-table">
+              <thead>
                 <tr>
-                  <td colSpan={6} className="initiatives-empty initiatives-empty--error">
-                    Couldn't load your approvals. Try refreshing the page.
-                  </td>
+                  <th>Document</th>
+                  <th>Initiative</th>
+                  <th>Decision</th>
+                  <th>Date</th>
+                  <th>
+                    <span className="sr-only">Action</span>
+                  </th>
                 </tr>
-              )}
+              </thead>
 
-              {[...pending]
-                .sort((a, b) => (a.sentAt ?? "").localeCompare(b.sentAt ?? ""))
-                .map((item) => (
+              <tbody>
+                {historyQuery.isLoading && (
+                  <tr>
+                    <td colSpan={5} className="initiatives-empty">
+                      Loading your past decisions…
+                    </td>
+                  </tr>
+                )}
+
+                {historyQuery.isError && (
+                  <tr>
+                    <td colSpan={5} className="initiatives-empty initiatives-empty--error">
+                      Couldn't load your past decisions. Try refreshing the page.
+                    </td>
+                  </tr>
+                )}
+
+                {shownHistory.map((item) => (
                   <tr key={`${item.workflowId}:${item.stepId}`}>
                     <td>
                       <div className="initiative-cell">
-                        <strong title={documentName(item.documentType)}>
-                          {item.documentType ?? "Document"} · {documentName(item.documentType)}
+                        <strong title={item.documentType ? documentName(item.documentType) : undefined}>
+                          {item.documentType ? `${item.documentType} · ${documentName(item.documentType)}` : "Document"}
+                          {item.documentVersion ? ` (v${item.documentVersion})` : ""}
                         </strong>
-                        <span>Approved by the Group Head</span>
+                        {item.approverRole && <span>Signed as {item.approverRole}</span>}
                       </div>
                     </td>
                     <td>{item.initiativeName ?? "—"}</td>
-                    <td>{item.approverRole ?? "—"}</td>
                     <td>
-                      {item.sequence && item.totalSteps ? `${item.sequence} of ${item.totalSteps}` : "—"}
+                      <span
+                        className={
+                          item.status === "Signed"
+                            ? "status-badge status-badge--approved"
+                            : "status-badge status-badge--overdue"
+                        }
+                        title={item.status === "Rejected" && item.comment ? item.comment : undefined}
+                      >
+                        {item.status}
+                      </span>
                     </td>
-                    <td>
-                      {item.sentAt ? `${daysSince(item.sentAt, now)} day${daysSince(item.sentAt, now) === 1 ? "" : "s"}` : "—"}
-                    </td>
+                    <td className="sign-offs_date">{item.decidedAt ? formatDate(item.decidedAt) : "—"}</td>
                     <td className="brd-reviews-actions">
                       <button
                         type="button"
-                        className="table-action table-action--premium"
-                        onClick={() => navigate(`/dashboard/approvals/${item.workflowId}/${item.stepId}`)}
+                        className="table-action table-action--dark"
+                        onClick={() =>
+                          // The document with the signatures so far.
+                          openPdf(() => fetchReviewPdf(item.workflowId))
+                        }
                       >
-                        Review &amp; sign
+                        View PDF
                       </button>
                     </td>
                   </tr>
                 ))}
 
-              {!pendingQuery.isLoading && !pendingQuery.isError && pending.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="initiatives-empty">
-                    Nothing is waiting for your signature.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="dashboard-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <h2>Your past decisions</h2>
-            <p>Documents you've signed or rejected, most recent first.</p>
+                {!historyQuery.isLoading && !historyQuery.isError && shownHistory.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="initiatives-empty">
+                      {cardFilter ? "Nothing matches this filter." : "You haven't signed or rejected anything yet."}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        </div>
-
-        {pdfError && (
-          <p className="form-error" role="alert">
-            {pdfError}
-          </p>
-        )}
-
-        <div className="portfolio-table-wrapper">
-          <table className="portfolio-table">
-            <thead>
-              <tr>
-                <th>Document</th>
-                <th>Initiative</th>
-                <th>Decision</th>
-                <th>Date</th>
-                <th>
-                  <span className="sr-only">Action</span>
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {historyQuery.isLoading && (
-                <tr>
-                  <td colSpan={5} className="initiatives-empty">
-                    Loading your past decisions…
-                  </td>
-                </tr>
-              )}
-
-              {historyQuery.isError && (
-                <tr>
-                  <td colSpan={5} className="initiatives-empty initiatives-empty--error">
-                    Couldn't load your past decisions. Try refreshing the page.
-                  </td>
-                </tr>
-              )}
-
-              {history.map((item) => (
-                <tr key={`${item.workflowId}:${item.stepId}`}>
-                  <td>
-                    <div className="initiative-cell">
-                      <strong title={item.documentType ? documentName(item.documentType) : undefined}>
-                        {item.documentType ? `${item.documentType} · ${documentName(item.documentType)}` : "Document"}
-                        {item.documentVersion ? ` (v${item.documentVersion})` : ""}
-                      </strong>
-                      {item.approverRole && <span>Signed as {item.approverRole}</span>}
-                    </div>
-                  </td>
-                  <td>{item.initiativeName ?? "—"}</td>
-                  <td>
-                    <span
-                      className={
-                        item.status === "Signed"
-                          ? "status-badge status-badge--approved"
-                          : "status-badge status-badge--overdue"
-                      }
-                      title={item.status === "Rejected" && item.comment ? item.comment : undefined}
-                    >
-                      {item.status}
-                    </span>
-                  </td>
-                  <td className="sign-offs_date">{item.decidedAt ? formatDate(item.decidedAt) : "—"}</td>
-                  <td className="brd-reviews-actions">
-                    <button
-                      type="button"
-                      className="table-action table-action--dark"
-                      onClick={() =>
-                        // The document with the signatures so far.
-                        openPdf(() => fetchReviewPdf(item.workflowId))
-                      }
-                    >
-                      View PDF
-                    </button>
-                  </td>
-                </tr>
-              ))}
-
-              {!historyQuery.isLoading && !historyQuery.isError && history.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="initiatives-empty">
-                    You haven't signed or rejected anything yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+        </section>
+      )}
     </div>
   );
 }

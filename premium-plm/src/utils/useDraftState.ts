@@ -65,6 +65,17 @@ export function clearDraft(key: string) {
   removeDraft(key);
 }
 
+// Carries a draft over to a new key — e.g. once a new record is saved and
+// gets its own id, so input that isn't saved with it yet isn't lost.
+export function moveDraft(fromKey: string, toKey: string) {
+  const draft = readDraft<unknown>(fromKey);
+
+  if (draft) {
+    writeDraft(toKey, draft.value);
+    removeDraft(fromKey);
+  }
+}
+
 export interface DraftControls<T> {
   // When restored edits were last typed (ISO), or null if nothing was restored.
   restoredAt: string | null;

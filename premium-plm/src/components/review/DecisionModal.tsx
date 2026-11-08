@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useDraftState } from "../../utils/useDraftState";
+import ModalShell from "../common/ModalShell";
 
 export type Decision = "approve" | "reject";
 
@@ -54,86 +55,80 @@ function DecisionModal({
   }
 
   return (
-    <div
-      className="modal-overlay"
-      role="presentation"
-      onClick={() => !isPending && onCancel()}
+    <ModalShell
+      open
+      onClose={onCancel}
+      busy={isPending}
+      labelledBy="decision-modal-title"
+      className="modal-panel--compact"
     >
-      <div
-        className="modal-panel modal-panel--compact"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="decision-modal-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="modal-panel_header">
-          <h2 id="decision-modal-title">
-            {decision === "approve" ? approveTitle : rejectTitle}
-          </h2>
-        </div>
-
-        <div className="modal-panel_body">
-          {decision === "approve" ? (
-            <p className="brd-confirm-copy">{approveBody}</p>
-          ) : (
-            <div className="form-field">
-              <label htmlFor="decision-comment">{rejectLabel}</label>
-
-              <textarea
-                id="decision-comment"
-                rows={4}
-                value={comment}
-                onChange={(event) => setComment(event.target.value)}
-                placeholder={rejectPlaceholder}
-              />
-
-              {commentDraft.restoredAt && (
-                <p className="decision-modal_restored">
-                  Restored the reason you were writing earlier.{" "}
-                  <button type="button" className="text-button" onClick={commentDraft.discard}>
-                    Clear it
-                  </button>
-                </p>
-              )}
-            </div>
-          )}
-
-          {(validationError || errorMessage) && (
-            <p className="form-error" role="alert">
-              {validationError || errorMessage}
-            </p>
-          )}
-        </div>
-
-        <div className="modal-panel_footer">
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={onCancel}
-            disabled={isPending}
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
-            className={
-              decision === "approve"
-                ? "button button--primary"
-                : "button button--primary brd-reject-confirm"
-            }
-            onClick={handleConfirm}
-            disabled={isPending}
-          >
-            {isPending
-              ? "Recording…"
-              : decision === "approve"
-                ? approveTitle
-                : rejectTitle}
-          </button>
-        </div>
+      <div className="modal-panel_header">
+        <h2 id="decision-modal-title">
+          {decision === "approve" ? approveTitle : rejectTitle}
+        </h2>
       </div>
-    </div>
+
+      <div className="modal-panel_body">
+        {decision === "approve" ? (
+          <p className="brd-confirm-copy">{approveBody}</p>
+        ) : (
+          <div className="form-field">
+            <label htmlFor="decision-comment">{rejectLabel}</label>
+
+            <textarea
+              id="decision-comment"
+              rows={4}
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
+              placeholder={rejectPlaceholder}
+            />
+
+            {commentDraft.restoredAt && (
+              <p className="decision-modal_restored">
+                Restored the reason you were writing earlier.{" "}
+                <button type="button" className="text-button" onClick={commentDraft.discard}>
+                  Clear it
+                </button>
+              </p>
+            )}
+          </div>
+        )}
+
+        {(validationError || errorMessage) && (
+          <p className="form-error" role="alert">
+            {validationError || errorMessage}
+          </p>
+        )}
+      </div>
+
+      <div className="modal-panel_footer">
+        <button
+          type="button"
+          className="button button--secondary"
+          onClick={onCancel}
+          disabled={isPending}
+        >
+          Cancel
+        </button>
+
+        <button
+          type="button"
+          className={
+            decision === "approve"
+              ? "button button--primary"
+              : "button button--primary brd-reject-confirm"
+          }
+          onClick={handleConfirm}
+          disabled={isPending}
+        >
+          {isPending
+            ? "Recording…"
+            : decision === "approve"
+              ? approveTitle
+              : rejectTitle}
+        </button>
+      </div>
+    </ModalShell>
   );
 }
 

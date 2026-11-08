@@ -1,16 +1,27 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { X } from "lucide-react";
 
 import { getMyTasks } from "../../service/TicketService";
 import DashboardStatCard from "../../dashboardcomponents/DashboardStatCard";
+import type { DashboardStat } from "../../types/dashboardTypes";
+import type { DeveloperTask } from "../../types/ticketTypes";
 import { currentTimestamp } from "../../utils/documentStatus";
 import { formatDate, isTaskWorkable, taskStatusBadgeClass, taskStatusLabel } from "../../utils/ticketStatus";
 import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
+
+import MemoStatCards from "../../components/memos/MemoStatCards";
+
+// Each card filters the task list to the tasks it counts; clicking it again
+// (or "Clear filter") shows them all.
+type CardFilter = "to-start" | "working" | "in-review" | "overdue";
 
 // The developer's tasks from their Lead Engineers, from the live API.
 function DeveloperDashboard() {
   const navigate = useNavigate();
   const now = currentTimestamp();
+  const [cardFilter, setCardFilter] = useState<CardFilter | null>(null);
 
   const tasksQuery = useQuery({
     queryKey: ["developer-tasks"],
@@ -21,10 +32,64 @@ function DeveloperDashboard() {
   const isOverdue = (targetDate: string | null, done: boolean) =>
     !done && Boolean(targetDate) && new Date(targetDate as string).getTime() < now - 24 * 60 * 60 * 1000;
 
-  const toStart = tasks.filter((task) => task.status === "Assigned").length;
-  const working = tasks.filter((task) => task.status === "InProgress" || task.status === "ReworkRequested").length;
-  const inReview = tasks.filter((task) => task.status === "Submitted" || task.status === "UnderReview").length;
-  const overdue = tasks.filter((task) => isOverdue(task.targetDate, !isTaskWorkable(task.status))).length;
+  function matches(task: DeveloperTask, filter: CardFilter): boolean {
+    switch (filter) {
+      case "to-start":
+        return task.status === "Assigned";
+      case "working":
+        return task.status === "InProgress" || task.status === "ReworkRequested";
+      case "in-review":
+        return task.status === "Submitted" || task.status === "UnderReview";
+      case "overdue":
+        return isOverdue(task.targetDate, !isTaskWorkable(task.status));
+    }
+  }
+
+  const count = (filter: CardFilter) => tasks.filter((task) => matches(task, filter)).length;
+  const toStart = count("to-start");
+  const overdue = count("overdue");
+
+  const statCards: { key: CardFilter; stat: DashboardStat }[] = [
+    {
+      key: "to-start",
+      stat: {
+        label: "To start",
+        value: toStart,
+        description: toStart > 0 ? "Newly assigned" : "Nothing new",
+        descriptionType: toStart > 0 ? "warning" : "neutral",
+      },
+    },
+    {
+      key: "working",
+      stat: {
+        label: "In progress",
+        value: count("working"),
+        description: "Including any returned to you",
+        descriptionType: "neutral",
+      },
+    },
+    {
+      key: "in-review",
+      stat: {
+        label: "Awaiting review",
+        value: count("in-review"),
+        description: "Submitted to your Lead Engineer",
+        descriptionType: "neutral",
+      },
+    },
+    {
+      key: "overdue",
+      stat: {
+        label: "Overdue",
+        value: overdue,
+        description: overdue > 0 ? "Past their target date" : "All on time",
+        descriptionType: overdue > 0 ? "danger" : "success",
+      },
+    },
+  ];
+
+  const activeCardLabel = statCards.find((card) => card.key === cardFilter)?.stat.label ?? null;
+  const shownTasks = cardFilter ? tasks.filter((task) => matches(task, cardFilter)) : tasks;
 
   return (
     <div className="dashboard-page">
@@ -39,41 +104,32 @@ function DeveloperDashboard() {
       </header>
 
       <section className="dashboard-stats" aria-label="Your tasks">
-        <DashboardStatCard
-          stat={{
-            label: "To start",
-            value: toStart,
-            description: toStart > 0 ? "Newly assigned" : "Nothing new",
-            descriptionType: toStart > 0 ? "warning" : "neutral",
-          }}
-        />
-        <DashboardStatCard
-          stat={{
-            label: "In progress",
-            value: working,
-            description: "Including any returned to you",
-            descriptionType: "neutral",
-          }}
-        />
-        <DashboardStatCard
-          stat={{
-            label: "Awaiting review",
-            value: inReview,
-            description: "Submitted to your Lead Engineer",
-            descriptionType: "neutral",
-          }}
-        />
-        <DashboardStatCard
-          stat={{
-            label: "Overdue",
-            value: overdue,
-            description: overdue > 0 ? "Past their target date" : "All on time",
-            descriptionType: overdue > 0 ? "danger" : "success",
-          }}
-        />
+        {statCards.map(({ key, stat }) => (
+          <DashboardStatCard
+            key={key}
+            stat={stat}
+            isActive={cardFilter === key}
+            onClick={() => setCardFilter((current) => (current === key ? null : key))}
+          />
+        ))}
+        <MemoStatCards />
       </section>
 
       <section className="dashboard-panel">
+        <div className="dashboard-panel__header">
+          <div>
+            <h2>Your tasks</h2>
+            <p>{activeCardLabel ? `Filtered by "${activeCardLabel}".` : "Every task your Lead Engineers have assigned to you."}</p>
+          </div>
+
+          {activeCardLabel && (
+            <button type="button" className="text-button" onClick={() => setCardFilter(null)}>
+              Clear filter
+              <X size={15} />
+            </button>
+          )}
+        </div>
+
         <div className="portfolio-table-wrapper">
           <table className="portfolio-table">
             <thead>
@@ -106,7 +162,7 @@ function DeveloperDashboard() {
                 </tr>
               )}
 
-              {tasks.map((task) => (
+              {shownTasks.map((task) => (
                 <tr key={task.id}>
                   <td>
                     <div className="initiative-cell">
@@ -154,10 +210,10 @@ function DeveloperDashboard() {
                 </tr>
               ))}
 
-              {!tasksQuery.isLoading && !tasksQuery.isError && tasks.length === 0 && (
+              {!tasksQuery.isLoading && !tasksQuery.isError && shownTasks.length === 0 && (
                 <tr>
                   <td colSpan={6} className="initiatives-empty">
-                    No tasks are assigned to you yet.
+                    {cardFilter ? "No tasks match this filter." : "No tasks are assigned to you yet."}
                   </td>
                 </tr>
               )}

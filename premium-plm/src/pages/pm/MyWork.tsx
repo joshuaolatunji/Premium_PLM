@@ -27,6 +27,7 @@ import { backState } from "../../utils/navigation";
 import DashboardStatCard from "../../dashboardcomponents/DashboardStatCard";
 import type { DashboardStat } from "../../types/dashboardTypes";
 
+import MemoStatCards from "../../components/memos/MemoStatCards";
 // Each summary card doubles as a filter for the "My initiatives" table —
 // click to show only the initiatives behind its number, click again (or
 // "Clear filter") to show them all. Same behaviour as the Group Head's
@@ -245,6 +246,7 @@ function MyWork() {
             onClick={() => setCardFilter((current) => (current === key ? null : key))}
           />
         ))}
+        <MemoStatCards />
       </section>
 
       <section className="dashboard-panel">

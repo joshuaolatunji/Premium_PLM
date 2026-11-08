@@ -1,70 +1,42 @@
-import { useEffect, useState } from "react";
-import { Clock, X } from "lucide-react";
+import { useEffect } from "react";
+import { sileo } from "sileo";
 
 // How long before the session ends the warning appears.
 const WARNING_MS = 1 * 60 * 1000;
-
-function formatRemaining(ms: number): string {
-  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-}
 
 interface SessionExpiryWarningProps {
   // When the session ends (ms since epoch).
   expiry: number;
 }
 
-// A countdown shown for the last few minutes of a session. The backend has no
-// way to extend a session yet, so this is the user's cue to save their work —
-// after signing in again they're brought back to the same page.
+// A Sileo warning for the last minute of a session. The backend has no way to
+// extend a session yet, so this is the user's cue to save their work. After
+// signing in again they're brought back to the same page. It stays up until
+// the session ends (or is dismissed), and shows once per session.
 function SessionExpiryWarning({ expiry }: SessionExpiryWarningProps) {
-  const [msLeft, setMsLeft] = useState<number | null>(null);
-  const [dismissed, setDismissed] = useState(false);
-
   useEffect(() => {
-    function tick() {
+    let toastId: string | null = null;
+
+    function warn() {
       const left = expiry - Date.now();
-      setMsLeft(left <= WARNING_MS ? left : null);
+      if (left <= 0) return;
+
+      toastId = sileo.warning({
+        title: "Your session is ending",
+        description: "It ends in under a minute. Save your work; you'll come back to this page after signing in.",
+        duration: left,
+      });
     }
 
-    const firstTick = setTimeout(tick, 0);
-    const intervalId = setInterval(tick, 1000);
+    const timeoutId = window.setTimeout(warn, Math.max(0, expiry - WARNING_MS - Date.now()));
 
     return () => {
-      clearTimeout(firstTick);
-      clearInterval(intervalId);
+      window.clearTimeout(timeoutId);
+      if (toastId) sileo.dismiss(toastId);
     };
   }, [expiry]);
 
-  if (msLeft === null || dismissed) {
-    return null;
-  }
-
-  return (
-    <div className="session-warning" role="alert">
-      <Clock size={20} aria-hidden="true" className="session-warning_icon" />
-
-      <div>
-        <strong>Your session ends in {formatRemaining(msLeft)}</strong>
-        {/* <p>
-          Save your work now. You'll be asked to sign in again, and brought back to this page.
-          Anything you've typed but not saved is kept on this device.
-        </p> */}
-      </div>
-
-      <button
-        type="button"
-        className="session-warning_close"
-        onClick={() => setDismissed(true)}
-        aria-label="Dismiss"
-      >
-        <X size={16} />
-      </button>
-    </div>
-  );
+  return null;
 }
 
 export default SessionExpiryWarning;

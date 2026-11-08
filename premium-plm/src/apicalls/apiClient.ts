@@ -151,8 +151,11 @@ export async function apiClient<T>(
         // call itself) reach here on bad credentials, not an expired
         // session, so they're left alone to show their own error message.
         if (response.status === 401 && token) {
+            // Like the expiry check above: back to this page after signing
+            // in, and login replaces it so "Back" doesn't return to it.
+            rememberReturnPath();
             clearAuthSession();
-            window.location.href = "/login";
+            window.location.replace("/login");
         }
 
         throw new ApiError(errorMessageFor(response.status, data), response.status, data);

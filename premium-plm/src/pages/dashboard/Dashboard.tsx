@@ -30,6 +30,7 @@ import { daysSince, useInitiativeDocuments } from "../../utils/documentStatus";
 import { documentReviewPath } from "../../utils/documentRoutes";
 
 import type { DerivedStatus } from "../../utils/initiativeStatus";
+import MemoStatCards from "../../components/memos/MemoStatCards";
 import type {
   ApprovalQueueItem,
   AtRiskInitiative,
@@ -426,6 +427,7 @@ function Dashboard() {
             }
           />
         ))}
+        <MemoStatCards />
       </section>
 
       {/* Full width so all nine columns fit without sideways scrolling; the

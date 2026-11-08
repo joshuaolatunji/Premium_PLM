@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
 
 import {
   getNotifications,
@@ -177,6 +178,9 @@ function Notifications() {
                     {formatDate(notification.createdAt)}
                   </span>
                 </span>
+
+                {/* Only notifications that go somewhere get the arrow. */}
+                {notification.link && <ChevronRight className="notifications-item_go" size={17} aria-hidden="true" />}
               </button>
             ))}
 

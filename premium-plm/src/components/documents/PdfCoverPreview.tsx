@@ -8,12 +8,14 @@ interface PdfCoverPreviewProps {
   title: string;
   hint: string;
   onOpen: () => void;
+  // The button's text; "Open PDF" by default.
+  openLabel?: string;
 }
 
 // The PDF's front page as a thumbnail, with a button to open the whole file.
 // pdf.js is loaded only when a preview is shown, so it stays out of the main
 // bundle.
-function PdfCoverPreview({ blob, isLoading, isError, title, hint, onOpen }: PdfCoverPreviewProps) {
+function PdfCoverPreview({ blob, isLoading, isError, title, hint, onOpen, openLabel = "Open PDF" }: PdfCoverPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [rendered, setRendered] = useState(false);
   const [renderFailed, setRenderFailed] = useState(false);
@@ -98,7 +100,7 @@ function PdfCoverPreview({ blob, isLoading, isError, title, hint, onOpen }: PdfC
 
         <button type="button" className="button button--dark" onClick={onOpen} disabled={isLoading}>
           <Eye size={17} aria-hidden="true" />
-          Open PDF
+          {openLabel}
         </button>
       </div>
     </section>

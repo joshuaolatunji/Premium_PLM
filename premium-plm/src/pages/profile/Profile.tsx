@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { clearAuthSession, getStoredUser } from "../../apicalls/authStorage";
 import { capitalize, formatRoleName } from "../../utils/text";
@@ -6,11 +7,13 @@ import UserAvatar from "../../components/ui/UserAvatar";
 
 function Profile() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const user = getStoredUser();
   const displayName = user?.userName ? capitalize(user.userName) : "Guest";
 
   function handleLogout() {
     clearAuthSession();
+    queryClient.clear();
     navigate("/login", { replace: true });
   }
 
@@ -38,7 +41,7 @@ function Profile() {
 
         <div className="proposal-section">
           <div className="profile-identity-row">
-            <UserAvatar name={displayName} size="lg" />
+            <UserAvatar name={displayName} size="lg" animate="always" />
 
             <div>
               <p className="initiative-detail-grid_value">
