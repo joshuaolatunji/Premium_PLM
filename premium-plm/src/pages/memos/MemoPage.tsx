@@ -8,9 +8,9 @@ import { SHOW_INITIATIVES } from "../../config/features";
 import { getInitiativeById } from "../../service/InitiativeService";
 import {
   canCreateInitiativeMemo,
-  fetchMemoPreviewPdf,
+  fetchMemoPdfForAuthor,
   getMemo,
-  getMemoVersions,
+  getMemoSteps,
   isEditableStatus,
   isMine,
   isRejectedAtSignOff,
@@ -19,11 +19,11 @@ import {
   memoStatusClass,
   memoStatusText,
 } from "../../service/MemoService";
-import { getMemoReview, memoReviewKeys, memoStage } from "../../service/MemoReviewService";
+import { getMemoReview, memoReviewKeys, memoStage, withReviewerNames } from "../../service/MemoReviewService";
+import { getAllUsers } from "../../service/UserService";
 import { openPdfInTab } from "../../service/PdfService";
 import { MEMO_STATUS } from "../../types/memoTypes";
-import type { MemoPendingApproval, MemoPendingReview } from "../../types/memoTypes";
-import { formatDate } from "../../utils/ticketStatus";
+import type { MemoPendingApproval } from "../../types/memoTypes";
 import BackLink from "../../components/common/BackLink";
 import MemoForm from "../../components/memos/MemoForm";
 import MemoAttachmentsList from "../../components/memos/MemoAttachmentsList";
@@ -36,15 +36,18 @@ import MemoSignOffPanel from "../../components/memos/MemoSignOffPanel";
 import { CopyButton } from "../../components/ui/CopyButton";
 
 const SIGNING_STAGES: string[] = [MEMO_STATUS.reviewed, MEMO_STATUS.readyForApproval, MEMO_STATUS.inApproval, MEMO_STATUS.approved];
+const REVIEW_STAGES: string[] = [MEMO_STATUS.inReview, MEMO_STATUS.reviewRejected];
 
 // One memo. What shows depends on its stage and who's looking:
-//   Draft / Declined in review: its author edits it, chooses the reviewers
-//     and sends it for review.
-//   In review: the reviewer whose turn it is approves or declines it; its
-//     author follows the review.
+//   Draft / Changes requested: its author edits it, chooses the reviewers
+//     and sends it for review (again, after changes).
+//   In review: the reviewer whose turn it is approves it, asks for changes
+//     or rejects it; its author follows the review.
 //   Reviewed: its author chooses who signs it and starts the signing.
 //   Out for sign-off: the approver whose turn it is signs or rejects it; its
-//     author follows the signatures.
+//     author follows the signatures. An author who is also an approver gets
+//     the same signing screen as every other approver while it's their turn,
+//     then their author's view once they've signed.
 //   Fully signed: the signed PDF.
 // Only its author, and the reviewer or approver whose turn it is, can open
 // it. Reviewers and approvers get an approval-page layout: the PDF, then
@@ -72,14 +75,23 @@ function MemoPage() {
   const initiativeId = memo?.initiativeId ?? newInitiativeId;
   const isAuthor = memo ? isMine(memo) : true;
 
-  // Kept in the browser until the backend has reviews (gaps file M34).
+  // Its review, once its reviewers are set.
+  const reviewWorkflowId = memo?.reviewerWorkflowId ?? null;
   const reviewQuery = useQuery({
-    queryKey: memoReviewKeys.one(memoId ?? ""),
-    queryFn: () => getMemoReview(memoId as string),
-    enabled: !isNew,
+    queryKey: memoReviewKeys.one(reviewWorkflowId ?? ""),
+    queryFn: () => getMemoReview(reviewWorkflowId as string),
+    enabled: Boolean(reviewWorkflowId),
   });
 
-  const review = reviewQuery.data ?? null;
+  // Reviewers' names, from the staff list when the author can read it (the
+  // review has only their ids, gaps file M39).
+  const usersQuery = useQuery({
+    queryKey: ["plm-users"],
+    queryFn: getAllUsers,
+    enabled: isAuthor && Boolean(reviewQuery.data),
+  });
+
+  const review = withReviewerNames(reviewQuery.data ?? null, usersQuery.data ?? []);
   const stage = memo ? memoStage(memo.status, review) : MEMO_STATUS.draft;
 
   // The initiative's name, for the PM and the Group Head (who can read it).
@@ -96,17 +108,29 @@ function MemoPage() {
     enabled: memo?.status === MEMO_STATUS.inApproval,
   });
 
-  const versionsQuery = useQuery({
-    queryKey: memoKeys.versions(memoId ?? ""),
-    queryFn: () => getMemoVersions(memoId as string),
-    enabled: Boolean(memo && memo.version > 1 && isAuthor),
+  // The memo's sign-off, and its signatures so far (the same request as the
+  // signing panel's, so it isn't fetched twice), for "Open memo".
+  const signOffWorkflowId =
+    memo?.workflowId ??
+    signedItem?.workflowId ??
+    (memo ? (pendingQuery.data ?? []).find((item) => item.memoId === memo.id)?.workflowId : undefined) ??
+    null;
+  const stepsQuery = useQuery({
+    queryKey: memoKeys.steps(signOffWorkflowId ?? ""),
+    queryFn: () => getMemoSteps(signOffWorkflowId as string),
+    enabled: Boolean(signOffWorkflowId) && isAuthor,
   });
+  const signedCount = (stepsQuery.data ?? []).filter((step) => step.status === "Signed").length;
+  const fullySigned = memo?.status === MEMO_STATUS.approved;
 
   async function previewPdf() {
     setPdfError("");
 
     try {
-      await openPdfInTab(() => fetchMemoPreviewPdf(memoId as string), window.open("", "_blank"));
+      await openPdfInTab(
+        () => fetchMemoPdfForAuthor(memoId as string, signOffWorkflowId, signedCount, fullySigned),
+        window.open("", "_blank"),
+      );
     } catch (error) {
       console.error("Memo preview failed:", error);
       setPdfError("Couldn't open the memo. Try again.");
@@ -115,7 +139,9 @@ function MemoPage() {
 
   const back = <BackLink fallbackTo="/dashboard/memos" fallbackLabel="Back to memos" />;
 
-  if (memoQuery.isLoading || reviewQuery.isLoading || (memo && !isAuthor && pendingQuery.isLoading)) {
+  // Waits for the user's signing step too, so an author who signs doesn't
+  // see their author's view flash up first.
+  if (memoQuery.isLoading || reviewQuery.isLoading || (memo && pendingQuery.isLoading)) {
     return (
       <div className="dashboard-page">
         <p className="initiatives-empty">Loading memo…</p>
@@ -148,14 +174,14 @@ function MemoPage() {
   const myId = getCurrentUserId();
   const myItem = memo ? ((pendingQuery.data ?? []).find((item) => item.memoId === memo.id) ?? null) : null;
   const myReviewStep =
-    stage === MEMO_STATUS.inReview
-      ? (review?.steps.find((step) => step.status === "Pending" && step.reviewerUserId === myId) ?? null)
+    review?.status === "InReview"
+      ? (review.steps.find((step) => step.status === "Pending" && step.reviewerUserId === myId) ?? null)
       : null;
-  const myReview: MemoPendingReview | null = review && myReviewStep ? { review, step: myReviewStep } : null;
+  const myReview = review && myReviewStep ? { review, step: myReviewStep } : null;
   const title = memo?.subject || "Memo";
 
   // A reviewer or approver sees the memo only while it's their turn, which
-  // the review (M34) and my-pending-approvals decide.
+  // the review and my-pending-approvals decide.
   if (memo && !isAuthor && !myReview && !myItem && !signedItem) {
     return (
       <div className="dashboard-page">
@@ -168,9 +194,12 @@ function MemoPage() {
     );
   }
 
-  // A reviewer or approver (not its author): the PDF and their decision,
-  // like a document's approval page.
-  if (memo && !isAuthor) {
+  // A reviewer or approver: the PDF and their decision, like a document's
+  // approval page. Its author too, while it's their turn to sign: everyone
+  // signing gets the same screen.
+  const authorSigning = isAuthor && Boolean(myItem) && !signedItem;
+
+  if (memo && (!isAuthor || authorSigning)) {
     const signing = signedItem ?? myItem;
     const badge = signedItem
       ? { className: "status-badge status-badge--approved", text: "Signed by you" }
@@ -206,7 +235,13 @@ function MemoPage() {
         </header>
 
         {signedItem ? (
-          <MemoSignedView item={signedItem} title={title} />
+          <MemoSignedView
+            item={signedItem}
+            title={title}
+            // Read from the memo, re-read after signing: fully signed once
+            // the last approver has signed.
+            outcome={memoQuery.isFetching ? "checking" : memo.status === MEMO_STATUS.approved ? "final" : "next"}
+          />
         ) : signing ? (
           <MemoSignForm item={signing} title={title} onSigned={setSignedItem} />
         ) : (
@@ -224,14 +259,13 @@ function MemoPage() {
   // approvers are chosen after reading it; once it has, above, so the
   // signatures so far are the first thing they see.
   const signingStarted = inSigning && stage !== MEMO_STATUS.reviewed && stage !== MEMO_STATUS.readyForApproval;
-  const versions = versionsQuery.data ?? [];
 
   const signOffPanel = memo && (
     <MemoSignOffPanel
       memo={memo}
       stage={stage}
       isAuthor={isAuthor}
-      workflowId={memo.workflowId ?? myItem?.workflowId ?? null}
+      workflowId={signOffWorkflowId}
       currentStepId={myItem?.stepId}
     />
   );
@@ -280,49 +314,30 @@ function MemoPage() {
       )}
 
       {editable ? (
-        <MemoForm memo={memo} initiativeId={newInitiativeId} review={review} />
+        <MemoForm memo={memo} initiativeId={newInitiativeId} review={review} reviewersLoading={reviewQuery.isLoading} />
       ) : (
         memo && (
           <>
+            {/* Once the signing is under way: the signatures first, then the
+                finished review, then the memo. */}
             {signingStarted && signOffPanel}
+            {review && signingStarted && <MemoReviewPanel review={review} />}
 
             {/* The review, while it's under way or just finished. */}
             {review && !signingStarted && <MemoReviewPanel review={review} />}
+            {!review && REVIEW_STAGES.includes(stage) && reviewQuery.isError && (
+              <p className="form-error" role="alert">
+                Couldn't load the memo's review. Refresh the page to try again.
+              </p>
+            )}
 
             <MemoReadOnlyView memo={memo} />
 
             <MemoAttachmentsList memoId={memo.id} />
 
             {inSigning && !signingStarted && signOffPanel}
-
-            {/* Its review, for the record, once the signing is under way. */}
-            {review && signingStarted && <MemoReviewPanel review={review} />}
-
-            {/* The author, when they're also one of the approvers. */}
-            {myItem && !signedItem && <MemoSignForm item={myItem} title={title} onSigned={setSignedItem} />}
           </>
         )
-      )}
-
-      {versions.length > 1 && (
-        <section className="dashboard-panel initiative-detail-panel">
-          <div className="dashboard-panel__header">
-            <div>
-              <h2>Versions</h2>
-              <p>Each saved edit makes a new version.</p>
-            </div>
-          </div>
-
-          <ol className="memo-versions">
-            {versions.map((version) => (
-              <li key={version.id}>
-                <strong>Version {version.version}</strong>
-                <span>{formatDate(version.createdAt)}</span>
-                {version.comment && <p>{version.comment}</p>}
-              </li>
-            ))}
-          </ol>
-        </section>
       )}
     </div>
   );

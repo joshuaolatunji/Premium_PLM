@@ -2,16 +2,23 @@ import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Send } from "lucide-react";
-import { sileo } from "sileo";
 
 import { createMemo, memoKeys, updateMemo } from "../../service/MemoService";
 import { memoAttachmentKeys, uploadMemoAttachments } from "../../service/MemoAttachmentService";
-import { declinedStep, sendMemoForReview } from "../../service/MemoReviewService";
+import {
+  createMemoReview,
+  declinedStep,
+  getMemoReview,
+  resubmitMemoAfterChanges,
+  resumeMemoReview,
+  reviewerLabel,
+  submitMemo,
+} from "../../service/MemoReviewService";
 import { getAllUsers, isUserListForbidden } from "../../service/UserService";
 import { getCurrentUserId } from "../../apicalls/authStorage";
 import type { ApproverInput } from "../../types/approvalTypes";
 import { EMPTY_MEMO_FIELDS, MEMO_STATUS } from "../../types/memoTypes";
-import type { Memo, MemoFields, MemoReview } from "../../types/memoTypes";
+import type { Memo, MemoFields, MemoReview, MemoReviewResumeMode } from "../../types/memoTypes";
 import { EMPTY_APPROVER, approverLevel, approverRowsError } from "../../utils/approvers";
 import { richTextToPlain } from "../../utils/richText";
 import { isUserActive } from "../../utils/userStatus";
@@ -23,6 +30,8 @@ import { SHOW_MEMO_ATTACHMENTS } from "../../config/features";
 import type { StagedFile } from "./MemoAttachmentsPanel";
 import RichTextEditor from "../editor/RichTextEditor";
 import ModalShell from "../common/ModalShell";
+import SearchableSelect from "../ui/SearchableSelect";
+import { notifyError, notifySuccess } from "../../utils/notify";
 
 // The short fields, two to a row: To / Thru, then From / Date.
 const SHORT_FIELDS: { key: keyof MemoFields; label: string; type: "text" | "date"; placeholder: string }[] = [
@@ -56,24 +65,41 @@ interface MemoFormProps {
   memo: Memo | null;
   // For a new memo on an initiative.
   initiativeId: string | null;
-  // Its last review, when a reviewer has declined it.
+  // Its review, once its reviewers are set (after a reviewer asked for
+  // changes, the round they asked in).
   review: MemoReview | null;
+  reviewersLoading?: boolean;
 }
 
+// After changes, where the review picks up again.
+const RESUME_MODES: { value: MemoReviewResumeMode; label: string; hint: string }[] = [
+  {
+    value: "ResumeFromRequestingReviewer",
+    label: "Continue from the reviewer who asked for changes",
+    hint: "Approvals already given are kept.",
+  },
+  { value: "FullRestart", label: "Start again from the first reviewer", hint: "Everyone reviews it again." },
+  { value: "ResumeFromSelectedReviewer", label: "Continue from a reviewer you choose", hint: "Earlier approvals are kept." },
+];
+
 // Writing a memo: To, Thru, From, Date and Subject, then the Memo details,
-// any attachments, and the reviewers it goes to, in order. Saved as a draft at any time, then
-// sent for review. After a reviewer declines it, its author edits it and
-// sends it again with a note of what changed, to the same reviewers or
-// others. Who signs it is chosen once every reviewer has approved it
-// (MemoSignOffPanel).
-function MemoForm({ memo, initiativeId, review }: MemoFormProps) {
+// any attachments, and the reviewers it goes to, in order. Saved as a draft
+// at any time, then sent for review. After a reviewer asks for changes, its
+// author edits it and sends it again to the same reviewers, with a note of
+// what changed, choosing where the review picks up. Who signs it is chosen
+// once every reviewer has approved it (MemoSignOffPanel).
+function MemoForm({ memo, initiativeId, review, reviewersLoading = false }: MemoFormProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [errorMessage, setErrorMessage] = useState("");
   const [confirming, setConfirming] = useState(false);
   const declined = declinedStep(review);
-  // Sent back by a reviewer (or, on an old memo, by the Group Head).
-  const isResend = Boolean(declined) || memo?.status === MEMO_STATUS.changesRequested;
+  // A reviewer asked for changes: it goes back to the same reviewers.
+  const isResend = Boolean(declined);
+  // An old memo the Group Head sent back, before reviewers.
+  const groupHeadAsked = !declined && memo?.status === MEMO_STATUS.changesRequested;
+  const [resumeMode, setResumeMode] = useState<MemoReviewResumeMode>("ResumeFromRequestingReviewer");
+  const [resumeFrom, setResumeFrom] = useState(1);
 
   const draftId = memo?.id ?? `new:${initiativeId ?? "standalone"}`;
   const draftKey = `memo:${draftId}`;
@@ -85,12 +111,7 @@ function MemoForm({ memo, initiativeId, review }: MemoFormProps) {
       ? { to: memo.to, thru: memo.thru, from: memo.from, date: memo.date, subject: memo.subject, details: memo.details }
       : { ...EMPTY_MEMO_FIELDS, date: today() },
   );
-  // A resend starts from the last round's reviewers.
-  const [reviewers, setReviewers, reviewersDraft] = useDraftState<ApproverInput[]>(reviewersDraftKey, () =>
-    review?.steps.length
-      ? review.steps.map((step) => ({ userId: step.reviewerUserId, name: step.reviewerName, role: step.reviewerRole }))
-      : [EMPTY_APPROVER],
-  );
+  const [reviewers, setReviewers, reviewersDraft] = useDraftState<ApproverInput[]>(reviewersDraftKey, [EMPTY_APPROVER]);
 
   // Files chosen here go up right after the memo is saved (they can't be
   // kept as a draft), and before it's sent for review.
@@ -99,7 +120,7 @@ function MemoForm({ memo, initiativeId, review }: MemoFormProps) {
 
   // Anyone active can review it, whatever their role, except its author.
   const myId = getCurrentUserId();
-  const usersQuery = useQuery({ queryKey: ["plm-users"], queryFn: getAllUsers });
+  const usersQuery = useQuery({ queryKey: ["plm-users"], queryFn: getAllUsers, enabled: !isResend });
   const directory = (usersQuery.data ?? []).filter((user) => isUserActive(user) && user.userId !== myId);
   const directoryUnavailable = usersQuery.isError || (usersQuery.isSuccess && isUserListForbidden());
 
@@ -156,11 +177,11 @@ function MemoForm({ memo, initiativeId, review }: MemoFormProps) {
     mutationFn: save,
     onSuccess: async (saved) => {
       setErrorMessage("");
-      sileo.success({ title: "Memo saved", description: "Save again after any changes." });
+      notifySuccess({ title: "Memo saved", description: "Save again after any changes." });
       await refresh(saved);
     },
     onError: async (error) => {
-      sileo.error({ title: "Couldn't save the memo", description: error instanceof Error ? error.message : "Try again." });
+      setErrorMessage(notifyError("Couldn't save the memo", error));
       if (savedRef.current) {
         await refresh(savedRef.current);
       }
@@ -170,7 +191,29 @@ function MemoForm({ memo, initiativeId, review }: MemoFormProps) {
   const submitMutation = useMutation({
     mutationFn: async () => {
       const saved = await save();
-      await sendMemoForReview(saved, reviewers, isResend ? revisionComment : null);
+
+      if (isResend && review) {
+        const comment = revisionComment.trim();
+        await resubmitMemoAfterChanges(saved.id, comment);
+        // Resubmitting may already restart the review; if not, pick it up
+        // where the author chose.
+        const after = await getMemoReview(review.workflowId);
+        if (after?.status === "Declined") {
+          await resumeMemoReview(saved.id, resumeMode, resumeFrom, comment);
+        }
+        return saved;
+      }
+
+      // The API wants the memo submitted first, then its reviewers set
+      // ("The memo must be submitted before a reviewer workflow can be
+      // created"). A retry after a half-finished attempt skips whichever
+      // step already went through.
+      if (/draft/i.test(saved.status)) {
+        await submitMemo(saved.id);
+      }
+      if (!saved.reviewerWorkflowId) {
+        await createMemoReview(saved.id, reviewers);
+      }
       return saved;
     },
     onSuccess: async (sent) => {
@@ -179,18 +222,15 @@ function MemoForm({ memo, initiativeId, review }: MemoFormProps) {
       clearDraft(revisionDraftKey);
       reviewersDraft.markSaved();
       clearDraft(reviewersDraftKey);
-      sileo.success({
+      notifySuccess({
         title: isResend ? "Sent for review again" : "Sent for review",
-        description: "Your reviewers have been asked to approve it.",
+        description: "Your reviewers have been asked to review it.",
       });
       await refresh(sent);
     },
     onError: async (error) => {
       setConfirming(false);
-      sileo.error({
-        title: "Couldn't send the memo for review",
-        description: error instanceof Error ? error.message : "Try again.",
-      });
+      setErrorMessage(notifyError("Couldn't send the memo for review", error));
       // Some steps may have gone through; show the memo as it now stands.
       if (savedRef.current) {
         await refresh(savedRef.current);
@@ -199,7 +239,7 @@ function MemoForm({ memo, initiativeId, review }: MemoFormProps) {
   });
 
   function startSubmit() {
-    const problem = missingFields(fields, "sending") ?? approverRowsError(reviewers, "reviewer");
+    const problem = missingFields(fields, "sending") ?? (isResend ? null : approverRowsError(reviewers, "reviewer"));
     setErrorMessage(problem ?? "");
     setConfirming(!problem);
   }
@@ -224,13 +264,13 @@ function MemoForm({ memo, initiativeId, review }: MemoFormProps) {
       {declined ? (
         <div className="document-returned-note" role="status">
           <strong>
-            Declined by {declined.reviewerName}
-            {declined.reviewerRole ? ` (${declined.reviewerRole})` : ""}
+            {reviewerLabel(declined)}
+            {declined.reviewerRole ? ` (${declined.reviewerRole})` : ""} asked for changes
           </strong>
           <p>{declined.comment || "No reason was given."}</p>
         </div>
       ) : (
-        isResend && (
+        groupHeadAsked && (
           <div className="document-returned-note" role="status">
             <strong>The Group Head asked for changes</strong>
             <p>{memo?.groupHeadReview?.comment || "Make the changes asked for, then send it for review."}</p>
@@ -315,57 +355,70 @@ function MemoForm({ memo, initiativeId, review }: MemoFormProps) {
           <div>
             <h2>Reviewers</h2>
             <p>
-              Who reviews the memo before it's signed, in order. Each approves it before it moves to the next; once
-              they all have, you choose who signs it.
+              {isResend
+                ? "It goes back to the same reviewers. When you send it, choose where the review picks up."
+                : "Who reviews the memo before it's signed, in order. Each approves it before it moves to the next; once they all have, you choose who signs it."}
             </p>
           </div>
         </div>
 
-        <div className="proposal-section">
-          <DraftRestoredNotice
-            savedAt={reviewersDraft.restoredAt}
-            onDiscard={reviewersDraft.discard}
-            keepHint="Send the memo for review to keep them."
-          />
+        {isResend && review ? (
+          <div className="proposal-section">
+            <ol className="approver-confirm-list">
+              {review.steps.map((step) => (
+                <li key={step.id}>
+                  <strong>{approverLevel(step.sequence, "reviewer")}:</strong>{" "}
+                  {step.reviewerName
+                    ? `${step.reviewerName}${step.reviewerRole ? ` (${step.reviewerRole})` : ""}`
+                    : step.reviewerRole || reviewerLabel(step)}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : (
+          <>
+            <div className="proposal-section">
+              <DraftRestoredNotice
+                savedAt={reviewersDraft.restoredAt}
+                onDiscard={reviewersDraft.discard}
+                keepHint="Send the memo for review to keep them."
+              />
 
-          {directoryUnavailable && (
-            <div className="document-returned-note" role="alert">
-              <strong>Couldn't load the staff list</strong>
-              <p>
-                {usersQuery.isError
-                  ? "The staff list didn't load, so reviewers can't be chosen. Refresh the page to try again."
-                  : "Your account isn't allowed to read the staff list, so reviewers can't be chosen. Ask an administrator to check your role."}
-              </p>
+              {directoryUnavailable && (
+                <div className="document-returned-note" role="alert">
+                  <strong>Couldn't load the staff list</strong>
+                  <p>
+                    {usersQuery.isError
+                      ? "The staff list didn't load, so reviewers can't be chosen. Refresh the page to try again."
+                      : "Your account isn't allowed to read the staff list, so reviewers can't be chosen. Ask an administrator to check your role."}
+                  </p>
+                </div>
+              )}
+
+              <ApproverRowsEditor
+                rows={reviewers}
+                setRows={setReviewers}
+                users={directory}
+                usersLoading={usersQuery.isLoading}
+                disabled={directoryUnavailable || isBusy}
+                idPrefix="memo-reviewer"
+                noun="reviewer"
+              />
             </div>
-          )}
 
-          <ApproverRowsEditor
-            rows={reviewers}
-            setRows={setReviewers}
-            users={directory}
-            usersLoading={usersQuery.isLoading}
-            disabled={directoryUnavailable || isBusy}
-            idPrefix="memo-reviewer"
-            noun="reviewer"
-          />
-
-          <p className="mock-data-notice">
-            The review is kept in this browser until the backend adds it (gaps file M34), so reviewers see the memo
-            only when signed in on this browser.
-          </p>
-        </div>
-
-        <div className="approval-panel_actions">
-          <button
-            type="button"
-            className="button button--dark"
-            onClick={() => setReviewers((current) => [...current, EMPTY_APPROVER])}
-            disabled={directoryUnavailable || isBusy}
-          >
-            <Plus size={17} aria-hidden="true" />
-            Add {approverLevel(reviewers.length + 1, "reviewer")}
-          </button>
-        </div>
+            <div className="approval-panel_actions">
+              <button
+                type="button"
+                className="button button--dark"
+                onClick={() => setReviewers((current) => [...current, EMPTY_APPROVER])}
+                disabled={directoryUnavailable || isBusy}
+              >
+                <Plus size={17} aria-hidden="true" />
+                Add {approverLevel(reviewers.length + 1, "reviewer")}
+              </button>
+            </div>
+          </>
+        )}
       </section>
 
       <div className="bdo-action-bar bdo-action-bar--static">
@@ -396,7 +449,7 @@ function MemoForm({ memo, initiativeId, review }: MemoFormProps) {
             type="button"
             className="button button--primary"
             onClick={startSubmit}
-            disabled={isBusy || directoryUnavailable}
+            disabled={isBusy || (!isResend && directoryUnavailable) || (isResend && reviewersLoading)}
           >
             <Send size={17} aria-hidden="true" />
             {isResend ? "Send again for review" : "Send for review"}
@@ -416,18 +469,67 @@ function MemoForm({ memo, initiativeId, review }: MemoFormProps) {
         </div>
 
         <div className="modal-panel_body">
-          <p className="brd-confirm-copy">
-            The memo goes to these reviewers in this order. Each approves it before it moves to the next. It's
-            read-only while it's in review.
-          </p>
+          {isResend && review ? (
+            <fieldset className="memo-resubmit-modes">
+              <legend>Where should the review pick up?</legend>
 
-          <ol className="approver-confirm-list">
-            {reviewers.map((row, index) => (
-              <li key={index}>
-                <strong>{approverLevel(index + 1, "reviewer")}:</strong> {row.name} ({row.role})
-              </li>
-            ))}
-          </ol>
+              {RESUME_MODES.map((option) => (
+                <label key={option.value} className="memo-resubmit-mode">
+                  <input
+                    type="radio"
+                    name="memo-resume-mode"
+                    value={option.value}
+                    checked={resumeMode === option.value}
+                    onChange={() => setResumeMode(option.value)}
+                    disabled={isBusy}
+                  />
+                  <span>
+                    <strong>{option.label}</strong>
+                    <small>{option.hint}</small>
+                  </span>
+                </label>
+              ))}
+
+              {resumeMode === "ResumeFromSelectedReviewer" && (
+                <div className="form-field">
+                  <label htmlFor="memo-resume-from">Continue from</label>
+                  <SearchableSelect
+                    id="memo-resume-from"
+                    value={resumeFrom}
+                    onChange={(event) => setResumeFrom(Number(event.target.value))}
+                    disabled={isBusy}
+                  >
+                    {review.steps.map((step) => (
+                      <option
+                        key={step.id}
+                        value={step.sequence}
+                        data-description={[approverLevel(step.sequence, "reviewer"), step.reviewerName && step.reviewerRole]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      >
+                        {step.reviewerName || step.reviewerRole || reviewerLabel(step)}
+                      </option>
+                    ))}
+                  </SearchableSelect>
+                </div>
+              )}
+            </fieldset>
+          ) : (
+            <>
+              <p className="brd-confirm-copy">
+                The memo goes to these reviewers in this order. Each approves it before it moves to the next. It's
+                read-only while it's in review.
+              </p>
+
+              <ol className="approver-confirm-list">
+                {reviewers.map((row, index) => (
+                  <li key={index}>
+                    <strong>{approverLevel(index + 1, "reviewer")}:</strong> {row.name} ({row.role})
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
 
           {staged.length > 0 && (
             <p className="brd-confirm-copy">

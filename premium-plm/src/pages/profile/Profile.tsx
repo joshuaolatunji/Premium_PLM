@@ -1,15 +1,15 @@
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { clearAuthSession, getStoredUser } from "../../apicalls/authStorage";
-import { capitalize, formatRoleName } from "../../utils/text";
+import { clearAuthSession, getStoredUser, getCurrentUserName } from "../../apicalls/authStorage";
+import { formatRoleName } from "../../utils/text";
 import UserAvatar from "../../components/ui/UserAvatar";
 
 function Profile() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const user = getStoredUser();
-  const displayName = user?.userName ? capitalize(user.userName) : "Guest";
+  const displayName = getCurrentUserName() || "Guest";
 
   function handleLogout() {
     clearAuthSession();

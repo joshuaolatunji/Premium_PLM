@@ -7,7 +7,7 @@ import { getInitiativeById } from "../../service/InitiativeService";
 import { getDiscoveryByInitiativeId } from "../../service/ProductDiscoveryService";
 import { getInitiativeDocuments, saveDocument, submitDocument } from "../../service/DocumentService";
 import { generateDocumentDescription, isAiAvailable } from "../../service/AiService";
-import { getCurrentUserId, getStoredUser } from "../../apicalls/authStorage";
+import { getCurrentUserId, getStoredUser, getCurrentUserName } from "../../apicalls/authStorage";
 import type { ProductInitiative } from "../../types/initiativeTypes";
 import type { ProductDiscovery } from "../../types/discoveryTypes";
 import { priorityLabel } from "../../utils/initiativeStatus";
@@ -34,7 +34,6 @@ import { useDraftState } from "../../utils/useDraftState";
 import DraftRestoredNotice from "../../components/common/DraftRestoredNotice";
 import { downloadDocument, previewDocument } from "../../utils/printDocument";
 import { documentEditorPath, documentHubPath } from "../../utils/documentRoutes";
-import { capitalize } from "../../utils/text";
 import BackLink from "../../components/common/BackLink";
 import DocumentTabs from "../../components/documents/DocumentTabs";
 import DocumentPager from "../../components/documents/DocumentPager";
@@ -87,7 +86,7 @@ function DocumentForm({
       return { overview: document.overview, description: document.description };
     }
 
-    const myName = capitalize(getStoredUser()?.userName ?? "");
+    const myName = getCurrentUserName();
     return { overview: { ...EMPTY_OVERVIEW, author: myName, productManager: myName }, description: "" };
   });
   const [errorMessage, setErrorMessage] = useState("");

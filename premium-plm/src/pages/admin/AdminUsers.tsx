@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
-import { sileo } from "sileo";
 import { AnimatePresence } from "motion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -13,6 +12,8 @@ import { isUserActive } from "../../utils/userStatus";
 import UserAvatar from "../../components/ui/UserAvatar";
 import type { PLMUser } from "../../types/userTypes";
 import ModalShell from "../../components/common/ModalShell";
+import SearchableSelect from "../../components/ui/SearchableSelect";
+import { notifySuccess } from "../../utils/notify";
 
 const USERS_QUERY_KEY = ["plm-users"];
 
@@ -67,7 +68,7 @@ function AdminUsers() {
     onSuccess: (_data, user) => {
       setStatusError("");
       setStatusUserId(null);
-      sileo.success({
+      notifySuccess({
         title: isUserActive(user) ? "User deactivated" : "User activated",
         description: isUserActive(user)
           ? `${capitalize(user.userName)} can no longer sign in.`
@@ -223,7 +224,7 @@ function AdminUsers() {
             availableRoles={rolesQuery.data ?? []}
             onClose={() => setManagingUserId(null)}
             onChanged={(roleName) => {
-              sileo.success({
+              notifySuccess({
                 title: "Role changed",
                 description: `${capitalize(managingUser.userName)} is now ${formatRoleName(roleName)}.`,
               });
@@ -371,7 +372,7 @@ function ChangeRoleModal({ user, availableRoles, onClose, onChanged }: ChangeRol
               <label htmlFor="changeRoleId">New role</label>
             </dt>
             <dd className="form-field">
-              <select
+              <SearchableSelect
                 id="changeRoleId"
                 value={selectedRoleId}
                 onChange={(event) => {
@@ -389,7 +390,7 @@ function ChangeRoleModal({ user, availableRoles, onClose, onChanged }: ChangeRol
                     {formatRoleName(role.roleName as string)}
                   </option>
                 ))}
-              </select>
+              </SearchableSelect>
             </dd>
           </div>
         </dl>

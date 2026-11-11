@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Eye, Plus, RotateCcw, Send } from "lucide-react";
-import { sileo } from "sileo";
 
 import {
   activateMemoSignOff,
@@ -24,6 +23,7 @@ import ApprovalSignOff from "../approvals/ApprovalSignOff";
 import ApproverRowsEditor from "../approvals/ApproverRowsEditor";
 import DraftRestoredNotice from "../common/DraftRestoredNotice";
 import ModalShell from "../common/ModalShell";
+import { notifyError, notifySuccess } from "../../utils/notify";
 
 interface MemoSignOffPanelProps {
   memo: Memo;
@@ -105,7 +105,7 @@ function MemoSignOffPanel({ memo, stage, isAuthor, workflowId, currentStepId }: 
   async function done(title: string, description: string) {
     setConfirming(null);
     setErrorMessage("");
-    sileo.success({ title, description });
+    notifySuccess({ title, description });
     await queryClient.invalidateQueries({ queryKey: memoKeys.all });
   }
 
@@ -122,7 +122,7 @@ function MemoSignOffPanel({ memo, stage, isAuthor, workflowId, currentStepId }: 
     },
     onError: (error) => {
       setConfirming(null);
-      sileo.error({ title: "Couldn't start the signing", description: failure("start the signing", error) });
+      setErrorMessage(notifyError("Couldn't start the signing", failure("start the signing", error)));
     },
   });
 
@@ -140,7 +140,7 @@ function MemoSignOffPanel({ memo, stage, isAuthor, workflowId, currentStepId }: 
     },
     onError: (error) => {
       setConfirming(null);
-      sileo.error({ title: "Couldn't send it round again", description: failure("send it round again", error) });
+      setErrorMessage(notifyError("Couldn't send it round again", failure("send it round again", error)));
     },
   });
 
@@ -161,7 +161,7 @@ function MemoSignOffPanel({ memo, stage, isAuthor, workflowId, currentStepId }: 
         downloadBlob(await fetchFinalMemoPdf(workflowId), `${memo.memoNumber || "memo"}-signed.pdf`);
       }
     } catch (error) {
-      sileo.error({ title: "Couldn't open the signed PDF", description: failure("open the signed PDF", error) });
+      setErrorMessage(notifyError("Couldn't open the signed PDF", failure("open the signed PDF", error)));
     } finally {
       setPdfBusy(false);
     }

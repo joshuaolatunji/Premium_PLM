@@ -8,6 +8,7 @@ import { backState } from "../../utils/navigation";
 import { formatDate } from "../../utils/ticketStatus";
 import { useMemoLists } from "../../utils/useMemoLists";
 import PreviewBadge from "../../components/memos/PreviewBadge";
+import SearchableSelect from "../../components/ui/SearchableSelect";
 
 const PAGE_SIZE = 10;
 const PARTS: MemoPart[] = ["Author", "Reviewer", "Signer"];
@@ -125,26 +126,26 @@ function Memos() {
 
         <div className="sign-offs-filters_field">
           <label htmlFor="memos-part">Your part</label>
-          <select id="memos-part" value={part ?? ""} onChange={(event) => setFilter("part", event.target.value)}>
+          <SearchableSelect id="memos-part" value={part ?? ""} onChange={(event) => setFilter("part", event.target.value)}>
             <option value="">All parts</option>
             {PARTS.map((item) => (
               <option key={item} value={item}>
                 {item}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
         </div>
 
         <div className="sign-offs-filters_field">
           <label htmlFor="memos-status">Status</label>
-          <select id="memos-status" value={status ?? ""} onChange={(event) => setFilter("status", event.target.value)}>
+          <SearchableSelect id="memos-status" value={status ?? ""} onChange={(event) => setFilter("status", event.target.value)}>
             <option value="">All statuses</option>
             {statuses.map((item) => (
               <option key={item} value={item}>
                 {memoStatusText(item)}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
         </div>
 
         <div className="sign-offs-filters_field">
@@ -166,8 +167,7 @@ function Memos() {
       </section>
 
       <p className="mock-data-notice">
-        Memos you've already signed aren't listed yet: the API has no memo signing history (gaps file M36). Reviews are
-        kept in this browser until the backend adds them (M34).
+        Memos you've already signed aren't listed yet: the API can't list them (gaps file M36).
       </p>
 
       <section className="dashboard-panel">

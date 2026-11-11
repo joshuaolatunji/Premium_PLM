@@ -8,17 +8,19 @@
 //      the signatures to the memo's PDF.
 // The Group Head has no special part in it.
 
-// A memo's stage. The review stage isn't on the server yet (gaps file M34):
-// the server memo stays Draft through it, and these three stages come from
-// the review kept in the browser (see memoStage). Kept as a plain string so a
-// status the API adds later still shows, as its own words.
+// A memo's stage. The review stage comes from the memo's reviewer workflow
+// when it's loaded (see memoStage), and otherwise from the server's status.
+// Kept as a plain string so a status the API adds later still shows, as its
+// own words.
 export type MemoStatus = string;
 
 export const MEMO_STATUS = {
   draft: "Draft",
-  // Review stage (kept in the browser until gaps file M34).
+  // Review stage. A reviewer can ask for changes (the author edits it and
+  // sends it again) or reject it outright.
   inReview: "InReview",
   reviewDeclined: "ReviewDeclined",
+  reviewRejected: "ReviewRejected",
   reviewed: "Reviewed",
   // Signing stage (the server's own statuses).
   readyForApproval: "ReadyForApproval",
@@ -58,14 +60,16 @@ export interface MemoGroupHeadReview {
 }
 
 // One reviewer, in review order. Waiting: not their turn yet; Pending: with
-// them now.
-export type MemoReviewStepStatus = "Waiting" | "Pending" | "Approved" | "Declined";
+// them now; Declined: they asked for changes; Rejected: they rejected it.
+export type MemoReviewStepStatus = "Waiting" | "Pending" | "Approved" | "Declined" | "Rejected";
 
 export interface MemoReviewStep {
   id: string;
   sequence: number;
   reviewerUserId: string;
-  reviewerName: string;
+  // The API sends only the user id; the page fills the name in from the
+  // staff list when it can read it (gaps file M39).
+  reviewerName: string | null;
   reviewerRole: string;
   status: MemoReviewStepStatus;
   // When it reached them, and when they decided.
@@ -74,29 +78,23 @@ export interface MemoReviewStep {
   comment: string | null;
 }
 
-// A memo's review: the reviewers its author sent it to, in order. Each
-// resend after a decline starts a new round.
+// A memo's review (get-reviewer-workflow): the reviewers its author chose,
+// in order. Each resend after changes starts a new round, with the same
+// reviewers; only the latest round is kept here.
 export interface MemoReview {
+  workflowId: string;
   memoId: string;
-  memoNumber: string;
-  subject: string;
-  from: string;
-  to: string;
-  authorUserId: string;
+  memoVersion: number;
   round: number;
-  status: "InReview" | "Declined" | "Approved";
+  status: "InReview" | "Declined" | "Rejected" | "Approved" | "Cancelled";
   steps: MemoReviewStep[];
-  // What the author changed, when they sent it again after a decline.
+  // What the author changed, when they sent it again.
   changeNote: string | null;
-  sentAt: string;
   updatedAt: string;
 }
 
-// A memo waiting for the signed-in user's review.
-export interface MemoPendingReview {
-  review: MemoReview;
-  step: MemoReviewStep;
-}
+// After changes, where the review picks up again.
+export type MemoReviewResumeMode = "ResumeFromRequestingReviewer" | "FullRestart" | "ResumeFromSelectedReviewer";
 
 // One memo in full (get-memo-byId).
 export interface Memo extends MemoFields {
@@ -116,9 +114,10 @@ export interface Memo extends MemoFields {
   submittedAt: string | null;
   completedAt: string | null;
   groupHeadReview: MemoGroupHeadReview | null;
-  // The memo's sign-off, once its approvers are set. The API doesn't send
-  // it on the memo yet (gaps file M27); read here so it's used once it does.
+  // The memo's sign-off, once its approvers are set.
   workflowId: string | null;
+  // The memo's review, once its reviewers are set.
+  reviewerWorkflowId: string | null;
   hasFinalPdf: boolean;
 }
 
@@ -134,6 +133,18 @@ export interface MemoSummary {
   createdByUserId: string;
   createdAt: string;
   updatedAt: string | null;
+}
+
+// A memo the signed-in user is a reviewer on (my-assigned-memo): their step
+// in its review, and whether it's their turn.
+export interface MemoAssignedReview {
+  memo: MemoSummary;
+  reviewerWorkflowId: string | null;
+  stepId: string | null;
+  sequence: number;
+  // True while the step waits on them (stepStatus AwaitingAction).
+  myTurn: boolean;
+  assignedAt: string | null;
 }
 
 // A memo waiting for the signed-in user's signature (my-pending-approvals),

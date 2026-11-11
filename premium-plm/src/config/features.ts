@@ -12,10 +12,10 @@
 // While a phase is off, its addresses send people to the memo dashboard.
 //
 // Memos:
-//   VITE_SHOW_MEMO_ATTACHMENTS  the Attachments step and lists. Off until the
-//                               backend accepts memo attachments (gap M37).
+//   VITE_SHOW_MEMO_ATTACHMENTS  the Attachments step and lists. The backend
+//                               accepts them now (gap M37, fixed 2026-11-09).
 //   VITE_MEMOS_LIVE             removes the "Preview" badge. Leave off until
-//                               gaps M33, M26, M34 and M35 are fixed.
+//                               gaps M33, M26, M39 and M35 are fixed.
 
 function isOn(value: unknown): boolean {
   return value === "true";

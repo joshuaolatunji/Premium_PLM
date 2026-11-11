@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Trash2, UploadCloud, X } from "lucide-react";
-import { sileo } from "sileo";
 
 import {
   attachmentName,
@@ -14,6 +13,7 @@ import {
 import type { MemoAttachment } from "../../service/MemoAttachmentService";
 import { formatDate } from "../../utils/ticketStatus";
 import { FileBadge } from "./MemoAttachmentsList";
+import { notifyError, notifySuccess, notifyWarning } from "../../utils/notify";
 
 // A file chosen in this session, uploaded when the memo is next saved or sent.
 export interface StagedFile {
@@ -48,6 +48,7 @@ function MemoAttachmentsPanel({ memoId, staged, setStaged, progress, disabled }:
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [fileError, setFileError] = useState("");
 
   const savedQuery = useQuery({
     queryKey: memoAttachmentKeys.one(memoId ?? ""),
@@ -61,10 +62,11 @@ function MemoAttachmentsPanel({ memoId, staged, setStaged, progress, disabled }:
     mutationFn: deleteMemoAttachment,
     onSuccess: async () => {
       setConfirmingId(null);
-      sileo.success({ title: "File removed" });
+      setFileError("");
+      notifySuccess({ title: "File removed" });
       await queryClient.invalidateQueries({ queryKey: memoAttachmentKeys.one(memoId ?? "") });
     },
-    onError: () => sileo.error({ title: "Couldn't remove the file", description: "Try again." }),
+    onError: (error) => setFileError(notifyError("Couldn't remove the file", error)),
   });
 
   function addFiles(list: FileList | null) {
@@ -78,7 +80,7 @@ function MemoAttachmentsPanel({ memoId, staged, setStaged, progress, disabled }:
     );
 
     if (tooBig.length > 0) {
-      sileo.warning({
+      notifyWarning({
         title: tooBig.length === 1 ? "File too large" : "Files too large",
         description: `${tooBig.map((file) => file.name).join(", ")} ${tooBig.length === 1 ? "is" : "are"} over 25 MB and wasn't added.`,
       });
@@ -90,10 +92,11 @@ function MemoAttachmentsPanel({ memoId, staged, setStaged, progress, disabled }:
   }
 
   async function open(item: MemoAttachment) {
+    setFileError("");
     try {
       await openMemoAttachment(item.id, window.open("", "_blank"));
     } catch {
-      sileo.error({ title: "Couldn't open the file", description: `"${attachmentName(item)}". Try again.` });
+      setFileError(notifyError("Couldn't open the file", `"${attachmentName(item)}". Try again.`));
     }
   }
 
@@ -113,6 +116,12 @@ function MemoAttachmentsPanel({ memoId, staged, setStaged, progress, disabled }:
       </div>
 
       <div className="proposal-section">
+        {fileError && (
+          <p className="form-error" role="alert">
+            {fileError}
+          </p>
+        )}
+
         <div
           className={["memo-dropzone", dragging ? "memo-dropzone--active" : "", disabled ? "memo-dropzone--disabled" : ""]
             .filter(Boolean)

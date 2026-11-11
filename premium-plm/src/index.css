@@ -203,7 +203,7 @@
 }
 
 .sidebar_link--active svg {
-  color: var(--premium-red);
+  color: var(--premium-red-text);
 }
 
 /* The profile, with the one-click log out beside it. */
@@ -247,7 +247,17 @@
   flex-shrink: 0;
 }
 
+/* Name and role beside the avatar. min-width: 0 lets a long full name
+   shorten with an ellipsis instead of wrapping onto a second line. */
+.sidebar_user-text {
+  min-width: 0;
+}
+
 .sidebar_user-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+
   font-size: 13px;
   font-weight: 600;
   color: white;
@@ -437,7 +447,7 @@
 .topbar_logout:hover {
   border-color: var(--premium-red);
   background-color: var(--premium-tint);
-  color: var(--premium-red);
+  color: var(--premium-red-text);
 }
 
 .sidebar_logout:focus-visible,
@@ -1841,7 +1851,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--premium-red);
+  color: var(--premium-red-text);
 
   display: inline-flex;
   align-items: center;
@@ -2238,7 +2248,7 @@
 }
 
 .initiatives-bulk-bar_count strong {
-  color: var(--premium-red);
+  color: var(--premium-red-text);
   font-size: 15px;
 }
 
@@ -2571,6 +2581,19 @@ p.initiatives-empty {
   color: var(--color-success);
   font-size: 14px;
   font-weight: 600;
+}
+
+/* With an icon: the icon beside the message, level with its first line. */
+.brd-status-message--icon {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  line-height: 1.45;
+}
+
+.brd-status-message--icon > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .brd-resubmit-hint {
@@ -3093,7 +3116,7 @@ p.initiatives-empty {
   align-items: center;
   gap: 3px;
 
-  color: var(--premium-red);
+  color: var(--premium-red-text);
 
   font: inherit;
   font-size: 0.875rem;
@@ -4211,7 +4234,7 @@ select:disabled {
     order: 1;
     margin-left: auto;
 
-    color: var(--premium-red);
+    color: var(--premium-red-text);
   }
 
   select option:disabled {
@@ -4325,7 +4348,7 @@ select:disabled {
 .rte-tool--active {
   border-color: var(--color-border-strong);
   background-color: var(--color-surface);
-  color: var(--premium-red);
+  color: var(--premium-red-text);
 }
 
 .rte-tool:disabled {
@@ -5149,7 +5172,7 @@ select:disabled {
   border-radius: var(--radius-pill);
   background-color: var(--premium-tint);
 
-  color: var(--premium-red);
+  color: var(--premium-red-text);
   font-size: 11.5px;
   font-style: normal;
   font-weight: 700;
@@ -6292,7 +6315,7 @@ select:disabled {
 
   border-radius: 999px;
   background-color: var(--premium-tint);
-  color: var(--premium-red);
+  color: var(--premium-red-text);
 }
 
 .signoff-prompt_text {
@@ -6366,23 +6389,23 @@ select:disabled {
    subject takes what's left. */
 .memo-table {
   table-layout: fixed;
-  min-width: 880px;
+  min-width: 820px;
 }
 
 .memo-table__party {
-  width: 17%;
+  width: 15%;
 }
 
 .memo-table__date {
-  width: 120px;
+  width: 112px;
 }
 
 .memo-table__status {
-  width: 190px;
+  width: 156px;
 }
 
 .memo-table__action {
-  width: 170px;
+  width: 124px;
 }
 
 /* The register's extra column: the user's part in each memo. */
@@ -6456,6 +6479,24 @@ select:disabled {
   padding-right: 12px;
 }
 
+/* Subject: up to two lines, then an ellipsis (the full text is in the
+   tooltip); the memo number stays on one line. */
+.memo-table .initiative-cell strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.memo-table .initiative-cell span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .memo-table__text {
   overflow: hidden;
   white-space: nowrap;
@@ -6471,52 +6512,12 @@ select:disabled {
 }
 
 .memo-table .table-action {
-  min-width: 96px;
+  min-width: 92px;
 }
 
 /* =========================
-   Memo versions and resubmission
+   Memo resubmission
    ========================= */
-
-.memo-versions {
-  display: grid;
-  gap: 0;
-
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.memo-versions li {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: baseline;
-  gap: 4px 16px;
-
-  padding: 14px 24px;
-  border-bottom: 1px solid var(--color-divider);
-}
-
-.memo-versions li:last-child {
-  border-bottom: 0;
-}
-
-.memo-versions strong {
-  color: var(--color-ink);
-  font-size: 0.9375rem;
-}
-
-.memo-versions span {
-  color: var(--color-ink-muted);
-  font-size: 0.84375rem;
-}
-
-.memo-versions p {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--color-ink-secondary);
-  font-size: 0.875rem;
-}
 
 .memo-resubmit-modes {
   display: grid;
@@ -6587,7 +6588,7 @@ select:disabled {
 .memo-dash__eyebrow {
   margin: 0 0 6px;
 
-  color: var(--premium-red);
+  color: var(--premium-red-text);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -6856,7 +6857,7 @@ select:disabled {
   border: 0;
   background: none;
 
-  color: var(--premium-red);
+  color: var(--premium-red-text);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -7007,7 +7008,7 @@ select:disabled {
   border-radius: 999px;
   background-color: var(--premium-tint);
 
-  color: var(--premium-red);
+  color: var(--premium-red-text);
   font-size: 12px;
   font-weight: 700;
   vertical-align: 2px;
@@ -7107,7 +7108,7 @@ select:disabled {
   border: 0;
   background: none;
 
-  color: var(--premium-red);
+  color: var(--premium-red-text);
   font: inherit;
   text-decoration: underline;
   text-decoration-thickness: 1px;
@@ -7351,7 +7352,7 @@ select:disabled {
 .memo-attach__icon-button:hover:not(:disabled) {
   border-color: var(--color-border);
   background-color: var(--premium-tint);
-  color: var(--premium-red);
+  color: var(--premium-red-text);
 }
 
 .memo-attach__icon-button:disabled {
@@ -7928,7 +7929,7 @@ select:disabled {
 }
 
 .memo-dash-stage:hover .memo-dash-stage__go {
-  color: var(--premium-red);
+  color: var(--premium-red-text);
 }
 
 .memo-dash-stage:not(.memo-dash-stage--active):hover .memo-dash-stage__go {
@@ -7936,7 +7937,7 @@ select:disabled {
 }
 
 .memo-dash-stage--active .memo-dash-stage__go {
-  color: var(--premium-red);
+  color: var(--premium-red-text);
 }
 
 /* Row actions ("View ›", "Review & sign ›"): the arrow says where it goes. */
@@ -8020,7 +8021,7 @@ select:disabled {
 
 .notifications-item:not(:disabled):hover .notifications-item_go {
   transform: translateX(3px);
-  color: var(--premium-red);
+  color: var(--premium-red-text);
 }
 
 /* The drop zone is one big target: pointer, and a red edge on hover. */
@@ -8195,6 +8196,30 @@ select:disabled {
   color: rgb(255 255 255 / 90%);
 }
 
+/* Every toast's title (utils/notify.ts): larger and bolder than its message,
+   in sentence case as written (Sileo title-cases it by default). */
+[data-sileo-viewport] [data-sileo-title][data-sileo-title] {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.005em;
+  text-transform: none;
+}
+
+/* Solid toasts (success green, error red, warning amber, info blue): white
+   title and message, a white-tinted badge, on the coloured island. */
+.sileo-solid.sileo-solid[data-state] {
+  --sileo-tone: #ffffff;
+  --sileo-tone-bg: rgb(255 255 255 / 22%);
+  color: #ffffff;
+}
+
+[data-sileo-viewport] [data-sileo-description].sileo-solid.sileo-solid {
+  color: #ffffff;
+  font-weight: 500;
+}
+
 /* The page change itself (a view transition, only while signing in). */
 :root[data-transition="sign-in"]::view-transition-old(root) {
   animation: sign-in-leave 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
@@ -8248,6 +8273,28 @@ select:disabled {
     opacity: 0;
     transform: translateY(-12px);
   }
+}
+
+/* Toasts stay on top through every page transition. The topbar and sidebar
+   above get their own transition layers, which paint over the page's (where
+   the toast would otherwise be, hidden under the arriving topbar). So the
+   toasts get a layer of their own, the topmost, shown live with no
+   cross-fade. */
+[data-sileo-viewport][data-position="top-center"] {
+  view-transition-name: app-toasts;
+}
+
+::view-transition-group(app-toasts) {
+  z-index: 100;
+  animation: none;
+}
+
+::view-transition-old(app-toasts) {
+  display: none;
+}
+
+::view-transition-new(app-toasts) {
+  animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -8421,4 +8468,269 @@ select:disabled {
 
   color: rgb(255 255 255 / 92%);
   font-size: 9.5px;
+}
+
+/* =========================
+   DARK MODE CARDS
+   On the black page, four solid red cards beside the red sidebar read as
+   harsh, so in dark mode the stat cards turn graphite and keep red only as an
+   accent: a stripe along the top, the icon, and the Filter pill. The sidebar
+   keeps its red gradient. Light mode is unchanged.
+   ========================= */
+
+:root[data-theme="dark"] .memo-dash-card {
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgb(255 255 255 / 4%) 0%, transparent 50%),
+    linear-gradient(160deg, #1e2229 0%, #171b21 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 4%),
+    0 0 0 1px #2a2f37,
+    0 12px 26px -18px rgb(0 0 0 / 70%);
+}
+
+/* The red stripe along the top edge. */
+:root[data-theme="dark"] .memo-dash-card::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--premium-red), #ff7a75);
+}
+
+:root[data-theme="dark"] .memo-dash-card:hover {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 5%),
+    0 0 0 1px #3a4049,
+    0 20px 36px -18px rgb(0 0 0 / 80%);
+}
+
+:root[data-theme="dark"] .memo-dash-card--active {
+  box-shadow:
+    0 0 0 1px #3a4049,
+    0 0 0 3px var(--color-surface-alt),
+    0 0 0 5px #ff7a75,
+    0 20px 36px -18px rgb(0 0 0 / 80%);
+}
+
+:root[data-theme="dark"] .memo-dash-card__icon {
+  border-color: rgb(255 122 117 / 30%);
+  background: rgb(221 32 37 / 16%);
+  color: #ff7a75;
+}
+
+:root[data-theme="dark"] .memo-dash-card__watermark {
+  opacity: 0.06;
+}
+
+:root[data-theme="dark"] .memo-dash-card:hover .memo-dash-card__watermark {
+  opacity: 0.1;
+}
+
+:root[data-theme="dark"] .memo-dash-card__foot {
+  border-top-color: rgb(255 255 255 / 10%);
+}
+
+:root[data-theme="dark"] .memo-dash-card__state {
+  border-color: rgb(255 122 117 / 45%);
+  background-color: rgb(221 32 37 / 10%);
+  color: #ff9a96;
+}
+
+:root[data-theme="dark"] .memo-dash-card:hover .memo-dash-card__state {
+  border-color: #ff7a75;
+  background-color: rgb(221 32 37 / 20%);
+}
+
+/* The chosen card's pill fills in, so "Showing" reads at a glance. */
+:root[data-theme="dark"] .memo-dash-card--active .memo-dash-card__state {
+  border-color: #ff7a75;
+  background-color: #ff7a75;
+  color: #16181c;
+}
+
+/* =========================
+   Searchable dropdown (components/ui/SearchableSelect.tsx)
+   Opens in place of the browser's list for every <select>: a search box,
+   then each item in its own faint rectangle, a second line (a person's
+   role) in faint red underneath.
+========================= */
+
+.select-menu {
+  position: fixed;
+  z-index: 1100;
+
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  background-color: var(--color-surface);
+  box-shadow:
+    0 12px 32px rgb(22 24 28 / 14%),
+    0 2px 6px rgb(22 24 28 / 6%);
+}
+
+.select-menu__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+
+  margin: var(--space-2);
+  padding: 0 var(--space-3);
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background-color: var(--color-field);
+  color: var(--color-ink-muted);
+
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.select-menu__search:focus-within {
+  border-color: var(--premium-red);
+  background-color: var(--color-surface);
+  box-shadow: 0 0 0 3px var(--premium-tint);
+}
+
+/* Reset: the app-wide input rules would otherwise give it a second box. */
+.select-menu__search input,
+.select-menu__search input:focus {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  padding: 0;
+
+  border: 0;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.select-menu__search input::placeholder {
+  color: var(--color-ink-muted);
+}
+
+.select-menu__search input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+.select-menu__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+
+  margin: 0;
+  padding: var(--space-2);
+  list-style: none;
+  outline: none;
+}
+
+.select-menu__search + .select-menu__list {
+  padding-top: 0;
+}
+
+.select-menu__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+
+  padding: 9px var(--space-3);
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background-color: var(--color-surface);
+
+  cursor: pointer;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+
+.select-menu__option--active {
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface-alt);
+}
+
+.select-menu__option--selected {
+  border-color: rgb(221 32 37 / 35%);
+  background-color: var(--premium-tint);
+}
+
+.select-menu__option--disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.select-menu__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.select-menu__label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+/* People's names in bold; plain choices (priority, status…) stay regular. */
+.select-menu__option:has(.select-menu__description) .select-menu__label {
+  font-weight: 600;
+}
+
+.select-menu__description {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+
+  color: var(--premium-red-text);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.3;
+  opacity: 0.75;
+}
+
+.select-menu__check {
+  flex-shrink: 0;
+  color: var(--premium-red-text);
+}
+
+.select-menu__empty {
+  padding: var(--space-5) var(--space-3);
+
+  color: var(--color-ink-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+:root[data-theme="dark"] .select-menu {
+  box-shadow:
+    0 12px 32px rgb(0 0 0 / 55%),
+    0 2px 6px rgb(0 0 0 / 35%);
+}
+
+:root[data-theme="dark"] .select-menu__option--selected {
+  border-color: rgb(255 122 117 / 40%);
+}
+
+:root[data-theme="dark"] .select-menu__description {
+  opacity: 0.8;
 }

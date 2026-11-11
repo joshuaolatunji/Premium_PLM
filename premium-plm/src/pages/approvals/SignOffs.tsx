@@ -13,6 +13,7 @@ import { resolvePrimaryRole } from "../../utils/roleRouting";
 import { documentEditorPath, documentReviewPath } from "../../utils/documentRoutes";
 import { backState } from "../../utils/navigation";
 import { formatDate } from "../../utils/ticketStatus";
+import SearchableSelect from "../../components/ui/SearchableSelect";
 
 
 type Row = WorkflowPage["workflows"][number];
@@ -168,7 +169,7 @@ function SignOffs() {
       <section className="sign-offs-filters" aria-label="Filter sign-offs">
         <div className="sign-offs-filters_field">
           <label htmlFor="sign-offs-status">Status</label>
-          <select
+          <SearchableSelect
             id="sign-offs-status"
             value={filters.status ?? ""}
             onChange={(event) => setFilter("status", event.target.value)}
@@ -179,12 +180,12 @@ function SignOffs() {
                 {STATUS_LABELS[status]}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
         </div>
 
         <div className="sign-offs-filters_field">
           <label htmlFor="sign-offs-type">Document</label>
-          <select
+          <SearchableSelect
             id="sign-offs-type"
             value={filters.documentType ?? ""}
             onChange={(event) => setFilter("documentType", event.target.value)}
@@ -195,12 +196,12 @@ function SignOffs() {
                 {type}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
         </div>
 
         <div className="sign-offs-filters_field sign-offs-filters_field--wide">
           <label htmlFor="sign-offs-initiative">Initiative</label>
-          <select
+          <SearchableSelect
             id="sign-offs-initiative"
             value={filters.initiativeId ?? ""}
             onChange={(event) => setFilter("initiativeId", event.target.value)}
@@ -211,7 +212,7 @@ function SignOffs() {
                 {initiative.projectName}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
         </div>
 
         <div className="sign-offs-filters_field">

@@ -13,12 +13,21 @@ interface MemoSignedViewProps {
   // The step the user has just signed.
   item: MemoPendingApproval;
   title: string;
+  // Where the memo has gone: to the next approver, or nowhere because this
+  // was the last signature. "checking" while the memo is being re-read.
+  outcome: "checking" | "next" | "final";
 }
+
+const OUTCOME_TEXT: Record<MemoSignedViewProps["outcome"], string> = {
+  checking: "Signed.",
+  next: "Signed. The memo has moved on to the next approver.",
+  final: "Signed. You were the final approver, so the memo is now fully signed.",
+};
 
 // Straight after an approver signs: the memo with their signature on it, and
 // the way back to their queue. Once they leave, the memo is no longer theirs
 // to open.
-function MemoSignedView({ item, title }: MemoSignedViewProps) {
+function MemoSignedView({ item, title, outcome }: MemoSignedViewProps) {
   const navigate = useNavigate();
   const [pdfError, setPdfError] = useState("");
 
@@ -43,9 +52,9 @@ function MemoSignedView({ item, title }: MemoSignedViewProps) {
 
   return (
     <>
-      <p className="brd-status-message" role="status">
+      <p className="brd-status-message brd-status-message--icon" role="status">
         <CheckCircle2 size={17} aria-hidden="true" />
-        Signed. The memo has moved on to the next approver.
+        <span>{OUTCOME_TEXT[outcome]}</span>
       </p>
 
       {pdfError && (

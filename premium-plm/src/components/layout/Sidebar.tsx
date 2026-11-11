@@ -25,11 +25,11 @@ import {
 
 import UserAvatar from "../ui/UserAvatar"
 import LogoutButton from "./LogoutButton";
-import { getStoredUser } from "../../apicalls/authStorage";
+import { getStoredUser, getCurrentUserName } from "../../apicalls/authStorage";
 import { resolvePrimaryRole } from "../../utils/roleRouting";
 import { SHOW_INITIATIVES } from "../../config/features";
 import PreviewBadge from "../memos/PreviewBadge";
-import { capitalize, formatRoleName } from "../../utils/text";
+import { formatRoleName } from "../../utils/text";
 import { documentHubPath, documentReviewsPath } from "../../utils/documentRoutes";
 import type { DocumentReviewer, DocumentType } from "../../types/documentTypes";
 
@@ -370,7 +370,7 @@ function Sidebar({ open, onClose }: SidebarProps) {
     const navigate = useNavigate();
     const user = getStoredUser();
     const roles = user?.roles ?? [];
-    const displayName = user?.userName ? capitalize(user.userName) : "Guest";
+    const displayName = getCurrentUserName() || "Guest";
 
     // Same role-priority rule as the post-login landing route and the
     // /dashboard index redirect (see utils/roleRouting.ts), so the sidebar
@@ -437,7 +437,7 @@ function Sidebar({ open, onClose }: SidebarProps) {
                             <UserAvatar name={displayName} />
                         </div>
 
-                        <div>
+                        <div className="sidebar_user-text">
                             <p className="sidebar_user-name">
                                 <strong>{displayName}</strong>
                             </p>

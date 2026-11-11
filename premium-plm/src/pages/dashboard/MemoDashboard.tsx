@@ -3,12 +3,11 @@ import { AnimatePresence, motion } from "motion/react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, ChevronRight, ClipboardCheck, FileText, ListTodo, PenLine, Plus, X, type LucideIcon } from "lucide-react";
 
-import { getStoredUser } from "../../apicalls/authStorage";
+import { getCurrentUserFirstName } from "../../apicalls/authStorage";
 import { isRejectedAtSignOff } from "../../service/MemoService";
 import { MEMO_STATUS } from "../../types/memoTypes";
 import type { MemoRow } from "../../types/memoTypes";
 import { backState } from "../../utils/navigation";
-import { capitalize } from "../../utils/text";
 import { useCountUp } from "../../utils/useCountUp";
 import { useMemoLists } from "../../utils/useMemoLists";
 import MemoTable from "../../components/memos/MemoTable";
@@ -39,7 +38,7 @@ const STAGES: { id: StageId; label: string; statuses: string[] }[] = [
   { id: "ready", label: "Ready for signing", statuses: [MEMO_STATUS.reviewed, MEMO_STATUS.readyForApproval] },
   { id: "signing", label: "Out for signing", statuses: [MEMO_STATUS.inApproval] },
   { id: "signed", label: "Fully signed", statuses: [MEMO_STATUS.approved] },
-  { id: "returned", label: "Declined or rejected", statuses: [MEMO_STATUS.reviewDeclined, MEMO_STATUS.changesRequested] },
+  { id: "returned", label: "Declined or rejected", statuses: [MEMO_STATUS.reviewDeclined, MEMO_STATUS.reviewRejected, MEMO_STATUS.changesRequested] },
 ];
 
 const LIST_SIZE = 8;
@@ -66,8 +65,7 @@ function MemoDashboard() {
   const memos = useMemoLists();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const user = getStoredUser();
-  const name = user?.userName ? capitalize(user.userName) : "";
+  const name = getCurrentUserFirstName();
 
   const cards: Card[] = [
     {

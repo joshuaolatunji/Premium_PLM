@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { sileo } from "sileo";
+import { notifyWarning } from "../../utils/notify";
 
 // How long before the session ends the warning appears.
 const WARNING_MS = 1 * 60 * 1000;
@@ -21,7 +22,7 @@ function SessionExpiryWarning({ expiry }: SessionExpiryWarningProps) {
       const left = expiry - Date.now();
       if (left <= 0) return;
 
-      toastId = sileo.warning({
+      toastId = notifyWarning({
         title: "Your session is ending",
         description: "It ends in under a minute. Save your work; you'll come back to this page after signing in.",
         duration: left,

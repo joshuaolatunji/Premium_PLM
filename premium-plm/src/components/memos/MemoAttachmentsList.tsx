@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
-import { sileo } from "sileo";
+import { useState } from "react";
 
 import {
   attachmentName,
@@ -12,6 +12,7 @@ import {
 import type { MemoAttachment } from "../../service/MemoAttachmentService";
 import { formatDate } from "../../utils/ticketStatus";
 import { SHOW_MEMO_ATTACHMENTS } from "../../config/features";
+import { notifyError } from "../../utils/notify";
 
 // A coloured tag for the file's kind, from its name.
 const KINDS: { kind: string; label: string; extensions: string[] }[] = [
@@ -41,6 +42,7 @@ function MemoAttachmentsList({ memoId }: { memoId: string }) {
 }
 
 function AttachmentsList({ memoId }: { memoId: string }) {
+  const [fileError, setFileError] = useState("");
 
   const query = useQuery({
     queryKey: memoAttachmentKeys.one(memoId),
@@ -55,10 +57,11 @@ function AttachmentsList({ memoId }: { memoId: string }) {
   }
 
   async function open(item: MemoAttachment) {
+    setFileError("");
     try {
       await openMemoAttachment(item.id, window.open("", "_blank"));
     } catch {
-      sileo.error({ title: "Couldn't open the file", description: `"${attachmentName(item)}". Try again.` });
+      setFileError(notifyError("Couldn't open the file", `"${attachmentName(item)}". Try again.`));
     }
   }
 
@@ -75,6 +78,12 @@ function AttachmentsList({ memoId }: { memoId: string }) {
       </div>
 
       <div className="proposal-section">
+        {fileError && (
+          <p className="form-error" role="alert">
+            {fileError}
+          </p>
+        )}
+
         {query.isError ? (
           <p className="mock-data-notice">
             {query.error instanceof Error ? query.error.message : "Couldn't load the attachments."}

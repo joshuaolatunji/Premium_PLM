@@ -1,7 +1,6 @@
 import { Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { getStoredUser } from "../apicalls/authStorage";
-import { capitalize } from "../utils/text";
+import { getCurrentUserFirstName } from "../apicalls/authStorage";
 
 interface DashboardHeaderProps {
   onOpenCreateInitiative: () => void;
@@ -11,7 +10,6 @@ interface DashboardHeaderProps {
 
 function DashboardHeader({ onOpenCreateInitiative, overSlaApprovalCount }: DashboardHeaderProps) {
   const navigate = useNavigate();
-  const user = getStoredUser();
 
   const today = new Date().toLocaleDateString("en-GB", {
     weekday: "long",
@@ -28,7 +26,7 @@ function DashboardHeader({ onOpenCreateInitiative, overSlaApprovalCount }: Dashb
         </p> */}
 
         <h1 className="dashboard-title">
-          Hello, {user?.userName ? capitalize(user.userName) : "there"}
+          Hello, {getCurrentUserFirstName() || "there"}
         </h1>
 
         <p className="dashboard-subtitle">

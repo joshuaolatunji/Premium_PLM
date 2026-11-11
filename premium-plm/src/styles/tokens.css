@@ -6,6 +6,8 @@
   --premium-red-dark: #a8141c;
   --premium-red-deep: #8e1215;
   --premium-tint: #fbe9e8;
+  /* Brand red used as text. Dark mode lifts it so it stays readable. */
+  --premium-red-text: var(--premium-red);
 
 
   /*NEUTRAL COLORS*/
@@ -108,7 +110,8 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --premium-tint: rgb(221 32 37 / 18%);
+  --premium-tint: rgb(221 32 37 / 14%);
+  --premium-red-text: #ff7a75;
 
   --color-ink: #e8eaed;
   --color-ink-secondary: #b8bec6;

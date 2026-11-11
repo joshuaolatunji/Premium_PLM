@@ -22,6 +22,7 @@ import {
 } from "../../utils/initiativeStatus";
 import { capitalize } from "../../utils/text";
 import { useInitiativeDocuments } from "../../utils/documentStatus";
+import SearchableSelect from "../../components/ui/SearchableSelect";
 
 // Every value currentStageFor() can return, in pipeline order — backs both
 // the status filter dropdown and the CSV export.
@@ -340,7 +341,7 @@ function Initiatives() {
           />
         </div>
 
-        <select
+        <SearchableSelect
           value={priorityFilter}
           onChange={(event) => setPriorityFilter(event.target.value)}
           aria-label="Filter by priority"
@@ -352,9 +353,9 @@ function Initiatives() {
               {priority.label}
             </option>
           ))}
-        </select>
+        </SearchableSelect>
 
-        <select
+        <SearchableSelect
           value={managerFilter}
           onChange={(event) => setManagerFilter(event.target.value)}
           aria-label="Filter by product manager"
@@ -366,9 +367,9 @@ function Initiatives() {
               {manager.name}
             </option>
           ))}
-        </select>
+        </SearchableSelect>
 
-        <select
+        <SearchableSelect
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value)}
           aria-label="Filter by current stage"
@@ -380,16 +381,16 @@ function Initiatives() {
               {stage}
             </option>
           ))}
-        </select>
+        </SearchableSelect>
 
-        <select
+        <SearchableSelect
           value={sortOrder}
           onChange={(event) => setSortOrder(event.target.value as "newest" | "oldest")}
           aria-label="Sort initiatives by creation date"
         >
           <option value="newest">Newest</option>
           <option value="oldest">Oldest</option>
-        </select>
+        </SearchableSelect>
 
         {hasActiveFilters && (
           <button type="button" className="text-button" onClick={clearFilters}>
@@ -405,7 +406,7 @@ function Initiatives() {
           </span>
 
           <div className="initiatives-bulk-bar_actions">
-            <select
+            <SearchableSelect
               value={bulkPriority}
               onChange={(event) => setBulkPriority(Number(event.target.value))}
               aria-label="New priority for selected initiatives"
@@ -415,7 +416,7 @@ function Initiatives() {
                   {priority.label}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
 
             <button
               type="button"

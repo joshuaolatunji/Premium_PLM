@@ -2,14 +2,12 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PenLine } from "lucide-react";
-import { sileo } from "sileo";
 import { AnimatePresence } from "motion/react";
 
-import { getStoredUser } from "../../apicalls/authStorage";
+import { getCurrentUserName } from "../../apicalls/authStorage";
 import { fetchMemoPdfToSign, memoKeys, rejectMemo, signMemo } from "../../service/MemoService";
 import { openPdfInTab } from "../../service/PdfService";
 import type { MemoPendingApproval } from "../../types/memoTypes";
-import { capitalize } from "../../utils/text";
 import { clearDraft, useDraftState } from "../../utils/useDraftState";
 import SignaturePad from "../approvals/SignaturePad";
 import DraftRestoredNotice from "../common/DraftRestoredNotice";
@@ -17,6 +15,7 @@ import PdfCoverPreview from "../documents/PdfCoverPreview";
 import MemoAttachmentsList from "./MemoAttachmentsList";
 import DecisionModal from "../review/DecisionModal";
 import ModalShell from "../common/ModalShell";
+import { notifyError, notifySuccess } from "../../utils/notify";
 
 interface MemoSignFormProps {
   // The user's step on this memo, from my-pending-approvals.
@@ -38,7 +37,7 @@ function MemoSignForm({ item, title, onSigned }: MemoSignFormProps) {
   const [confirming, setConfirming] = useState<"approve" | "reject" | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [pdfError, setPdfError] = useState("");
-  const myName = capitalize(getStoredUser()?.userName ?? "");
+  const myName = getCurrentUserName();
   const rejectDraftKey = `memo-reject:${item.stepId}`;
 
   // Fetched once for the front-page preview, and reused when it's opened.
@@ -71,12 +70,11 @@ function MemoSignForm({ item, title, onSigned }: MemoSignFormProps) {
     mutationFn: () => signMemo(item, signature as string, comment),
     onSuccess: async () => {
       clearDrafts();
-      sileo.success({ title: "Memo signed", description: "Your signature has been added." });
+      notifySuccess({ title: "Memo signed", description: "Your signature has been added." });
       onSigned(item);
       await queryClient.invalidateQueries({ queryKey: memoKeys.all });
     },
-    onError: (error) =>
-      sileo.error({ title: "Couldn't sign the memo", description: error instanceof Error ? error.message : "Try again." }),
+    onError: (error) => setErrorMessage(notifyError("Couldn't sign the memo", error)),
   });
 
   // A rejected memo goes back to its author, and leaves the approver's queue.
@@ -84,12 +82,11 @@ function MemoSignForm({ item, title, onSigned }: MemoSignFormProps) {
     mutationFn: (reason: string) => rejectMemo(item, reason),
     onSuccess: async () => {
       clearDrafts();
-      sileo.success({ title: "Memo rejected", description: "It's gone back to its author with your reason." });
+      notifySuccess({ title: "Memo rejected", description: "It's gone back to its author with your reason." });
       navigate("/dashboard?filter=sign", { replace: true });
       await queryClient.invalidateQueries({ queryKey: memoKeys.all });
     },
-    onError: (error) =>
-      sileo.error({ title: "Couldn't reject the memo", description: error instanceof Error ? error.message : "Try again." }),
+    onError: (error) => setErrorMessage(notifyError("Couldn't reject the memo", error)),
   });
 
   const isBusy = signMutation.isPending || rejectMutation.isPending;
@@ -202,8 +199,8 @@ function MemoSignForm({ item, title, onSigned }: MemoSignFormProps) {
 
         <div className="modal-panel_body">
           <p className="brd-confirm-copy">
-            Your signature is added to the memo beside your name, and it moves to the next approver. This
-            can't be undone.
+            Your signature is added to the memo beside your name. The memo then moves on to the next
+            approver, or is fully signed if you're the last. This can't be undone.
           </p>
 
           <div className="signature-confirm">

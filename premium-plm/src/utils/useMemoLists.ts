@@ -1,58 +1,37 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getCurrentUserId } from "../apicalls/authStorage";
-
-import { isMine, isRejectedAtSignOff, listMemos, listMyMemoApprovals, memoKeys } from "../service/MemoService";
-import { listMemoReviews, listMyPendingReviews, memoReviewKeys, memoStage } from "../service/MemoReviewService";
+import { isMine, isRejectedAtSignOff, listMemos, listMyAssignedMemos, listMyMemoApprovals, memoKeys } from "../service/MemoService";
+import { normaliseMemoStatus } from "../service/MemoReviewService";
 import { MEMO_STATUS } from "../types/memoTypes";
-import type {
-  MemoPart,
-  MemoPendingApproval,
-  MemoPendingReview,
-  MemoRegisterRow,
-  MemoReview,
-  MemoRow,
-  MemoSummary,
-} from "../types/memoTypes";
+import type { MemoAssignedReview, MemoPart, MemoPendingApproval, MemoRegisterRow, MemoRow, MemoSummary } from "../types/memoTypes";
 
 export interface MemoLists {
-  // Waiting for the signed-in user's review (their turn only).
+  // Waiting for the signed-in user's review (their turn only, from
+  // my-assigned-memo).
   toReview: MemoRow[];
   // Waiting for the signed-in user's signature (their turn only).
   toSign: MemoRow[];
-  // The user's own memos waiting on them: declined in review, reviewed and
-  // ready for signing, or rejected at signing.
+  // The user's own memos waiting on them: changes asked for in review,
+  // reviewed and ready for signing, or rejected at signing.
   toAction: MemoRow[];
   // Written by the signed-in user.
   mine: MemoRow[];
-  // Every memo the user is part of (written, reviewed or signing), newest
-  // first, for the Memos register.
+  // Every memo the user is part of (written or signing), newest first, for
+  // the Memos register.
   involved: MemoRegisterRow[];
   isLoading: boolean;
   isError: boolean;
 }
 
-function fromSummary(memo: MemoSummary, review: MemoReview | undefined): MemoRow {
+function fromSummary(memo: MemoSummary): MemoRow {
   return {
     id: memo.id,
     memoNumber: memo.memoNumber,
     subject: memo.subject,
     from: memo.from,
     to: memo.to,
-    status: memoStage(memo.status, review ?? null),
-    date: review && review.updatedAt > (memo.updatedAt ?? memo.createdAt) ? review.updatedAt : (memo.updatedAt ?? memo.createdAt),
-  };
-}
-
-function fromPendingReview({ review, step }: MemoPendingReview): MemoRow {
-  return {
-    id: review.memoId,
-    memoNumber: review.memoNumber,
-    subject: review.subject,
-    from: review.from,
-    to: review.to,
-    status: MEMO_STATUS.inReview,
-    date: step.sentAt,
+    status: normaliseMemoStatus(memo.status),
+    date: memo.updatedAt ?? memo.createdAt,
   };
 }
 
@@ -63,7 +42,7 @@ function fromPendingApproval(item: MemoPendingApproval, summary: MemoSummary | u
     subject: item.subject || summary?.subject || "",
     from: item.from || summary?.from || "",
     to: summary?.to ?? "",
-    status: summary?.status ?? MEMO_STATUS.inApproval,
+    status: summary ? normaliseMemoStatus(summary.status) : MEMO_STATUS.inApproval,
     date: item.assignedAt,
   };
 }
@@ -71,31 +50,30 @@ function fromPendingApproval(item: MemoPendingApproval, summary: MemoSummary | u
 const AUTHOR_ACTION: string[] = [MEMO_STATUS.reviewDeclined, MEMO_STATUS.reviewed, MEMO_STATUS.changesRequested];
 
 // The memo lists on the Memos page and the dashboard cards: every memo (the
-// API has no filters, so they're picked out here), the memos waiting on the
-// user's signature, and the reviews (kept in the browser, gaps file M34).
+// API has no filters, so they're picked out here) and the memos waiting on
+// the user's signature or review.
 export function useMemoLists(): MemoLists {
   const memosQuery = useQuery({ queryKey: memoKeys.list, queryFn: listMemos });
   const pendingQuery = useQuery({ queryKey: memoKeys.pending, queryFn: listMyMemoApprovals });
-  const reviewsQuery = useQuery({ queryKey: memoReviewKeys.all, queryFn: listMemoReviews });
-  const myReviewsQuery = useQuery({ queryKey: [...memoReviewKeys.all, "mine"], queryFn: listMyPendingReviews });
+  const assignedQuery = useQuery({ queryKey: memoKeys.assigned, queryFn: listMyAssignedMemos });
 
   const memos = memosQuery.data ?? [];
   const byId = new Map(memos.map((memo) => [memo.id, memo]));
-  const reviews = new Map((reviewsQuery.data ?? []).map((review) => [review.memoId, review]));
-  const mine = memos.filter(isMine).map((memo) => fromSummary(memo, reviews.get(memo.id)));
+  const mine = memos.filter(isMine).map(fromSummary);
 
-  const toReview = (myReviewsQuery.data ?? []).map(fromPendingReview);
+  // One row per memo (a memo can have a step in more than one round); the
+  // fuller copy from get-memos when there is one, for its real status.
+  const assigned = new Map<string, MemoAssignedReview>();
+  for (const item of assignedQuery.data ?? []) {
+    const seen = assigned.get(item.memo.id);
+    if (!seen || (item.myTurn && !seen.myTurn)) assigned.set(item.memo.id, item);
+  }
+  const reviewing = [...assigned.values()].map((item) => fromSummary(byId.get(item.memo.id) ?? item.memo));
+  const toReview = [...assigned.values()]
+    .filter((item) => item.myTurn)
+    .map((item) => ({ ...fromSummary(byId.get(item.memo.id) ?? item.memo), date: item.assignedAt }));
   const toSign = (pendingQuery.data ?? []).map((item) => fromPendingApproval(item, byId.get(item.memoId)));
   const toAction = mine.filter((row) => AUTHOR_ACTION.includes(row.status) || isRejectedAtSignOff(row.status));
-
-  // Memos the user reviewed, or is reviewing now (only once it reached them).
-  const myId = getCurrentUserId();
-  const reviewed = (reviewsQuery.data ?? [])
-    .filter((review) => review.steps.some((step) => step.reviewerUserId === myId && step.status !== "Waiting"))
-    .map((review) => {
-      const summary = byId.get(review.memoId);
-      return summary ? fromSummary(summary, review) : { ...fromPendingReview({ review, step: review.steps[0] }), date: review.updatedAt };
-    });
 
   const register = new Map<string, MemoRegisterRow>();
   function add(rows: MemoRow[], part: MemoPart) {
@@ -109,9 +87,9 @@ export function useMemoLists(): MemoLists {
     }
   }
   add(mine, "Author");
-  add(reviewed, "Reviewer");
-  // Memos already signed aren't listed: the API has no memo signing history
-  // (gaps file M36).
+  add(reviewing, "Reviewer");
+  // Memos the user has already signed aren't listed: the API can't list
+  // them (gaps file M36).
   add(toSign, "Signer");
 
   const waitingOn = (ids: MemoRow[], kind: MemoRegisterRow["waiting"]) =>
@@ -129,7 +107,7 @@ export function useMemoLists(): MemoLists {
     toAction,
     mine,
     involved: [...register.values()].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")),
-    isLoading: memosQuery.isLoading || pendingQuery.isLoading || reviewsQuery.isLoading || myReviewsQuery.isLoading,
-    isError: memosQuery.isError || pendingQuery.isError,
+    isLoading: memosQuery.isLoading || pendingQuery.isLoading || assignedQuery.isLoading,
+    isError: memosQuery.isError || pendingQuery.isError || assignedQuery.isError,
   };
 }

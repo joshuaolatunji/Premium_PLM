@@ -28,11 +28,12 @@ import {
   ticketStatusLabel,
 } from "../../utils/ticketStatus";
 import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
-import { capitalize } from "../../utils/text";
+import { capitalize, formatPersonName, formatRoleName } from "../../utils/text";
 import { activeUsersWithRole } from "../../utils/userStatus";
 import { resolvePrimaryRole } from "../../utils/roleRouting";
 import BackLink from "../../components/common/BackLink";
 import { TicketFields } from "../../components/tickets/TicketBrief";
+import SearchableSelect from "../../components/ui/SearchableSelect";
 
 type TicketForm = Omit<CreateTicketRequest, "initiativeId">;
 
@@ -294,7 +295,7 @@ function TicketsPage() {
           <div className="proposal-section">
             <div className="form-field">
               <label htmlFor="ticketDocument">Document</label>
-              <select
+              <SearchableSelect
                 id="ticketDocument"
                 value={form.documentId ?? ""}
                 onChange={(event) => update("documentId", event.target.value)}
@@ -311,7 +312,7 @@ function TicketsPage() {
                     </option>
                   ) : null,
                 )}
-              </select>
+              </SearchableSelect>
 
               {documentsQuery.isSuccess && approvedDocuments.length === 0 && (
                 <p className="form-field_hint">
@@ -368,7 +369,7 @@ function TicketsPage() {
             <div className="form-field-row">
               <div className="form-field">
                 <label htmlFor="ticketPriority">Priority</label>
-                <select
+                <SearchableSelect
                   id="ticketPriority"
                   value={form.priority}
                   onChange={(event) => update("priority", Number(event.target.value))}
@@ -378,7 +379,7 @@ function TicketsPage() {
                       {priority.label}
                     </option>
                   ))}
-                </select>
+                </SearchableSelect>
               </div>
 
               <div className="form-field">
@@ -396,7 +397,7 @@ function TicketsPage() {
             <div className="form-field">
               <label htmlFor="leadEngineerId">Lead Engineer</label>
 
-              <select
+              <SearchableSelect
                 id="leadEngineerId"
                 value={form.leadEngineerId}
                 onChange={(event) => update("leadEngineerId", event.target.value)}
@@ -407,11 +408,16 @@ function TicketsPage() {
                 </option>
 
                 {leadEngineers.map((user) => (
-                  <option key={user.userId} value={user.userId}>
-                    {capitalize(user.userName)} ({user.email})
+                  <option
+                      key={user.userId}
+                      value={user.userId}
+                      data-description={user.role.map(formatRoleName).join(", ")}
+                      data-keywords={user.email}
+                    >
+                    {formatPersonName(user)}
                   </option>
                 ))}
-              </select>
+              </SearchableSelect>
 
               {/* {usersQuery.isSuccess && leadEngineers.length === 0 && (
                 <p className={isUserListForbidden() ? "form-error" : "form-field_hint"}>

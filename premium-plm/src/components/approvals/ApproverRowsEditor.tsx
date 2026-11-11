@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 import type { PLMUser } from "../../types/userTypes";
 import type { ApproverInput } from "../../types/approvalTypes";
 import { formatPersonName, formatRoleName } from "../../utils/text";
+import SearchableSelect from "../ui/SearchableSelect";
 import { approverLevel } from "../../utils/approvers";
 import type { PersonNoun } from "../../utils/approvers";
 
@@ -70,8 +71,10 @@ function ApproverRowsEditor({
             <label htmlFor={`${idPrefix}-user-${index}`} className="sr-only">
               {approverLevel(index + 1, noun)}
             </label>
-            <select
+            <SearchableSelect
               className="approver-picker"
+              searchable
+              searchPlaceholder="Search by name or role…"
               id={`${idPrefix}-user-${index}`}
               value={row.userId}
               onChange={(event) => chooseUser(index, event.target.value)}
@@ -87,11 +90,12 @@ function ApproverRowsEditor({
                   value={user.userId}
                   // Each person can only sign once.
                   disabled={rows.some((other, otherIndex) => otherIndex !== index && other.userId === user.userId)}
+                  data-description={user.role.map(formatRoleName).join(", ")}
                 >
                   {formatPersonName(user)}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           </div>
 
           <span className={row.role ? "approver-row_role" : "approver-row_role approver-row_role--empty"}>

@@ -5,9 +5,8 @@
 //   GET    api/general-attachments/{attachmentId}/open-attachments
 //   DELETE api/general-attachments/{attachmentId}/delete-attachments
 //
-// The API's AttachmentTargetType doesn't have "Memo" yet (only
-// ProductDiscovery, ProductProposal, ProductInitiative and ProductDocument),
-// so upload and list are refused until it's added (gaps file M37).
+// "Memo" is one of the API's AttachmentTargetType values (gaps file M37,
+// fixed 2026-11-09).
 
 import { apiClient, ApiError, API_BASE_URL } from "../apicalls/apiClient";
 import { getToken } from "../apicalls/authStorage";
@@ -29,14 +28,8 @@ export const memoAttachmentKeys = {
   one: (memoId: string) => ["memos", "attachments", memoId] as const,
 };
 
-// Shown in place of the server's message when it refuses the "Memo" target.
-const NOT_SUPPORTED = "The server doesn't accept memo attachments yet (gaps file M37).";
-
 function friendly(error: unknown, fallback: string): Error {
-  if (error instanceof ApiError && (error.status === 400 || error.status === 404)) {
-    return new Error(NOT_SUPPORTED);
-  }
-  return error instanceof Error ? error : new Error(fallback);
+  return error instanceof Error && error.message ? error : new Error(fallback);
 }
 
 function toAttachment(raw: unknown): MemoAttachment | null {

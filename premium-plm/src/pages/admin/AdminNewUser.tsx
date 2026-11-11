@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserPlus } from "lucide-react";
-import { sileo } from "sileo";
 
 import { getAllUsers } from "../../service/UserService";
 import { assignRole, createUser, getAllRoles } from "../../service/AdminService";
@@ -11,6 +10,8 @@ import { formatRoleName } from "../../utils/text";
 import { useDraftState } from "../../utils/useDraftState";
 import BackLink from "../../components/common/BackLink";
 import DraftRestoredNotice from "../../components/common/DraftRestoredNotice";
+import SearchableSelect from "../../components/ui/SearchableSelect";
+import { notifySuccess } from "../../utils/notify";
 
 const USERS_QUERY_KEY = ["plm-users"];
 const EMPTY_FORM = { username: "", emailAddress: "", firstName: "", lastName: "" };
@@ -50,7 +51,7 @@ function AdminNewUser() {
     onSuccess: async () => {
       drafts.forEach((draft) => draft.discard());
       await queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
-      sileo.success({
+      notifySuccess({
         title: "User created",
         description: `${form.firstName.trim() || form.username.trim()} can now sign in as ${formatRoleName(
           rolesQuery.data?.find((role) => role.roleId === roleId)?.roleName ?? "",
@@ -156,7 +157,7 @@ function AdminNewUser() {
         <div className="proposal-section">
           <div className="form-field">
             <label htmlFor="new-user-role">Role</label>
-            <select
+            <SearchableSelect
               id="new-user-role"
               value={roleId}
               onChange={(event) => setRoleId(event.target.value)}
@@ -173,7 +174,7 @@ function AdminNewUser() {
                     {formatRoleName(role.roleName as string)}
                   </option>
                 ))}
-            </select>
+            </SearchableSelect>
           </div>
 
           {rolesQuery.isError && (

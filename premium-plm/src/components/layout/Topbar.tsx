@@ -5,8 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import UserAvatar from "../ui/UserAvatar";
 import ThemeToggle from "../common/ThemeToggle";
 import LogoutButton from "./LogoutButton";
-import { getStoredUser } from "../../apicalls/authStorage";
-import { capitalize, formatRoleName } from "../../utils/text";
+import { getStoredUser, getCurrentUserName } from "../../apicalls/authStorage";
+import { formatRoleName } from "../../utils/text";
 import { getUnreadCount } from "../../service/NotificationService";
 import { SHOW_INITIATIVES } from "../../config/features";
 
@@ -22,7 +22,7 @@ function Topbar({ onMenuClick }: TopbarProps) {
     const [searchTerm, setSearchTerm] = useState("");
     const user = getStoredUser();
     const roles = user?.roles ?? [];
-    const displayName = user?.userName ? capitalize(user.userName) : "Guest";
+    const displayName = getCurrentUserName() || "Guest";
 
     const unreadCountQuery = useQuery({
         queryKey: ["notifications-unread-count"],

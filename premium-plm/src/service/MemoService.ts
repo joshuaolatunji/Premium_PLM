@@ -3,6 +3,7 @@
 //   Memo
 //     POST  api/memos/Create-memo                          create (Draft)
 //     GET   api/memos/get-memos                            every memo (no filters)
+//     GET   api/memos/my-assigned-memo                     memos the user reviews, with their step
 //     GET   api/memos/{memoId}/get-memo-byId               one memo
 //     PATCH api/memos/{memoId}/update-memo                 save; while it's a Draft
 //     GET   api/memos/{memoId}/memo-historical-flow        saved versions
@@ -16,18 +17,18 @@
 //     GET   api/memo-approval-route/my-pending-approvals
 //   MemoPdf
 //     GET   api/memo-pdf/{memoId}/preview                  the memo as it stands
-//     GET   api/memo-pdf/{wf}/submitted-pdf                first approver, before signing
+//     GET   api/memo-pdf/{wf}/submitted-pdf                not used: returns no signatures (gaps M40)
 //     GET   api/memo-pdf/{wf}/approval-review-pdf          everyone after signing, and later approvers before
 //     GET   api/memo-pdf/workflows/{wf}/final-memo-pdf     fully signed
 //
-// The review stage before signing has no endpoints yet; it's simulated in
-// MemoReviewService (gaps file M34). The Group Head review endpoints
+// The review stage before signing is in MemoReviewService. The Group Head
+// review endpoints
 // (submit-for-group-head-review, group-head-review, resubmit-for-review)
 // belong to the old flow and aren't used.
 //
-// Not used: get-approvalmemo-workflow (its `steps` is always empty, and
-// approvers get 403; the steps endpoint has the same and more) and
-// get-approvalmemo-history (actor names are user ids). Gaps file M26–M29.
+// Not used: get-approvalmemo-workflow (the steps endpoint has the same and
+// more) and get-approvalmemo-history (the steps already carry each
+// decision, comment and date). Gaps file M26–M29.
 
 import { apiClient } from "../apicalls/apiClient";
 import { getCurrentUserId, getStoredUser, getToken } from "../apicalls/authStorage";
@@ -35,6 +36,7 @@ import type { ApprovalStep, ApprovalStepStatus, ApproverInput } from "../types/a
 import { MEMO_STATUS } from "../types/memoTypes";
 import type {
   Memo,
+  MemoAssignedReview,
   MemoFields,
   MemoPendingApproval,
   MemoResubmissionMode,
@@ -66,7 +68,7 @@ export function canCreateInitiativeMemo(): boolean {
 }
 
 // The author can change it (by stage, see memoStage) before it's sent for
-// review, and after a reviewer declines it. Old memos the Group Head sent
+// review, and after a reviewer asks for changes. Old memos the Group Head sent
 // back can still be changed too.
 export function isEditableStatus(stage: MemoStatus): boolean {
   return (
@@ -75,9 +77,10 @@ export function isEditableStatus(stage: MemoStatus): boolean {
 }
 
 // A memo rejected at sign-off. The API's name for it isn't known yet (the
-// rejection path is untested), so any status mentioning a rejection counts.
+// rejection path is untested), so any status mentioning a rejection counts,
+// except a rejection in review.
 export function isRejectedAtSignOff(status: MemoStatus): boolean {
-  return /reject/i.test(status);
+  return /reject/i.test(status) && !/review/i.test(status);
 }
 
 // The yyyy-mm-dd part of an API date-time.
@@ -123,6 +126,7 @@ function toMemo(record: ApiRecord): Memo | null {
         }
       : null,
     workflowId: readString(record, "workflowId", "approvalWorkflowId"),
+    reviewerWorkflowId: readString(record, "reviewerWorkflowId"),
     hasFinalPdf: Boolean(readString(record, "finalPdfReference")),
   };
 }
@@ -168,6 +172,44 @@ export async function listMemos(): Promise<MemoSummary[]> {
     .map(toSummary)
     .filter((memo): memo is MemoSummary => memo !== null)
     .sort((a, b) => (b.updatedAt ?? b.createdAt).localeCompare(a.updatedAt ?? a.createdAt));
+}
+
+// The memos the signed-in user reviews, one row per review step: memoId,
+// memoNumber, to, from, subject, memoVersion, reviewerWorkflowId, stepId,
+// reviewerSequence, stepStatus (AwaitingAction while it's their turn),
+// assignedAt, memoCreatedAt. Swagger doesn't describe it; this is the shape
+// the live API returned (2026-11-09).
+export async function listMyAssignedMemos(): Promise<MemoAssignedReview[]> {
+  const body = await apiClient<unknown>("api/memos/my-assigned-memo", { ...auth() });
+
+  return readList(body)
+    .map((row): MemoAssignedReview | null => {
+      const id = readString(row, "memoId", "id");
+
+      return id
+        ? {
+            memo: {
+              id,
+              memoNumber: readString(row, "memoNumber") ?? "",
+              to: readString(row, "to") ?? "",
+              from: readString(row, "from") ?? "",
+              subject: readString(row, "subject") ?? "",
+              // The row has no memo status; it's in review while the step is open.
+              status: MEMO_STATUS.inReview,
+              version: readNumber(row, "memoVersion") ?? 1,
+              createdByUserId: "",
+              createdAt: readString(row, "memoCreatedAt") ?? "",
+              updatedAt: readString(row, "assignedAt"),
+            },
+            reviewerWorkflowId: readString(row, "reviewerWorkflowId"),
+            stepId: readString(row, "stepId"),
+            sequence: readNumber(row, "reviewerSequence", "sequence") ?? 1,
+            myTurn: statusKey(readString(row, "stepStatus")) === "awaitingaction",
+            assignedAt: readString(row, "assignedAt"),
+          }
+        : null;
+    })
+    .filter((item): item is MemoAssignedReview => item !== null);
 }
 
 export async function getMemo(memoId: string): Promise<Memo> {
@@ -270,6 +312,18 @@ function toStepStatus(value: unknown): ApprovalStepStatus {
   return "Waiting";
 }
 
+// A step's signature as an image the page can show, from its
+// signatureReference: a data URL, or bare base64 image data. Anything else
+// (a file name or storage key) can't be shown without an endpoint that
+// returns the image, which the memo API doesn't have (gaps M41).
+function signatureSrc(reference: string | null): string | null {
+  const value = reference?.trim();
+  if (!value) return null;
+  if (value.startsWith("data:image/")) return value;
+  if (value.length > 100 && /^[A-Za-z0-9+/=\s]+$/.test(value)) return `data:image/png;base64,${value.replace(/\s/g, "")}`;
+  return null;
+}
+
 export async function getMemoSteps(workflowId: string): Promise<ApprovalStep[]> {
   const body = await apiClient<unknown>(`api/memo-approval-route/workflows/${workflowId}/get-memoapprovals-steps`, {
     ...auth(),
@@ -291,7 +345,7 @@ export async function getMemoSteps(workflowId: string): Promise<ApprovalStep[]> 
             status: toStepStatus(readString(row, "status")),
             decidedAt: readString(row, "respondedAt"),
             comment: readString(row, "comment"),
-            signatureImage: null,
+            signatureImage: signatureSrc(readString(row, "signatureReference")),
           }
         : null;
     })
@@ -381,17 +435,33 @@ export function fetchMemoPdfToSign(item: SigningStep): Promise<Blob> {
     : fetchPdfBlob(`api/memo-pdf/${item.workflowId}/approval-review-pdf`);
 }
 
-// What an approver sees once they've signed: the first approver's signed
-// copy is the submitted PDF; later approvers' is the review PDF, now with
-// their signature on it.
+// What an approver sees once they've signed: the review PDF, with every
+// signature so far, theirs included. (submitted-pdf would be the first
+// approver's, but it still returns the memo without signatures: gaps M40.)
 export function fetchMemoPdfSigned(item: SigningStep): Promise<Blob> {
-  return item.sequence === 1
-    ? fetchPdfBlob(`api/memo-pdf/${item.workflowId}/submitted-pdf`)
-    : fetchPdfBlob(`api/memo-pdf/${item.workflowId}/approval-review-pdf`);
+  return fetchPdfBlob(`api/memo-pdf/${item.workflowId}/approval-review-pdf`);
 }
 
 export function fetchFinalMemoPdf(workflowId: string): Promise<Blob> {
   return fetchPdfBlob(`api/memo-pdf/workflows/${workflowId}/final-memo-pdf`);
+}
+
+// The memo as it stands for its author, with every signature so far:
+//   nobody has signed yet       the memo itself (preview)
+//   one or more approvers       approval-review-pdf
+//   everyone                    final-memo-pdf
+// (submitted-pdf, meant for after the first signature, still returns the
+// memo without it: gaps M40.)
+export function fetchMemoPdfForAuthor(
+  memoId: string,
+  workflowId: string | null,
+  signedCount: number,
+  fullySigned: boolean,
+): Promise<Blob> {
+  if (!workflowId) return fetchMemoPreviewPdf(memoId);
+  if (fullySigned) return fetchFinalMemoPdf(workflowId);
+  if (signedCount >= 1) return fetchPdfBlob(`api/memo-pdf/${workflowId}/approval-review-pdf`);
+  return fetchMemoPreviewPdf(memoId);
 }
 
 // ---------------------------------------------------------------------------
@@ -400,7 +470,8 @@ export function fetchFinalMemoPdf(workflowId: string): Promise<Blob> {
 const STATUS_TEXT: Record<string, string> = {
   [MEMO_STATUS.draft]: "Draft",
   [MEMO_STATUS.inReview]: "In review",
-  [MEMO_STATUS.reviewDeclined]: "Declined in review",
+  [MEMO_STATUS.reviewDeclined]: "Changes requested",
+  [MEMO_STATUS.reviewRejected]: "Rejected in review",
   [MEMO_STATUS.reviewed]: "Ready for sign-off",
   [MEMO_STATUS.withGroupHead]: "With Group Head",
   [MEMO_STATUS.changesRequested]: "Changes requested",
@@ -424,7 +495,12 @@ export function memoStatusClass(status: MemoStatus): string {
   if (status === MEMO_STATUS.draft) return "status-badge status-badge--brd-drafting";
   if (status === MEMO_STATUS.approved) return "status-badge status-badge--approved";
   if (status === MEMO_STATUS.reviewed) return "status-badge status-badge--approved";
-  if (status === MEMO_STATUS.reviewDeclined || status === MEMO_STATUS.changesRequested || isRejectedAtSignOff(status)) {
+  if (
+    status === MEMO_STATUS.reviewDeclined ||
+    status === MEMO_STATUS.reviewRejected ||
+    status === MEMO_STATUS.changesRequested ||
+    isRejectedAtSignOff(status)
+  ) {
     return "status-badge status-badge--bdo-documentation-rejected";
   }
   return "status-badge status-badge--brd-under-review";
@@ -439,6 +515,7 @@ export const memoKeys = {
   all: ["memos"] as const,
   list: ["memos", "list"] as const,
   pending: ["memos", "pending"] as const,
+  assigned: ["memos", "assigned"] as const,
   one: (memoId: string) => ["memos", "one", memoId] as const,
   versions: (memoId: string) => ["memos", "versions", memoId] as const,
   steps: (workflowId: string) => ["memos", "steps", workflowId] as const,

@@ -17,6 +17,9 @@ export interface LoginResponseData {
     userName: string;
     email: string;
     roles: string[];
+    // Not sent yet (gaps file M38); saved and shown as soon as it is.
+    firstName?: string | null;
+    lastName?: string | null;
 }
 
 

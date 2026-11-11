@@ -17,8 +17,7 @@ import { documentsQueryKey } from "../../utils/documentStatus";
 import { getInitiativeDocuments } from "../../service/DocumentService";
 import DocumentTabs from "../../components/documents/DocumentTabs";
 import { clearDraft, useDraftState } from "../../utils/useDraftState";
-import { capitalize } from "../../utils/text";
-import { getStoredUser } from "../../apicalls/authStorage";
+import { getCurrentUserName } from "../../apicalls/authStorage";
 import BackLink from "../../components/common/BackLink";
 import DraftRestoredNotice from "../../components/common/DraftRestoredNotice";
 import PdfCoverPreview from "../../components/documents/PdfCoverPreview";
@@ -142,7 +141,7 @@ function ApprovalSign() {
 
   const type = item.documentType;
   const title = type ? DOCUMENT_META[type].name : "Document";
-  const myName = capitalize(getStoredUser()?.userName ?? "");
+  const myName = getCurrentUserName();
 
   return (
     <div className="dashboard-page">

@@ -93,6 +93,8 @@ function Login() {
                 userName: response.data.userName,
                 email: response.data.email,
                 roles: response.data.roles,
+                firstName: response.data.firstName ?? null,
+                lastName: response.data.lastName ?? null,
             });
 
             console.log(

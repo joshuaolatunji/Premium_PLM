@@ -12,12 +12,13 @@ import { ApiError } from "../../apicalls/apiClient";
 import { getStoredUser } from "../../apicalls/authStorage";
 import { INITIATIVE_PRIORITIES } from "../../types/initiativeTypes";
 import type { CreateInitiativeRequest } from "../../types/initiativeTypes";
-import { capitalize } from "../../utils/text";
+import { capitalize, formatPersonName, formatRoleName } from "../../utils/text";
 import { resolvePrimaryRole } from "../../utils/roleRouting";
 import { activeUsersWithRole } from "../../utils/userStatus";
 import InitiativeCreatedPanel from "../../dashboardcomponents/InitiativeCreatedPanel";
 import NumberInput from "../../components/ui/NumberInput";
 import BackLink from "../../components/common/BackLink";
+import SearchableSelect from "../../components/ui/SearchableSelect";
 
 interface CreatedInitiativeInfo {
   initiativeId: string | null;
@@ -338,7 +339,7 @@ function CreateInitiativeForm() {
                 <div className="form-field">
                   <label htmlFor="priority">Priority</label>
 
-                  <select
+                  <SearchableSelect
                     id="priority"
                     value={form.priority}
                     onChange={(event) =>
@@ -350,7 +351,7 @@ function CreateInitiativeForm() {
                         {priority.label}
                       </option>
                     ))}
-                  </select>
+                  </SearchableSelect>
                 </div>
 
                 <div className="form-field">
@@ -374,7 +375,7 @@ function CreateInitiativeForm() {
               <div className="form-field">
                 <label htmlFor="categoryId">Category</label>
 
-                <select
+                <SearchableSelect
                   id="categoryId"
                   value={form.categoryId}
                   onChange={(event) =>
@@ -392,7 +393,7 @@ function CreateInitiativeForm() {
                       {category.name}
                     </option>
                   ))}
-                </select>
+                </SearchableSelect>
 
                 {categoriesQuery.isError && (
                   <p className="form-field_hint form-field_hint--error">
@@ -478,7 +479,7 @@ function CreateInitiativeForm() {
                 <div className="form-field">
                   <label htmlFor="bdoId">Business Development Officer</label>
 
-                  <select
+                  <SearchableSelect
                     id="bdoId"
                     value={bdoId}
                     onChange={(event) => setBdoId(event.target.value)}
@@ -490,11 +491,16 @@ function CreateInitiativeForm() {
                     </option>
 
                     {bdos.map((user) => (
-                      <option key={user.userId} value={user.userId}>
-                        {capitalize(user.userName)} ({user.email})
+                      <option
+                          key={user.userId}
+                          value={user.userId}
+                          data-description={user.role.map(formatRoleName).join(", ")}
+                          data-keywords={user.email}
+                        >
+                        {formatPersonName(user)}
                       </option>
                     ))}
-                  </select>
+                  </SearchableSelect>
 
                   {usersQuery.isError && (
                     <p className="form-field_hint form-field_hint--error">
@@ -512,7 +518,7 @@ function CreateInitiativeForm() {
                 <div className="form-field">
                   <label htmlFor="pmId">Product Manager</label>
 
-                  <select
+                  <SearchableSelect
                     id="pmId"
                     value={pmId}
                     onChange={(event) => setPmId(event.target.value)}
@@ -524,11 +530,16 @@ function CreateInitiativeForm() {
                     </option>
 
                     {pms.map((user) => (
-                      <option key={user.userId} value={user.userId}>
-                        {capitalize(user.userName)} ({user.email})
+                      <option
+                          key={user.userId}
+                          value={user.userId}
+                          data-description={user.role.map(formatRoleName).join(", ")}
+                          data-keywords={user.email}
+                        >
+                        {formatPersonName(user)}
                       </option>
                     ))}
-                  </select>
+                  </SearchableSelect>
 
                   {usersQuery.isError && (
                     <p className="form-field_hint form-field_hint--error">

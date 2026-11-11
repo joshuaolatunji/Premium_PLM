@@ -34,8 +34,9 @@ import {
 } from "../../utils/ticketStatus";
 import { priorityBadgeClass, priorityLabel } from "../../utils/initiativeStatus";
 import { currentTimestamp } from "../../utils/documentStatus";
-import { capitalize } from "../../utils/text";
+import { capitalize, formatPersonName, formatRoleName } from "../../utils/text";
 import { activeUsersWithRole } from "../../utils/userStatus";
+import SearchableSelect from "../../components/ui/SearchableSelect";
 
 const EMPTY_TASK: CreateTaskRequest = {
   title: "",
@@ -459,7 +460,7 @@ function TicketWorkspace() {
               <div className="form-field-row">
                 <div className="form-field">
                   <label htmlFor="taskDeveloper">Developer</label>
-                  <select
+                  <SearchableSelect
                     id="taskDeveloper"
                     value={task.developerId}
                     onChange={(event) => setTask((current) => ({ ...current, developerId: event.target.value }))}
@@ -470,11 +471,16 @@ function TicketWorkspace() {
                     </option>
 
                     {developers.map((user) => (
-                      <option key={user.userId} value={user.userId}>
-                        {capitalize(user.userName)} ({user.email})
+                      <option
+                          key={user.userId}
+                          value={user.userId}
+                          data-description={user.role.map(formatRoleName).join(", ")}
+                          data-keywords={user.email}
+                        >
+                        {formatPersonName(user)}
                       </option>
                     ))}
-                  </select>
+                  </SearchableSelect>
 
                   {usersQuery.isSuccess && developers.length === 0 && (
                     <p className={isUserListForbidden() ? "form-error" : "form-field_hint"}>
@@ -487,7 +493,7 @@ function TicketWorkspace() {
 
                 <div className="form-field">
                   <label htmlFor="taskPriority">Priority</label>
-                  <select
+                  <SearchableSelect
                     id="taskPriority"
                     value={task.priority}
                     onChange={(event) => setTask((current) => ({ ...current, priority: Number(event.target.value) }))}
@@ -497,7 +503,7 @@ function TicketWorkspace() {
                         {priority.label}
                       </option>
                     ))}
-                  </select>
+                  </SearchableSelect>
                 </div>
               </div>
 

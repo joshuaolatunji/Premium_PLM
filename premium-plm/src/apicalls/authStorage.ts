@@ -1,3 +1,5 @@
+import { formatPersonName } from "../utils/text";
+
 const TOKEN_KEY = "premiumplm_token";
 const USER_KEY = "premiumplm_user";
 
@@ -5,6 +7,10 @@ export interface StoredUser {
     userName: string;
     email: string;
     roles: string[];
+    // The person's real name, when the login response carries it (gaps
+    // file M38). Older sessions saved before this was added won't have it.
+    firstName?: string | null;
+    lastName?: string | null;
 }
 
 export function saveAuthSession(
@@ -91,4 +97,63 @@ export function hasValidSession(): boolean {
     const expiry = getSessionExpiry();
 
     return expiry !== null && expiry > Date.now();
+}
+
+// Name claims the API may put on its token, in the WS-Identity form it already
+// uses for the user id, or the short OpenID form.
+const GIVEN_NAME_CLAIMS = [
+    "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
+    "given_name",
+];
+const SURNAME_CLAIMS = [
+    "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname",
+    "family_name",
+];
+
+function firstClaim(claims: Record<string, unknown> | null, names: string[]): string | null {
+    for (const name of names) {
+        const value = claims?.[name];
+
+        if (typeof value === "string" && value.trim()) {
+            return value.trim();
+        }
+    }
+
+    return null;
+}
+
+// The signed-in person's first and last name: from the login response if it
+// sent them, otherwise from the token's name claims. Both are null until the
+// backend provides them (gaps file M38).
+function currentNameParts(): { firstName: string | null; lastName: string | null } {
+    const user = getStoredUser();
+    const claims = readTokenClaims();
+
+    return {
+        firstName: user?.firstName?.trim() || firstClaim(claims, GIVEN_NAME_CLAIMS),
+        lastName: user?.lastName?.trim() || firstClaim(claims, SURNAME_CLAIMS),
+    };
+}
+
+// The signed-in person's full name for display and signatures ("Joshua
+// Olatunji"). Falls back to the tidied user name until M38 is fixed.
+export function getCurrentUserName(): string {
+    const user = getStoredUser();
+
+    if (!user) {
+        return "";
+    }
+
+    return formatPersonName({ userName: user.userName, ...currentNameParts() });
+}
+
+// Just the first name, for greetings ("Good afternoon, Joshua").
+export function getCurrentUserFirstName(): string {
+    const { firstName } = currentNameParts();
+
+    if (firstName) {
+        return formatPersonName({ userName: firstName });
+    }
+
+    return getCurrentUserName().split(" ")[0] ?? "";
 }

@@ -1,7 +1,7 @@
 import { MEMOS_PREVIEW } from "../../config/features";
 
 // Marks memos as a preview until the backend finishes access control, the
-// review stage and author-started signing (gaps M33, M26, M34, M35).
+// review stage and author-started signing (gaps M33, M26, M39, M35).
 // Goes away when VITE_MEMOS_LIVE is "true".
 function PreviewBadge({ className = "" }: { className?: string }) {
   if (!MEMOS_PREVIEW) return null;
